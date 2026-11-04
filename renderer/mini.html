@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'">
+<title>Timer</title>
+<script src="theme.js"></script>
+<style>
+  :root { --bg: #171a21; --fg: #e6e8ee; --line: #2a2f3a; --btn: #1e222b; --muted: #8b93a5; --accent: #7c8cff; --ok: #5ee0b0; --warn: #ffb454; --danger: #ff6b7a; --on-accent: #0b0d14; }
+  :root[data-theme="light"] { --bg: #ffffff; --fg: #1b1f2a; --line: #dcdfea; --btn: #eef0f6; --muted: #5f6880; --accent: #4f5fe0; --ok: #12936a; --warn: #b86e00; --danger: #d6293e; --on-accent: #ffffff; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 13px "Segoe UI", system-ui, sans-serif; overflow: hidden; }
+  body { display: flex; flex-direction: column; justify-content: center; gap: 8px; padding: 0 10px 0 14px; border: 1px solid var(--line); border-radius: 10px; -webkit-app-region: drag; user-select: none; }
+  .top, .send-row { display: flex; align-items: center; gap: 10px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); flex: none; animation: p 1.4s infinite; }
+  .dot.off { background: var(--warn); animation: none; }
+  @keyframes p { 50% { opacity: .25; } }
+  .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .name small { display: block; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
+  .name small.err { color: var(--danger); }
+  .t { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 16px; }
+  button { -webkit-app-region: no-drag; background: var(--btn); color: inherit; border: 1px solid var(--line); border-radius: 7px; width: 28px; height: 28px; cursor: pointer; font-size: 13px; padding: 0; display: grid; place-items: center; }
+  button:hover { border-color: var(--accent); }
+  button svg { width: 15px; height: 15px; }
+  #msg { -webkit-app-region: no-drag; user-select: text; flex: 1; min-width: 0; height: 30px; background: var(--btn); color: var(--fg); border: 1px solid var(--line); border-radius: 15px; padding: 0 12px; font: inherit; outline: none; }
+  #msg:focus { border-color: var(--accent); }
+  #msg:disabled { opacity: .55; }
+  #send { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  #send:disabled { opacity: .4; cursor: default; }
+  #send.stop { background: var(--danger); border-color: var(--danger); color: #fff; }
+</style>
+</head>
+<body>
+  <div class="top">
+    <span class="dot" id="dot"></span>
+    <div class="name" id="name"></div>
+    <div class="t" id="t"></div>
+    <button id="toggle" title="Pausar / reanudar"></button>
+    <button id="stop" title="Detener timer">■</button>
+    <button id="open" title="Abrir ventana principal">⤢</button>
+  </div>
+  <form class="send-row" id="form" autocomplete="off">
+    <input id="msg" placeholder="Escribe una instrucción para Claude…" maxlength="4000">
+    <button id="send" type="submit" title="Enviar (Enter)"></button>
+  </form>
+<script src="mini.js"></script>
+</body>
+</html>

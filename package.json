@@ -1,0 +1,16 @@
+{
+  "name": "shutoki",
+  "productName": "Shutoki",
+  "version": "0.1.0",
+  "description": "Gestor local de tareas con timer, horas en Excel y lanzador de Claude",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^45.2.2"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0"
+  }
+}
