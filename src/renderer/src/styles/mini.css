@@ -1,12 +1,4 @@
-<!doctype html>
-<html lang="es">
-<head>
-<meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'">
-<title>Timer</title>
-<script src="theme.js"></script>
-<style>
-  :root { --bg: #171a21; --fg: #e6e8ee; --line: #2a2f3a; --btn: #1e222b; --muted: #8b93a5; --accent: #7c8cff; --ok: #5ee0b0; --warn: #ffb454; --danger: #ff6b7a; --on-accent: #0b0d14; }
+﻿:root { --bg: #171a21; --fg: #e6e8ee; --line: #2a2f3a; --btn: #1e222b; --muted: #8b93a5; --accent: #7c8cff; --ok: #5ee0b0; --warn: #ffb454; --danger: #ff6b7a; --on-accent: #0b0d14; }
   :root[data-theme="light"] { --bg: #ffffff; --fg: #1b1f2a; --line: #dcdfea; --btn: #eef0f6; --muted: #5f6880; --accent: #4f5fe0; --ok: #12936a; --warn: #b86e00; --danger: #d6293e; --on-accent: #ffffff; }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 13px "Segoe UI", system-ui, sans-serif; overflow: hidden; }
@@ -28,21 +20,10 @@
   #send { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
   #send:disabled { opacity: .4; cursor: default; }
   #send.stop { background: var(--danger); border-color: var(--danger); color: #fff; }
-</style>
-</head>
-<body>
-  <div class="top">
-    <span class="dot" id="dot"></span>
-    <div class="name" id="name"></div>
-    <div class="t" id="t"></div>
-    <button id="toggle" title="Pausar / reanudar"></button>
-    <button id="stop" title="Detener timer">■</button>
-    <button id="open" title="Abrir ventana principal">⤢</button>
-  </div>
-  <form class="send-row" id="form" autocomplete="off">
-    <input id="msg" placeholder="Escribe una instrucción para Claude…" maxlength="4000">
-    <button id="send" type="submit" title="Enviar (Enter)"></button>
-  </form>
-<script src="mini.js"></script>
-</body>
-</html>
+#root { display: contents; }
+
+
+.top select { -webkit-app-region: no-drag; flex: 1; min-width: 0; height: 28px; background: var(--btn); color: var(--fg); border: 1px solid var(--line); border-radius: 7px; padding: 0 6px; font: inherit; outline: none; text-overflow: ellipsis; }
+.top select:focus { border-color: var(--accent); }
+#msg.err { border-color: var(--danger); }
+#msg.err::placeholder { color: var(--danger); }

@@ -26,7 +26,8 @@ label { display: block; color: var(--muted); font-size: 12px; margin: 10px 0 4px
 .hidden { display: none !important; }
 
 .side { width: 200px; background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 16px 10px; }
-.brand { font-weight: 700; font-size: 16px; padding: 0 10px 16px; letter-spacing: .3px; }
+.brand { font-weight: 700; font-size: 16px; padding: 0 10px 16px; letter-spacing: .3px; display: flex; align-items: center; gap: 8px; }
+.brand-icon { width: 26px; height: 26px; border-radius: 7px; }
 nav button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 9px 12px; border-radius: 8px; color: var(--muted); margin-bottom: 2px; }
 nav button:hover { background: var(--panel2); color: var(--text); }
 nav button.active { background: var(--panel2); color: var(--text); box-shadow: inset 3px 0 0 var(--accent); }
@@ -196,3 +197,5 @@ td input { padding: 4px 6px; }
   .grid2 { grid-template-columns: 1fr; }
 }
 @media (min-width: 1800px) { .chat-wrap { grid-template-columns: minmax(0, 1fr) 420px; } .msg { max-width: 75%; } }
+
+#root { display: contents; }

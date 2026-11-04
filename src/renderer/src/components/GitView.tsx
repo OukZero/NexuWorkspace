@@ -1,0 +1,414 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
+import type { GitBranches, GitCommit, GitFile, GitRepo, GitStatus } from '../../../shared/types'
+import { baseName } from '../utils'
+import { findTask, useDB } from '../store'
+import { useUi } from '../ui'
+import { EmptyState } from './EmptyState'
+
+type Sel = { path: string; kind: 'staged' | 'work' | 'untracked' } | { hash: string }
+
+const LETTER: Record<string, [string, string]> = {
+  M: ['M', 'modificado'],
+  A: ['A', 'añadido'],
+  D: ['D', 'eliminado'],
+  R: ['R', 'renombrado'],
+  C: ['C', 'copiado'],
+  T: ['T', 'cambio de tipo'],
+  U: ['!', 'conflicto']
+}
+const letterOf = (f: GitFile, side: 'index' | 'work'): [string, string] => (f.untracked ? ['U', 'sin seguimiento'] : f.conflicted ? LETTER.U : (LETTER[f[side]] ?? [f[side], '']))
+
+function DiffText({ text }: { text: string }): ReactNode {
+  const lines = text.split(/\r?\n/)
+  const shown = lines.slice(0, 3000)
+  return (
+    <div className="diff gdiff">
+      {shown.map((l, i) => {
+        const cls = l.startsWith('+++') || l.startsWith('---') || l.startsWith('diff ') || l.startsWith('index ') ? 'sep' : l.startsWith('+') ? 'add' : l.startsWith('-') ? 'del' : l.startsWith('@@') ? 'sep' : 'ctx'
+        const sign = cls === 'add' ? '+' : cls === 'del' ? '−' : ' '
+        return (
+          <div key={i} className={`dl ${cls}`}>
+            <i>{sign}</i>
+            <span>{cls === 'add' || cls === 'del' ? l.slice(1) || ' ' : l || ' '}</span>
+          </div>
+        )
+      })}
+      {lines.length > shown.length && <div className="meta" style={{ padding: 8 }}>… {lines.length - shown.length} líneas más (abre el archivo en VS Code para verlo completo).</div>}
+    </div>
+  )
+}
+
+function Row({ f, side, selected, onSelect, actions }: { f: GitFile; side: 'index' | 'work'; selected: boolean; onSelect: () => void; actions: ReactNode }): ReactNode {
+  const [l, label] = letterOf(f, side)
+  return (
+    <div className={`gfile ${selected ? 'on' : ''}`} onClick={onSelect} title={`${f.path} · ${label}`}>
+      <span className={`gl g-${l}`}>{l}</span>
+      <span className="gname">
+        <b>{baseName(f.path)}</b>
+        <small>{f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : ''}</small>
+      </span>
+      <span className="gact" onClick={(e) => e.stopPropagation()}>
+        {actions}
+      </span>
+    </div>
+  )
+}
+
+/** Control de código de la tarea, al estilo de VS Code: cambios, preparación, commit, ramas, sincronización e historial. */
+export function GitView({ taskId }: { taskId: string }): ReactNode {
+  const db = useDB()
+  const ui = useUi()
+  const task = findTask(db, taskId)
+  const [repos, setRepos] = useState<GitRepo[]>([])
+  const [dir, setDir] = useState<string>('')
+  const [st, setSt] = useState<GitStatus | null>(null)
+  const [br, setBr] = useState<GitBranches | null>(null)
+  const [commits, setCommits] = useState<GitCommit[]>([])
+  const [error, setError] = useState('')
+  const [sel, setSel] = useState<Sel | null>(null)
+  const [diff, setDiff] = useState('')
+  const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState('')
+  const [newBranch, setNewBranch] = useState<string | null>(null)
+  const [showLog, setShowLog] = useState(true)
+  const busyRef = useRef('')
+  busyRef.current = busy
+
+  // repositorios candidatos: la carpeta de la tarea y las de sus grupos
+  useEffect(() => {
+    let alive = true
+    void window.api.call('git:repos', taskId).then((r) => {
+      if (!alive) return
+      setRepos(r)
+      setDir((cur) => (cur && r.some((x) => x.dir === cur) ? cur : (r.find((x) => x.isRepo) ?? r[0])?.dir ?? ''))
+    })
+    return () => {
+      alive = false
+    }
+  }, [taskId, db.groups.length])
+
+  const current = repos.find((r) => r.dir === dir)
+
+  const refresh = useCallback(async () => {
+    if (!dir || !current?.isRepo) return
+    try {
+      const [s, b, l] = await Promise.all([window.api.call('git:status', dir), window.api.call('git:branches', dir), window.api.call('git:log', dir, 40)])
+      setSt(s)
+      setBr(b)
+      setCommits(l)
+      setError('')
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }, [dir, current?.isRepo])
+
+  useEffect(() => {
+    setSt(null)
+    setSel(null)
+    setDiff('')
+    void refresh()
+    const id = setInterval(() => {
+      if (!busyRef.current && document.visibilityState === 'visible') void refresh()
+    }, 5000)
+    const onFocus = (): void => void refresh()
+    window.addEventListener('focus', onFocus)
+    return () => {
+      clearInterval(id)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [refresh])
+
+  // diff del archivo (o patch del commit) seleccionado; se vuelve a pedir si cambió el estado
+  useEffect(() => {
+    if (!sel || !dir) return setDiff('')
+    let alive = true
+    const p = 'hash' in sel ? window.api.call('git:show', dir, sel.hash) : window.api.call('git:diff', dir, sel.path, sel.kind)
+    void p.then((t) => alive && setDiff(t)).catch((e: Error) => alive && setDiff(`No se pudo mostrar: ${e.message}`))
+    return () => {
+      alive = false
+    }
+  }, [sel, dir, st?.files.length])
+
+  const act = async (label: string, fn: () => Promise<unknown>, okMsg?: string): Promise<boolean> => {
+    setBusy(label)
+    try {
+      const r = await fn()
+      if (okMsg) ui.toast(okMsg)
+      else if (typeof r === 'string' && r) ui.toast(r.split('\n')[0])
+      await refresh()
+      return true
+    } catch (e) {
+      const m = (e as Error).message
+      const login = /authenticat|auth login|setup-token|OAUTH_TOKEN|not logged in|invalid api key/i.test(m)
+      ui.toast(login ? 'La sesión de Claude venció. Inicia sesión de nuevo y vuelve a intentarlo.' : m, true, login ? { label: 'Iniciar sesión', run: () => void ui.run('claude:login') } : undefined)
+      return false
+    } finally {
+      setBusy('')
+    }
+  }
+
+  if (!task) return null
+  if (!repos.length) return <EmptyState kind="folders" title="La tarea no tiene carpeta" text="Asigna una carpeta de proyecto a la tarea para ver su repositorio de Git." />
+  if (current && !current.isRepo) {
+    return (
+      <>
+        <h1>Git</h1>
+        <EmptyState
+          kind="folders"
+          title={`«${current.name}» no es un repositorio de Git`}
+          text="Puedes iniciar uno aquí para empezar a versionar el proyecto."
+          action={
+            <button className="btn primary" disabled={!!busy} onClick={() => void act('init', () => window.api.call('git:init', current.dir).then(() => window.api.call('git:repos', taskId).then(setRepos)), 'Repositorio iniciado')}>
+              Inicializar repositorio
+            </button>
+          }
+        />
+      </>
+    )
+  }
+
+  const files = st?.files ?? []
+  const conflicts = files.filter((f) => f.conflicted)
+  const staged = files.filter((f) => f.staged)
+  const changes = files.filter((f) => f.unstaged || f.untracked)
+  const isSel = (path: string, kind: string): boolean => !!sel && 'path' in sel && sel.path === path && sel.kind === kind
+
+  const commit = (): void => {
+    if (!dir || !staged.length || !msg.trim()) return
+    void act('commit', () => window.api.call('git:commit', dir, msg)).then((ok) => {
+      if (ok) {
+        setMsg('')
+        setSel(null)
+      }
+    })
+  }
+
+  const discard = (f: GitFile): void => {
+    if (!confirm(`¿Descartar los cambios de «${f.path}»? No se puede deshacer.`)) return
+    void act('discard', () => window.api.call('git:discard', dir, f.untracked ? [] : [f.path], f.untracked ? [f.path] : []))
+  }
+
+  return (
+    <div className="gitv">
+      <div className="gbar">
+        {repos.length > 1 && (
+          <select value={dir} aria-label="Repositorio" onChange={(e) => setDir(e.target.value)}>
+            {repos.map((r) => (
+              <option key={r.dir} value={r.dir} disabled={!r.isRepo}>
+                {r.name}
+                {r.isRepo ? '' : ' (sin Git)'}
+              </option>
+            ))}
+          </select>
+        )}
+        <span className="gbranch" title={st?.root}>
+          ⎇
+          <select value={br?.current ?? ''} aria-label="Rama" disabled={!!busy || !br} onChange={(e) => void act('checkout', () => window.api.call('git:checkout', dir, e.target.value, false), `Ahora en ${e.target.value}`)}>
+            {br && !br.local.includes(br.current) && <option value={br.current}>{br.current}</option>}
+            {br?.local.map((b) => (
+              <option key={b}>{b}</option>
+            ))}
+            {br && br.remote.filter((r) => !br.local.includes(r.replace(/^[^/]+\//, ''))).length > 0 && (
+              <optgroup label="Remotas (crea la rama local)">
+                {br.remote
+                  .filter((r) => !br.local.includes(r.replace(/^[^/]+\//, '')))
+                  .map((r) => (
+                    <option key={r}>{r}</option>
+                  ))}
+              </optgroup>
+            )}
+          </select>
+        </span>
+        {newBranch === null ? (
+          <button className="btn sm" onClick={() => setNewBranch('')}>
+            ＋ Rama
+          </button>
+        ) : (
+          <span className="gnew">
+            <input
+              autoFocus
+              value={newBranch}
+              placeholder="nombre-de-la-rama"
+              aria-label="Nombre de la rama nueva"
+              onChange={(e) => setNewBranch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setNewBranch(null)
+                if (e.key === 'Enter' && newBranch.trim()) void act('branch', () => window.api.call('git:checkout', dir, newBranch.trim(), true), `Rama «${newBranch.trim()}» creada`).then((ok) => ok && setNewBranch(null))
+              }}
+            />
+            <button className="btn sm" onClick={() => setNewBranch(null)}>
+              ✕
+            </button>
+          </span>
+        )}
+        <span className="grow" />
+        {st && !st.upstream && <span className="meta">sin rama remota</span>}
+        <button className="btn sm" disabled={!!busy} title="Traer los cambios del remoto sin aplicarlos" onClick={() => void act('fetch', () => window.api.call('git:sync', dir, 'fetch'), 'Fetch hecho')}>
+          ⟳ Fetch
+        </button>
+        <button className="btn sm" disabled={!!busy || !st?.upstream} title="Traer y aplicar los cambios del remoto" onClick={() => void act('pull', () => window.api.call('git:sync', dir, 'pull'))}>
+          ↓ Pull{st?.behind ? ` ${st.behind}` : ''}
+        </button>
+        <button
+          className={`btn sm ${st?.ahead || (st && !st.upstream) ? 'primary' : ''}`}
+          disabled={!!busy}
+          title={st?.upstream ? 'Enviar tus commits al remoto' : 'Publicar la rama en el remoto'}
+          onClick={() => void act('push', () => window.api.call('git:sync', dir, 'push'))}
+        >
+          ↑ {st?.upstream ? 'Push' : 'Publicar'}
+          {st?.ahead ? ` ${st.ahead}` : ''}
+        </button>
+        {busy && <span className="meta">{busy}…</span>}
+      </div>
+      {error && <div className="gerr">{error}</div>}
+
+      <div className="gcols">
+        <div className="gleft">
+          <div className="gcommit">
+            <textarea
+              rows={3}
+              value={msg}
+              placeholder={busy === 'redactando' ? 'Claude está redactando el mensaje…' : staged.length ? `Mensaje del commit (${staged.length} archivo${staged.length > 1 ? 's' : ''} preparado${staged.length > 1 ? 's' : ''})` : 'Prepara archivos para hacer un commit'}
+              aria-label="Mensaje del commit"
+              onChange={(e) => setMsg(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault()
+                  commit()
+                }
+              }}
+            />
+            <div className="gcommit-b">
+              <button
+                className="btn sm"
+                disabled={!!busy || (!staged.length && !changes.length)}
+                title={
+                  !staged.length && !changes.length
+                    ? 'No hay cambios que describir'
+                    : staged.length
+                      ? 'Claude redacta el mensaje a partir de los cambios preparados'
+                      : 'Nada preparado: Claude describirá todos los cambios (puedes prepararlos después)'
+                }
+                onClick={() =>
+                  void act(
+                    'redactando',
+                    () => window.api.call('git:message', dir).then((m) => setMsg(m)),
+                    staged.length ? 'Mensaje propuesto: revísalo antes de confirmar' : 'Mensaje propuesto a partir de todos los cambios: prepara los archivos y revísalo antes de confirmar'
+                  )
+                }
+              >
+                {busy === 'redactando' ? '✦ Redactando…' : '✦ Generar con Claude'}
+              </button>
+              <span className="grow" />
+              <button className="btn sm primary" disabled={!!busy || !staged.length || !msg.trim()} title="Ctrl+Enter" onClick={commit}>
+                ✓ Confirmar
+              </button>
+            </div>
+          </div>
+
+          {conflicts.length > 0 && (
+            <section>
+              <h4 className="gh err">Conflictos · {conflicts.length}</h4>
+              {conflicts.map((f) => (
+                <Row key={f.path} f={f} side="work" selected={isSel(f.path, 'work')} onSelect={() => setSel({ path: f.path, kind: 'work' })} actions={null} />
+              ))}
+            </section>
+          )}
+
+          <section>
+            <h4 className="gh">
+              Preparados · {staged.length}
+              {staged.length > 0 && (
+                <button className="icon" title="Quitar todo de lo preparado" aria-label="Quitar todo de lo preparado" disabled={!!busy} onClick={() => void act('unstage', () => window.api.call('git:unstage', dir, staged.map((f) => f.path)))}>
+                  −
+                </button>
+              )}
+            </h4>
+            {staged.map((f) => (
+              <Row
+                key={'s' + f.path}
+                f={f}
+                side="index"
+                selected={isSel(f.path, 'staged')}
+                onSelect={() => setSel({ path: f.path, kind: 'staged' })}
+                actions={
+                  <button className="icon" title="Quitar de lo preparado" aria-label="Quitar de lo preparado" disabled={!!busy} onClick={() => void act('unstage', () => window.api.call('git:unstage', dir, [f.path]))}>
+                    −
+                  </button>
+                }
+              />
+            ))}
+            {!staged.length && <div className="meta gempty">Nada preparado.</div>}
+          </section>
+
+          <section>
+            <h4 className="gh">
+              Cambios · {changes.length}
+              {changes.length > 0 && (
+                <button className="icon" title="Preparar todo" aria-label="Preparar todo" disabled={!!busy} onClick={() => void act('stage', () => window.api.call('git:stage', dir, changes.map((f) => f.path)))}>
+                  ＋
+                </button>
+              )}
+            </h4>
+            {changes.map((f) => (
+              <Row
+                key={'w' + f.path}
+                f={f}
+                side="work"
+                selected={isSel(f.path, f.untracked ? 'untracked' : 'work')}
+                onSelect={() => setSel({ path: f.path, kind: f.untracked ? 'untracked' : 'work' })}
+                actions={
+                  <>
+                    <button className="icon" title="Descartar los cambios" aria-label="Descartar los cambios" disabled={!!busy} onClick={() => discard(f)}>
+                      ↶
+                    </button>
+                    <button className="icon" title="Preparar" aria-label="Preparar" disabled={!!busy} onClick={() => void act('stage', () => window.api.call('git:stage', dir, [f.path]))}>
+                      ＋
+                    </button>
+                  </>
+                }
+              />
+            ))}
+            {!changes.length && !staged.length && !conflicts.length && st && <div className="meta gempty">Todo limpio: no hay cambios.</div>}
+          </section>
+
+          <section>
+            <h4 className="gh clickable" onClick={() => setShowLog((s) => !s)}>
+              {showLog ? '▾' : '▸'} Historial · {commits.length}
+            </h4>
+            {showLog &&
+              commits.map((c) => (
+                <div key={c.hash} className={`gcommitrow ${sel && 'hash' in sel && sel.hash === c.hash ? 'on' : ''}`} onClick={() => setSel({ hash: c.hash })} title={`${c.short} · ${c.author}`}>
+                  <span className="gsub">{c.subject}</span>
+                  <small>
+                    {c.short} · {c.author} · {new Date(c.date).toLocaleDateString('es', { day: 'numeric', month: 'short' })}
+                  </small>
+                </div>
+              ))}
+            {showLog && !commits.length && <div className="meta gempty">Aún no hay commits.</div>}
+          </section>
+        </div>
+
+        <div className="gright">
+          {sel ? (
+            <>
+              <div className="gdiffhead">
+                <b>{'hash' in sel ? `Commit ${sel.hash.slice(0, 7)}` : sel.path}</b>
+                {'path' in sel && <span className="chip">{sel.kind === 'staged' ? 'preparado' : sel.kind === 'untracked' ? 'nuevo' : 'cambios'}</span>}
+                {'path' in sel && task.folder && (
+                  <button className="btn sm" style={{ marginLeft: 'auto' }} onClick={() => void ui.run('vscode:open', st?.root ?? task.folder)}>
+                    Abrir en VS Code
+                  </button>
+                )}
+              </div>
+              <DiffText text={diff} />
+            </>
+          ) : (
+            <EmptyState kind="chart" title="Elige un archivo o un commit" text="Verás aquí qué cambió, línea por línea." />
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
