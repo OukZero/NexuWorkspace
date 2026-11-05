@@ -8,6 +8,28 @@ export const DEFAULT_SETTINGS: Settings = {
   openMode: 'chat', // 'chat' = chat de la app, 'desktop' = Claude Desktop (claude://code/new), 'terminal' = PowerShell + claude
   summaryMode: 'ai', // resumen automático al pausar/detener: 'ai' (claude -p), 'local' (sin IA) u 'off'
   claudeCmd: 'claude',
+  copilotCmd: 'copilot',
+  copilotModels: [
+    'auto',
+    'claude-sonnet-5.5',
+    'claude-sonnet-5',
+    'claude-opus-5.5',
+    'claude-haiku-5.5',
+    'gpt-6.1-sol',
+    'gpt-6.1-terra',
+    'gpt-6-sol',
+    'gpt-6-luna',
+    'gpt-6-astra',
+    'gpt-5.6-sol',
+    'gpt-5.6-terra',
+    'gpt-5.6-luna',
+    'gpt-5.3-codex',
+    'mai-code-1.1-flash',
+    'gemini-4-argon'
+  ].join('\n'),
+  allowedCommands: ['git status', 'git diff', 'git log', 'git show', 'git branch', 'git rev-parse', 'npm run', 'npm test', 'npm ls', 'npx tsc', 'npx eslint', 'dotnet build', 'dotnet test', 'dotnet restore'].join('\n'),
+  commandPolicy: 'ask',
+  copilotQuota: 0,
   targetHours: 8,
   reminderTime: '17:30',
   idleMinutes: 5,
@@ -49,6 +71,9 @@ function normalize(raw: Partial<DB>): DB {
     ...raw,
     settings: { ...DEFAULT_SETTINGS, ...raw.settings }
   }
+  // las listas de modelos de Copilot de las primeras versiones tenían nombres inventados: se reemplazan por la lista real
+  const oldModels = ['auto\nclaude-sonnet-5\ngpt-5.4', 'auto\nclaude-sonnet-5\nclaude-opus-5-5\nclaude-haiku-5-5\ngpt-5.4\ngpt-5.4-mini\ngemini-3-pro']
+  if (oldModels.includes(d.settings.copilotModels)) d.settings.copilotModels = DEFAULT_SETTINGS.copilotModels
   // migración única: el chat de la app pasa a ser el modo por defecto al hacer click en una tarea
   if (!d.settings.openModeChat) {
     d.settings.openMode = 'chat'
@@ -60,6 +85,7 @@ function normalize(raw: Partial<DB>): DB {
     c.createdAt ??= c.messages[0]?.ts ?? Date.now()
     // un chat no puede seguir "respondiendo" tras reiniciar la app
     c.running = false
+    delete c.pending
   }
   return d
 }

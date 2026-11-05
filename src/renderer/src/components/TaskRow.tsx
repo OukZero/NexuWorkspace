@@ -1,5 +1,6 @@
 import type { MouseEvent, ReactNode } from 'react'
 import type { Task } from '../../../shared/types'
+import { workFolder } from '../../../shared/util'
 import { activeEntry, taskMs, useDB, useNow } from '../store'
 import { PRIO, baseName, fmtH } from '../utils'
 import { useUi } from '../ui'
@@ -54,7 +55,7 @@ export function TaskRow({ task: t }: { task: Task }): ReactNode {
               #{tag}
             </span>
           ))}
-          {t.folder ? <span title={t.folder}>📁 {baseName(t.folder)}</span> : <span>sin carpeta</span>}
+          {workFolder(t, db.groups) ? <span title={workFolder(t, db.groups)}>📁 {baseName(workFolder(t, db.groups))}</span> : <span>sin carpeta</span>}
         </div>
       </div>
       <div className="actions">

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
+import { workFolder } from '../../../shared/util'
 import { closedConvs, convLabel } from '../conversations'
 import { findTask, useDB } from '../store'
 import { isWorkTask } from '../utils'
@@ -43,15 +44,15 @@ export function NewTabModal({ onClose }: { onClose: () => void }): ReactNode {
           {tasks.map((t) => (
             <button
               key={t.id}
-              disabled={!t.folder}
-              title={t.folder ? t.folder : 'Asigna una carpeta a la tarea para chatear'}
+              disabled={!workFolder(t, db.groups)}
+              title={workFolder(t, db.groups) || 'Asigna una carpeta (o un grupo con permiso de escritura) a la tarea para chatear'}
               onClick={() => {
                 onClose()
                 ui.openChat(t.id)
               }}
             >
               {t.title}
-              <span className="meta"> {t.folder ? t.project : 'sin carpeta'}</span>
+              <span className="meta"> {workFolder(t, db.groups) ? t.project : 'sin carpeta'}</span>
             </button>
           ))}
           {!tasks.length && <div className="meta">No hay tareas que coincidan.</div>}

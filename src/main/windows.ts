@@ -1,4 +1,4 @@
-import { BrowserWindow, screen } from 'electron'
+import { app, BrowserWindow, screen } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import { getDb, registerWindow } from './db'
@@ -73,6 +73,20 @@ export function createWindows(): void {
     webPreferences: { preload: preload(), contextIsolation: true, nodeIntegration: false }
   })
   registerWindow(win)
+  // Sin esto, al fijar la app en la barra de tareas (o en su menú de salto) Windows usa el icono de electron.exe.
+  if (process.platform === 'win32' && fs.existsSync(iconPath)) {
+    const launcher = path.join(app.getAppPath(), 'tools', 'launch.ps1')
+    win.setAppDetails({
+      appId: 'com.oukzero.shutoki',
+      appIconPath: iconPath,
+      appIconIndex: 0,
+      relaunchDisplayName: 'Shutoki',
+      // en desarrollo, fijarla en la barra la reabre compilando los últimos cambios
+      ...(!app.isPackaged && fs.existsSync(launcher)
+        ? { relaunchCommand: `powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${launcher}"` }
+        : {})
+    })
+  }
   loadPage(win, 'index')
   createMini()
   // al minimizar aparece la ventana flotante; al volver, se oculta

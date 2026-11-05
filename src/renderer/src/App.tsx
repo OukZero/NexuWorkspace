@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { IpcChannels, Task } from '../../shared/types'
+import { workFolder } from '../../shared/util'
 import { AddEntryModal } from './components/AddEntryModal'
 import { Board } from './components/Board'
 import { ChatView } from './components/Chat'
 import { DiffModal } from './components/DiffModal'
 import { Groups } from './components/Groups'
+import { History } from './components/History'
 import { Hours } from './components/Hours'
 import { NewTabModal } from './components/NewTabModal'
 import { SettingsView } from './components/SettingsView'
 import { Sidebar } from './components/Sidebar'
+import { StatusBar } from './components/StatusBar'
 import { ConvTabs, TaskTabs, type TaskMode } from './components/TabBar'
 import { DesignView } from './components/DesignView'
 import { GitView } from './components/GitView'
@@ -157,9 +160,9 @@ export function App(): ReactNode {
     newConversation: (taskId) => void newConversation(taskId),
     openNewTab: () => setModal({ kind: 'newtab' }),
     openTask: (t) => {
-      if (!t.folder) {
+      if (!workFolder(t, db.groups)) {
         setModal({ kind: 'task', task: t })
-        toast('Asigna una carpeta de proyecto para abrir Claude', true)
+        toast('Asigna una carpeta de proyecto, o un grupo de carpetas con permiso de escritura, para abrir Claude', true)
         return
       }
       if (db.settings.openMode === 'chat' || !db.settings.openMode) {
@@ -167,7 +170,7 @@ export function App(): ReactNode {
         return
       }
       void run('claude:open', t.id)
-      toast('Abriendo Claude en ' + t.folder)
+      toast('Abriendo Claude en ' + workFolder(t, db.groups))
     },
     editTask: (t) => setModal({ kind: 'task', task: t }),
     showDiff: (file) => activeConv && setModal({ kind: 'diff', file, convId: activeConv }),
@@ -303,6 +306,9 @@ export function App(): ReactNode {
     case 'usage':
       content = <Usage />
       break
+    case 'history':
+      content = <History />
+      break
     case 'groups':
       content = <Groups />
       break
@@ -354,6 +360,7 @@ export function App(): ReactNode {
         {active && dockOpen && db.settings.terminalMode !== 'external' && (
           <TerminalDock taskId={active} request={termReq} height={dockH} onHeight={setDockH} onClose={() => setDockOpen(false)} />
         )}
+        {active && <StatusBar taskId={active} onOpenGit={() => setModes((s) => ({ ...s, [active]: 'git' }))} />}
       </main>
       {modal && (
         <div className="modal">

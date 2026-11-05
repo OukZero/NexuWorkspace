@@ -1,4 +1,4 @@
-import { app, globalShortcut } from 'electron'
+import { app, globalShortcut, shell } from 'electron'
 import path from 'path'
 import * as chat from './chat'
 import { getDb, initDb, save } from './db'
@@ -17,12 +17,38 @@ app.setPath('userData', process.env['SHUTOKI_DATA_DIR'] || path.join(app.getPath
 app.setAppUserModelId('com.oukzero.shutoki') // agrupa la app en la barra de tareas de Windows con su propio icono
 registerMockupScheme() // debe registrarse antes de que la app esté lista
 
+/**
+ * Windows toma el nombre y el icono de las notificaciones del acceso directo del menú Inicio que tenga este AppUserModelId.
+ * El instalador ya lo crea; en desarrollo (electron.exe) no existe y salía «Electron», así que se crea uno.
+ */
+function ensureStartMenuShortcut(): void {
+  if (process.platform !== 'win32' || app.isPackaged) return
+  try {
+    const root = path.join(__dirname, '../..')
+    const launcher = path.join(root, 'tools', 'launch.ps1')
+    const icon = path.join(root, 'resources', 'icon.ico')
+    const lnk = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Shutoki.lnk')
+    shell.writeShortcutLink(lnk, 'create', {
+      target: path.join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+      args: `-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${launcher}"`,
+      cwd: root,
+      icon,
+      iconIndex: 0,
+      description: 'Shutoki',
+      appUserModelId: 'com.oukzero.shutoki'
+    })
+  } catch {
+    /* sin permiso para escribir el acceso directo: las notificaciones salen con el nombre de Electron */
+  }
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
   app.on('second-instance', showWin)
 
   void app.whenReady().then(() => {
+    ensureStartMenuShortcut()
     initDb()
     registerMockupProtocol()
     registerIpc()

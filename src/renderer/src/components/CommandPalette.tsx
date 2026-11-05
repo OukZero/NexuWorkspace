@@ -18,6 +18,7 @@ const VIEWS: Array<[View, string]> = [
   ['today', 'Hoy'],
   ['board', 'Tablero'],
   ['hours', 'Horas'],
+  ['history', 'Historial'],
   ['usage', 'Consumo'],
   ['groups', 'Carpetas'],
   ['settings', 'Ajustes']

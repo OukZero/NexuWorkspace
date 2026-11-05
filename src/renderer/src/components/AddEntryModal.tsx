@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { useDB } from '../store'
 import { isWorkTask, toTs } from '../utils'
 import { useUi } from '../ui'
+import { Select } from './Select'
 
 /** Entrada de tiempo manual (reemplaza al prompt() del navegador, que Electron no soporta). */
 export function AddEntryModal({ day }: { day: string }): ReactNode {
@@ -25,13 +26,7 @@ export function AddEntryModal({ day }: { day: string }): ReactNode {
       <h2>Entrada manual</h2>
       <div className="sub">Día {day}</div>
       <label>Tarea</label>
-      <select value={taskId} onChange={(e) => setTaskId(e.target.value)}>
-        {tasks.map((t) => (
-          <option key={t.id} value={t.id}>
-            {t.title}
-          </option>
-        ))}
-      </select>
+      <Select value={taskId} onChange={setTaskId} options={tasks.map((t) => ({ value: t.id, label: t.title }))} />
       <div className="grid2">
         <div>
           <label>Inicio</label>

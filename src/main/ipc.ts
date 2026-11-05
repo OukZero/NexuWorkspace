@@ -152,6 +152,8 @@ export function registerIpc(): void {
     return true // aceptado (el renderer restaura el input si la llamada falla)
   })
   api('chat:cancel', (convId) => chat.cancel(convId))
+  api('chat:permit', (convId, id, choice) => chat.permit(convId, id, choice))
+  api('chat:config', (convId, cfg) => chat.configure(convId, cfg))
   api('chat:reset', (convId) => chat.reset(convId))
   api('chat:close', (convId) => {
     const c = getDb().chats[convId]

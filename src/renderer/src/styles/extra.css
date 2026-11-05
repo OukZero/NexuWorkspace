@@ -55,7 +55,7 @@
 .group-h input { font-weight: 600; }
 .gfolder { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); }
 .gfolder .grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gfolder select { width: auto; flex: none; padding: 4px 8px; }
+.gfolder .sel { width: auto; flex: none; padding: 4px 8px; }
 .group-card .foot { align-items: center; }
 
 /* cabecera del chat: se parte en dos filas en vez de aplastar el título */
@@ -203,7 +203,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offs
 
 /* ===== filtros ===== */
 .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
-.filters input, .filters select { width: auto; padding: 6px 9px; font-size: 12px; }
+.filters input, .filters .sel { width: auto; padding: 6px 9px; font-size: 12px; }
+.filters input { width: auto; }
 .filters .f-q { flex: 1; min-width: 160px; }
 
 /* ===== subtareas ===== */
@@ -264,9 +265,9 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-bottom-wi
 #view:has(.gitv) { height: 100%; max-width: none; padding-bottom: 16px; }
 .gitv { display: flex; flex-direction: column; gap: 10px; height: 100%; min-height: 0; }
 .gbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.gbar select { width: auto; padding: 5px 8px; font-size: 12px; max-width: 220px; }
+.gbar .sel { width: auto; padding: 5px 8px; font-size: 12px; max-width: 260px; }
 .gbranch { display: inline-flex; align-items: center; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 2px 4px 2px 10px; color: var(--accent); }
-.gbranch select { border: 0; background: transparent; color: var(--text); font-weight: 600; }
+.gbranch .sel { border: 0; background: transparent; color: var(--text); font-weight: 600; }
 .gnew { display: inline-flex; gap: 4px; align-items: center; }
 .gnew input { width: 170px; padding: 5px 8px; font-size: 12px; }
 .gerr { background: color-mix(in srgb, var(--danger) 14%, transparent); border: 1px solid var(--danger); color: var(--danger); border-radius: 8px; padding: 8px 12px; font-size: 12px; white-space: pre-wrap; }
@@ -305,3 +306,73 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-bottom-wi
 .toast { display: flex; align-items: center; gap: 12px; }
 .toast-action { background: none; border: 0; color: var(--accent); font-weight: 600; cursor: pointer; padding: 0 2px; }
 .toast-action:hover { text-decoration: underline; }
+/* ===== Select (Radix Popover) ===== */
+.sel { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; text-align: left; font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; outline: none; cursor: pointer; transition: background-color .2s, border-color .2s, color .2s; }
+.sel:hover:not(:disabled) { border-color: var(--muted); }
+.sel:focus-visible, .sel[data-state="open"] { border-color: var(--accent); }
+.sel:disabled { opacity: .55; cursor: default; }
+.sel-v { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sel-ar { flex: none; color: var(--muted); font-size: 11px; }
+.sel-menu { z-index: 60; display: flex; flex-direction: column; max-width: min(560px, 94vw); max-height: min(380px, var(--radix-popover-content-available-height)); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); padding: 4px; outline: none; font-size: 13px; }
+.sel-q { flex: none; width: 100%; margin: 2px 0 4px; padding: 6px 9px; font-size: 12px; }
+.sel-list { overflow-y: auto; min-height: 0; }
+.sel-group { padding: 8px 10px 3px; font-size: 11px; font-weight: 600; letter-spacing: .3px; color: var(--muted); }
+.sel-opt { padding: 6px 10px; border-radius: 6px; color: var(--text); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sel-opt[data-active="true"] { background: var(--panel2); }
+.sel-opt.on { color: var(--accent); font-weight: 600; }
+.sel-opt.off { color: var(--muted); cursor: default; }
+.sel-empty { padding: 10px; color: var(--muted); font-size: 12px; }
+
+/* ===== barra de estado (rama de Git) ===== */
+.statusbar { flex: none; display: flex; align-items: center; gap: 12px; height: 24px; padding: 0 10px; background: var(--panel); border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.sb-branch { display: inline-flex; align-items: center; gap: 5px; height: 100%; padding: 0 8px; background: none; border: 0; color: var(--text); font-weight: 600; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-branch:hover { background: var(--panel2); color: var(--accent); }
+.sb-dirty { color: var(--warn); font-size: 9px; }
+.sb-sync { color: var(--accent2); }
+.sb-repo { margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ===== estilos y fondo personalizado ===== */
+body { background-image: var(--bg-deco, none); background-attachment: fixed; }
+html[data-bg="image"] body {
+  background-image: linear-gradient(color-mix(in srgb, var(--bg) var(--bg-dim, 80%), transparent), color-mix(in srgb, var(--bg) var(--bg-dim, 80%), transparent)), var(--bg-image);
+  background-size: cover; background-position: center; background-attachment: fixed;
+}
+html[data-bg="image"] .side { background: color-mix(in srgb, var(--panel) 82%, transparent); backdrop-filter: blur(14px); }
+.style-btn { border: 1px solid var(--line); }
+.pmenu .swatches { flex-wrap: wrap; }
+
+/* ===== paneles de vidrio (solo con imagen de fondo) =====
+   Se excluyen menús, diálogos y avisos, que deben seguir opacos para leerse bien. :where() mantiene baja la especificidad
+   para que los :hover y estados existentes sigan ganando. */
+:where(html[data-bg="image"]) :is(.side, .row, .col, .chat-main, .activity, .tabs, .group-card, .limit, .period, .bars, .wbars, .side-panel .panel-body, .side-panel .rail, .design-list, .design-chat, .gleft, .gright, .statusbar, .dock-head) {
+  background: color-mix(in srgb, var(--panel) var(--glass, 80%), transparent);
+}
+:where(html[data-bg="image"]) :is(.card, .stat, .design-stage, .tabs.sub) {
+  background: color-mix(in srgb, var(--panel2) var(--glass, 80%), transparent);
+}
+:where(html[data-bg="image"]) :is(.side, .col, .chat-main, .gleft, .gright, .side-panel .panel-body, .design-list, .design-chat, .statusbar) {
+  backdrop-filter: blur(12px);
+}
+
+/* El desenfoque de la barra lateral crea su propio contexto de apilado: sin z-index, el menú de perfil (que sobresale de ella)
+   quedaba tapado por el contenido. Va por debajo de los modales (z-index 20). */
+:where(html[data-bg="image"]) .side { position: relative; z-index: 15; }
+
+/* ===== proveedor y modelo en el chat ===== */
+.hint-pick { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.sel.mini-sel { width: auto; padding: 2px 8px; font-size: 11px; border-radius: 6px; max-width: 200px; }
+
+/* ===== historial de conversaciones ===== */
+.hist { display: flex; flex-direction: column; gap: 6px; }
+.hist-row { display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; color: var(--text); }
+.hist-row:hover { border-color: var(--accent); }
+.hist-h { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.hist-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.hist-d { margin-left: auto; flex: none; color: var(--muted); font-size: 12px; }
+.hist-s { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip.prov-copilot { color: var(--accent2); }
+
+/* solicitud de permiso de Claude (ejecutar un comando, etc.) */
+.perm { align-self: stretch; border: 1px solid var(--warn); border-left-width: 4px; border-radius: 10px; padding: 10px 12px; background: var(--card, transparent); display: flex; flex-direction: column; gap: 6px; }
+.perm-title { font-size: 12px; color: var(--warn); }
+.perm-cmd { margin: 0; padding: 8px 10px; border-radius: 8px; background: rgba(127,127,127,.12); font: 12px/1.45 Consolas, monospace; white-space: pre-wrap; word-break: break-all; max-height: 180px; overflow: auto; }

@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { MockupFile } from '../../../shared/types'
+import type { Attachment, MockupFile } from '../../../shared/types'
 import { designConv } from '../conversations'
 import { findTask, useDB } from '../store'
 import { useUi } from '../ui'
+import { AttachmentList } from './Chat'
 import { Markdown } from './Markdown'
 
 type Device = 'desktop' | 'tablet' | 'mobile'
 const WIDTH: Record<Device, number> = { desktop: 1280, tablet: 820, mobile: 390 }
 const DEVICE_LABEL: Record<Device, string> = { desktop: '🖥 Escritorio', tablet: '▭ Tableta', mobile: '▯ Móvil' }
 
-const IDEAS = ['Pantalla de inicio de sesión', 'Dashboard con métricas y una tabla', 'Formulario de alta con validaciones', 'Landing page para presentar el proyecto']
+const IDEAS = ['Pantalla de inicio de sesión', 'Dashboard con métricas y una tabla', 'Formulario de alta con validaciones', 'Landing page para presentar el proyecto', 'Rediseña esta pantalla con la marca de https://']
 
 /** Pestaña Diseño de una tarea: Claude genera mockups HTML y aquí se previsualizan, versionan y exportan. */
 export function DesignView({ taskId }: { taskId: string }): ReactNode {
@@ -26,6 +27,8 @@ export function DesignView({ taskId }: { taskId: string }): ReactNode {
   const [device, setDevice] = useState<Device>('desktop')
   const [prompt, setPrompt] = useState('')
   const [iterate, setIterate] = useState(true)
+  const [attached, setAttached] = useState<Attachment[]>([])
+  const [dragging, setDragging] = useState(false)
   const newest = useRef(0)
 
   const refresh = useCallback(async () => {
@@ -52,15 +55,43 @@ export function DesignView({ taskId }: { taskId: string }): ReactNode {
     return () => clearInterval(id)
   }, [running, refresh])
 
+  // la conversación de Diseño se crea al primer uso (también al adjuntar, porque los adjuntos se guardan por conversación)
+  const ensureConv = async (): Promise<string | undefined> => conv?.id ?? (await ui.run('chat:new', taskId, 'design'))
+
+  const addBlobs = async (blobs: File[]): Promise<void> => {
+    const id = await ensureConv()
+    if (!id) return
+    for (const f of blobs) {
+      const a = await ui.run('attach:save', id, f.name || 'captura.png', new Uint8Array(await f.arrayBuffer()))
+      if (a) setAttached((cur) => [...cur, a])
+    }
+  }
+
+  const pickFiles = async (): Promise<void> => {
+    const id = await ensureConv()
+    if (!id) return
+    const r = await ui.run('attach:pick', id)
+    if (r?.length) setAttached((cur) => [...cur, ...r])
+  }
+
   const send = async (): Promise<void> => {
     const text = prompt.trim()
-    if (!text || running) return
+    if ((!text && !attached.length) || running) return
+    const sent = attached
     setPrompt('')
-    const id = conv?.id ?? (await ui.run('chat:new', taskId, 'design'))
-    if (!id) return setPrompt(text)
-    const base = selected && iterate ? `Parte del mockup existente «${selected}» y crea una nueva versión con este cambio: ${text}` : text
-    const r = await ui.run('chat:send', id, base)
-    if (r === undefined) setPrompt(text)
+    setAttached([])
+    const id = await ensureConv()
+    if (!id) {
+      setPrompt(text)
+      return setAttached(sent)
+    }
+    const what = text || 'Usa las imágenes adjuntas como referencia (logo, colores y estilo).'
+    const base = selected && iterate ? `Parte del mockup existente «${selected}» y crea una nueva versión con este cambio: ${what}` : what
+    const r = await ui.run('chat:send', id, base, sent)
+    if (r === undefined) {
+      setPrompt(text)
+      setAttached(sent)
+    }
   }
 
   const exportAs = async (format: 'png' | 'pdf'): Promise<void> => {
@@ -163,12 +194,38 @@ export function DesignView({ taskId }: { taskId: string }): ReactNode {
               ))}
             </div>
           )}
-          <div className="composer">
+          {attached.length > 0 && (
+            <div className="attach-bar">
+              <AttachmentList items={attached} onRemove={(i) => setAttached((cur) => cur.filter((_, j) => j !== i))} />
+            </div>
+          )}
+          <div
+            className={`composer ${dragging ? 'drag' : ''}`}
+            onDragOver={(e) => {
+              e.preventDefault()
+              setDragging(true)
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => {
+              e.preventDefault()
+              setDragging(false)
+              void addBlobs([...e.dataTransfer.files])
+            }}
+          >
+            <button className="btn clip" title="Adjuntar logo, capturas o fotos de referencia (también puedes pegar o arrastrar)" disabled={running} onClick={() => void pickFiles()}>
+              📎
+            </button>
             <textarea
               rows={1}
               value={prompt}
               disabled={running}
-              placeholder={selected && iterate ? `Qué cambiar de «${selected}»…` : 'Describe el mockup que necesitas…'}
+              placeholder={selected && iterate ? `Qué cambiar de «${selected}»… (puedes adjuntar un logo o referencias)` : 'Describe el mockup que necesitas… (puedes adjuntar un logo o referencias, o pedirle que mire una web)'}
+              onPaste={(e) => {
+                const blobs = [...e.clipboardData.files]
+                if (!blobs.length) return
+                e.preventDefault()
+                void addBlobs(blobs)
+              }}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -177,7 +234,7 @@ export function DesignView({ taskId }: { taskId: string }): ReactNode {
                 }
               }}
             />
-            <button className="btn primary" disabled={running || !prompt.trim()} onClick={() => void send()}>
+            <button className="btn primary" disabled={running || (!prompt.trim() && !attached.length)} onClick={() => void send()}>
               {running ? 'Diseñando…' : selected && iterate ? 'Nueva versión' : 'Crear mockup'}
             </button>
           </div>

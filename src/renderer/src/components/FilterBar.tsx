@@ -3,6 +3,7 @@ import type { Priority } from '../../../shared/types'
 import { EMPTY, isFiltering, setFilters, useFilters, type SortKey } from '../filters'
 import { useDB } from '../store'
 import { PRIO, isWorkTask } from '../utils'
+import { Select } from './Select'
 
 const uniq = (xs: string[]): string[] => [...new Set(xs.filter(Boolean))].sort((a, b) => a.localeCompare(b))
 
@@ -18,41 +19,42 @@ export function FilterBar(): ReactNode {
   return (
     <div className="filters" role="search">
       <input className="f-q" value={f.q} placeholder="Filtrar tareas…" aria-label="Filtrar tareas" onChange={(e) => setFilters({ q: e.target.value })} />
-      <select value={f.client} aria-label="Cliente" onChange={(e) => setFilters({ client: e.target.value, project: '' })}>
-        <option value="">Todos los clientes</option>
-        {clients.map((c) => (
-          <option key={c}>{c}</option>
-        ))}
-      </select>
-      <select value={f.project} aria-label="Proyecto" onChange={(e) => setFilters({ project: e.target.value })}>
-        <option value="">Todos los proyectos</option>
-        {projects.map((c) => (
-          <option key={c}>{c}</option>
-        ))}
-      </select>
-      <select value={f.priority} aria-label="Prioridad" onChange={(e) => setFilters({ priority: e.target.value as '' | Priority })}>
-        <option value="">Toda prioridad</option>
-        {Object.entries(PRIO).map(([k, v]) => (
-          <option key={k} value={k}>
-            {v}
-          </option>
-        ))}
-      </select>
+      <Select
+        value={f.client}
+        ariaLabel="Cliente"
+        onChange={(v) => setFilters({ client: v, project: '' })}
+        options={[{ value: '', label: 'Todos los clientes' }, ...clients.map((c) => ({ value: c, label: c }))]}
+      />
+      <Select
+        value={f.project}
+        ariaLabel="Proyecto"
+        onChange={(v) => setFilters({ project: v })}
+        options={[{ value: '', label: 'Todos los proyectos' }, ...projects.map((c) => ({ value: c, label: c }))]}
+      />
+      <Select
+        value={f.priority}
+        ariaLabel="Prioridad"
+        onChange={(v) => setFilters({ priority: v as '' | Priority })}
+        options={[{ value: '', label: 'Toda prioridad' }, ...Object.entries(PRIO).map(([k, v]) => ({ value: k, label: v }))]}
+      />
       {tags.length > 0 && (
-        <select value={f.tag} aria-label="Etiqueta" onChange={(e) => setFilters({ tag: e.target.value })}>
-          <option value="">Toda etiqueta</option>
-          {tags.map((c) => (
-            <option key={c} value={c}>
-              #{c}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={f.tag}
+          ariaLabel="Etiqueta"
+          onChange={(v) => setFilters({ tag: v })}
+          options={[{ value: '', label: 'Toda etiqueta' }, ...tags.map((c) => ({ value: c, label: `#${c}` }))]}
+        />
       )}
-      <select value={f.sort} aria-label="Ordenar" onChange={(e) => setFilters({ sort: e.target.value as SortKey })}>
-        <option value="priority">Orden: prioridad</option>
-        <option value="recent">Orden: más recientes</option>
-        <option value="name">Orden: nombre</option>
-      </select>
+      <Select
+        value={f.sort}
+        ariaLabel="Ordenar"
+        onChange={(v) => setFilters({ sort: v as SortKey })}
+        options={[
+          { value: 'priority', label: 'Orden: prioridad' },
+          { value: 'recent', label: 'Orden: más recientes' },
+          { value: 'name', label: 'Orden: nombre' }
+        ]}
+      />
       {isFiltering(f) && (
         <button className="btn sm" onClick={() => setFilters({ ...EMPTY, sort: f.sort })}>
           Limpiar
