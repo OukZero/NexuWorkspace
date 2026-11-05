@@ -32,7 +32,7 @@ function GroupCard({ group, isNew, onDone }: { group: FolderGroup; isNew?: boole
   }
 
   const del = async (): Promise<void> => {
-    if (!confirm(`¿Eliminar el grupo «${group.name}»?${users ? ` Lo usan ${users} tarea(s); perderán ese acceso.` : ''}`)) return
+    if (!(await ui.confirm(`Se eliminará el grupo «${group.name}».${users ? ` Lo usan ${users} tarea(s); perderán ese acceso.` : ''}`, { title: "Eliminar grupo", confirmLabel: "Eliminar", danger: true }))) return
     await ui.run('group:delete', group.id)
   }
 

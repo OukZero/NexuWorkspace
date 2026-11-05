@@ -5,6 +5,7 @@ import { findTask, useDB, useNow } from '../store'
 import { baseName, dayKey, fmtH, hhmm, isWorkTask, toTs } from '../utils'
 import { useUi } from '../ui'
 import { DailyView } from './DailyView'
+import { DatePicker } from './DatePicker'
 import { EmptyState } from './EmptyState'
 import { RedminePanel } from './RedminePanel'
 import { WeekView } from './WeekView'
@@ -208,7 +209,7 @@ export function Hours(): ReactNode {
       <div className="toolbar">
         <div>
           <label>Día</label>
-          <input type="date" value={day} onChange={(e) => e.target.value && setDay(e.target.value)} />
+          <DatePicker value={day} ariaLabel="Día" onChange={setDay} />
         </div>
         <button className="btn" onClick={() => ui.addEntry(day)}>
           + Entrada manual
@@ -286,11 +287,11 @@ export function Hours(): ReactNode {
       <div className="toolbar">
         <div>
           <label>Desde</label>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <DatePicker value={from} ariaLabel="Desde" onChange={setFrom} />
         </div>
         <div>
           <label>Hasta</label>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          <DatePicker value={to} ariaLabel="Hasta" onChange={setTo} />
         </div>
         <button className="btn primary" onClick={exportXlsx}>
           Exportar .xlsx

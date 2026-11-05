@@ -1,5 +1,6 @@
 import { BrowserWindow } from 'electron'
-import type { RedmineCatalog, RedmineLine, RedmineResult } from '../shared/types'
+import { dayKey } from '../shared/util'
+import type { RedmineCatalog, RedmineDay, RedmineLine, RedmineResult } from '../shared/types'
 import { commit, getDb } from './db'
 
 /**
@@ -176,12 +177,25 @@ export async function loadCatalog(): Promise<{ projects: number; issues: number 
   return { projects: projects.size, issues }
 }
 
-const M_CREATE = `mutation ($attributes: TimeEntryAttributes!) {
+/** Horas imputadas en Redmine y horas laborables de cada día entre dos fechas (YYYY-MM-DD, ambas incluidas). */
+export async function days(from: string, to: string): Promise<RedmineDay[]> {
+  const s = await session()
+  if (!s) throw new Error('Inicia sesión en la ventana de Redmine y vuelve a pulsar «Actualizar».')
+  const list: string[] = []
+  for (let d = new Date(`${from}T00:00:00`); dayKey(d) <= to && list.length < 62; d.setDate(d.getDate() + 1)) list.push(dayKey(d))
+  // una sola petición con un alias por día (las fechas son YYYY-MM-DD generadas aquí, no texto del usuario)
+  const body = list.map((d, i) => `d${i}: user(id: $u) { max: maxWorkingHoursForDate(date: "${d}") spent: sumSpentTimeForDate(date: "${d}") }`).join('\n')
+  const r = await gqlFor(s.w)<Record<string, { max: number | string | null; spent: number | string | null }>>(`query ($u: ID!) {\n${body}\n}`, { u: s.userId })
+  return list.map((day, i) => ({ day, spent: Number(r[`d${i}`]?.spent) || 0, max: Number(r[`d${i}`]?.max) || 0 }))
+}
+
+const M_CREATE =`mutation ($attributes: TimeEntryAttributes!) {
   createTimeEntry(attributes: $attributes) { errors { attribute messages } }
 }`
 const Q_ACTIVITIES = `query ($projectId: ID!, $userId: ID) { project(id: $projectId) { activitiesPerRole(userId: $userId) { id name } } }`
 const Q_FIELDS = `query ($projectId: ID, $activityId: ID) { availableCustomFieldsForTimeEntry(projectId: $projectId, activityId: $activityId) { id name isRequired } }`
 
+const r2 = (n: number): number => Math.round(n * 100) / 100
 const norm = (s: string): string => s.toLowerCase().replace(/\s+/g, ' ').trim()
 
 /** Imputa en Redmine las líneas indicadas (sus `key`) del día. Marca como enviados los registros de las que salgan bien. */
@@ -194,8 +208,18 @@ export async function send(day: string, keys: string[]): Promise<RedmineResult> 
   const gql = gqlFor(s.w)
   const catalog = getDb().settings.redmineCatalog ?? {}
 
+  // tope diario (Ajustes → horas objetivo): lo ya imputado ese día en Redmine cuenta, y lo que sobre no se envía
+  const cap = getDb().settings.targetHours || 8
+  const q = await gql<{ user: { spent: number | string | null } }>(`query ($u: ID!) { user(id: $u) { spent: sumSpentTimeForDate(date: "${day}") } }`, { u: s.userId })
+  let remaining = cap - (Number(q.user.spent) || 0)
+  result.notes = []
+
   for (const l of todo) {
     try {
+      if (remaining <= 0.001) throw new Error(`Ya tienes ${cap} h imputadas el ${day} (tope diario). Estas horas quedan pendientes.`)
+      const trimmed = l.hours > remaining + 0.001
+      if (trimmed) result.notes.push(`${l.issue}: se imputaron ${r2(remaining)} h de ${l.hours} h por el tope de ${cap} h`)
+      const hours = Math.min(l.hours, remaining)
       const project = catalog[l.project]
       if (!project) throw new Error(`El proyecto «${l.project}» no está en la lista cargada de Redmine (usa «Cargar proyectos y tareas»).`)
       const issueId = project.issues.find((i) => i.label === l.issue)?.id ?? (l.issue.match(/#?(\d{3,})/) ?? [])[1]
@@ -215,7 +239,7 @@ export async function send(day: string, keys: string[]): Promise<RedmineResult> 
           comments: l.comment,
           easyTimeFrom: null,
           easyTimeTo: null,
-          hours: String(l.hours),
+          hours: String(r2(hours)),
           issueId,
           projectId: project.id,
           spentOn: day,
@@ -232,6 +256,7 @@ export async function send(day: string, keys: string[]): Promise<RedmineResult> 
         if (e) e.rmSent = Date.now()
       }
       commit()
+      remaining -= hours
       result.sent++
     } catch (e) {
       result.failed.push({ key: l.key, error: (e as Error).message })

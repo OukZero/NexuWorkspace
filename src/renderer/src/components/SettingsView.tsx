@@ -47,7 +47,7 @@ export function SettingsView(): ReactNode {
       <div className="sub">Todo se guarda localmente</div>
       <div className="grid2" style={{ maxWidth: 700 }}>
         <div>
-          <label>Horas objetivo por día</label>
+          <label>Horas objetivo por día (también el tope a imputar en Redmine)</label>
           <input type="number" step="0.5" value={s.targetHours} onChange={(e) => set('targetHours', e.target.valueAsNumber)} />
         </div>
         <div>
@@ -224,9 +224,13 @@ export function SettingsView(): ReactNode {
         </button>
         <button
           className="btn"
-          onClick={() => {
-            if (confirm('Importar reemplaza TODAS las tareas, horas y conversaciones actuales por las del archivo. Antes se guarda una copia de lo actual. ¿Continuar?'))
-              void ui.run('data:import').then((ok) => ok && ui.toast('Datos importados'))
+          onClick={async () => {
+            const ok = await ui.confirm('Importar reemplaza TODAS las tareas, horas y conversaciones actuales por las del archivo. Antes se guarda una copia de lo actual.', {
+              title: 'Importar datos',
+              confirmLabel: 'Importar',
+              danger: true
+            })
+            if (ok) void ui.run('data:import').then((done) => done && ui.toast('Datos importados'))
           }}
         >
           Importar datos…

@@ -232,6 +232,7 @@ export function registerIpc(): void {
   })
   api('redmine:lines', (day) => redmine.lines(day))
   api('redmine:login', () => redmine.openLogin())
+  api('redmine:days', (from, to) => redmine.days(from, to))
   api('redmine:send', (day, keys) => redmine.send(day, keys))
   api('redmine:catalog', () => redmine.loadCatalog())
   api('settings:save', (s) => {

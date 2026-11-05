@@ -68,10 +68,19 @@ export interface RedmineLine {
   entryIds: string[]
 }
 
+/** Un día en Redmine: horas imputadas y horas laborables que le corresponden. */
+export interface RedmineDay {
+  day: string
+  spent: number
+  max: number
+}
+
 export interface RedmineResult {
   sent: number
   failed: Array<{ key: string; error: string }>
   needLogin?: boolean
+  /** Avisos, p. ej. horas recortadas por el tope diario. */
+  notes?: string[]
 }
 
 export interface Hunk {
@@ -411,6 +420,7 @@ export interface IpcChannels {
   'group:delete': { args: [string]; ret: void }
   'redmine:lines': { args: [string]; ret: RedmineLine[] }
   'redmine:login': { args: []; ret: void }
+  'redmine:days': { args: [string, string]; ret: RedmineDay[] }
   'redmine:send': { args: [string, string[]]; ret: RedmineResult }
   'redmine:catalog': { args: []; ret: { projects: number; issues: number } }
   'entry:update': { args: [EntryPatch]; ret: void }

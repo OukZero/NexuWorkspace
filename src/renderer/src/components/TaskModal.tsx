@@ -88,7 +88,7 @@ export function TaskModal({ task: t }: { task: Partial<Task> }): ReactNode {
   }
 
   const del = async (): Promise<void> => {
-    if (!t.id || !confirm('¿Eliminar tarea y sus registros de tiempo?')) return
+    if (!t.id || !(await ui.confirm('Se eliminará la tarea junto con sus registros de tiempo. Podrás deshacerlo unos segundos.', { title: 'Eliminar tarea', confirmLabel: 'Eliminar', danger: true }))) return
     // se guarda todo lo que se borra con la tarea, para poder deshacer
     const task = db.tasks.find((x) => x.id === t.id)
     const payload: UndoPayload = {

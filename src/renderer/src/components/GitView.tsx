@@ -185,8 +185,8 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
     })
   }
 
-  const discard = (f: GitFile): void => {
-    if (!confirm(`¿Descartar los cambios de «${f.path}»? No se puede deshacer.`)) return
+  const discard = async (f: GitFile): Promise<void> => {
+    if (!(await ui.confirm(`Se descartarán los cambios de «${f.path}». No se puede deshacer.`, { title: "Descartar cambios", confirmLabel: "Descartar", danger: true }))) return
     void act('discard', () => window.api.call('git:discard', dir, f.untracked ? [] : [f.path], f.untracked ? [f.path] : []))
   }
 

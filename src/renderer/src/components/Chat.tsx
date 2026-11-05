@@ -228,7 +228,7 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
   }
 
   const reset = async (): Promise<void> => {
-    if (!confirm('¿Borrar los mensajes de esta conversación y empezar de cero? Las demás conversaciones de la tarea no se tocan.')) return
+    if (!(await ui.confirm('Se borrarán los mensajes de esta conversación y empezará de cero. Las demás conversaciones de la tarea no se tocan.', { title: 'Reiniciar conversación', confirmLabel: 'Borrar mensajes', danger: true }))) return
     setLive('')
     await ui.run('chat:reset', convId)
   }

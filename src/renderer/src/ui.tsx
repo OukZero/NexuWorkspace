@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react'
 import type { IpcChannels, Task } from '../../shared/types'
 
-export type View = 'today' | 'board' | 'hours' | 'usage' | 'history' | 'groups' | 'settings' | 'chat'
+export type View = 'today' | 'board' | 'hours' | 'usage' | 'history' | 'redmine' | 'groups' | 'settings' | 'chat'
 
 export interface Ui {
   view: View
@@ -27,6 +27,8 @@ export interface Ui {
   closeModal(): void
   /** Aviso temporal; con `action` muestra un botón (p. ej. «Deshacer»). */
   toast(msg: string, err?: boolean, action?: { label: string; run: () => void }): void
+  /** Pide confirmación con un diálogo de la app (reemplaza a confirm() del navegador). Resuelve true si el usuario acepta. */
+  confirm(message: string, opts?: { title?: string; confirmLabel?: string; danger?: boolean }): Promise<boolean>
   /** Terminal de la tarea: el panel integrado (como VS Code) o una ventana aparte, según Ajustes. Con sesión, retoma esa conversación. */
   openTerminal(taskId: string, sessionId?: string): void
   /** Confeti discreto al completar una tarea. */

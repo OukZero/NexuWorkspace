@@ -8,6 +8,7 @@ import { ChatView } from './components/Chat'
 import { DiffModal } from './components/DiffModal'
 import { Groups } from './components/Groups'
 import { History } from './components/History'
+import { RedmineView } from './components/RedmineView'
 import { Hours } from './components/Hours'
 import { NewTabModal } from './components/NewTabModal'
 import { SettingsView } from './components/SettingsView'
@@ -19,6 +20,8 @@ import { GitView } from './components/GitView'
 import { CommandPalette } from './components/CommandPalette'
 import { TerminalDock, type TermRequest } from './components/TerminalDock'
 import { Confetti } from './components/Confetti'
+import { ConfirmDialog } from './components/ConfirmDialog'
+import type { ConfirmRequest } from './components/ConfirmDialog'
 import { HelpModal } from './components/HelpModal'
 import { TaskModal } from './components/TaskModal'
 import { TimerBar } from './components/TimerBar'
@@ -72,6 +75,19 @@ export function App(): ReactNode {
   const [dockH, setDockH] = useState(() => Number(localStorage.getItem('shutoki.dockH')) || 280)
   const [termReq, setTermReq] = useState<TermRequest | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const [confirmReq, setConfirmReq] = useState<(ConfirmRequest & { resolve: (ok: boolean) => void }) | null>(null)
+
+  const confirm = useCallback(
+    (message: string, opts?: { title?: string; confirmLabel?: string; danger?: boolean }): Promise<boolean> =>
+      new Promise((resolve) => setConfirmReq({ message, ...opts, resolve })),
+    []
+  )
+  const answerConfirm = useCallback((ok: boolean): void => {
+    setConfirmReq((r) => {
+      r?.resolve(ok)
+      return null
+    })
+  }, [])
 
   const toast = useCallback((msg: string, err = false, action?: { label: string; run: () => void }): void => {
     setToastState({ msg, err, action })
@@ -180,6 +196,7 @@ export function App(): ReactNode {
     },
     closeModal: () => setModal(null),
     toast,
+    confirm,
     openTerminal: (taskId, sessionId) => {
       if (db.settings.terminalMode === 'external') {
         void run('terminal:open', taskId, sessionId)
@@ -309,6 +326,9 @@ export function App(): ReactNode {
     case 'history':
       content = <History />
       break
+    case 'redmine':
+      content = <RedmineView />
+      break
     case 'groups':
       content = <Groups />
       break
@@ -372,9 +392,13 @@ export function App(): ReactNode {
           {modal.kind === 'help' && <HelpModal />}
         </div>
       )}
+      {confirmReq && <ConfirmDialog req={confirmReq} onAnswer={answerConfirm} />}
       {toastState && (
         <div className={`toast ${toastState.err ? 'err' : ''}`} role="status">
-          {toastState.msg}
+          <span className="toast-ico" aria-hidden>
+            {toastState.err ? '!' : '✓'}
+          </span>
+          <span className="toast-msg">{toastState.msg}</span>
           {toastState.action && (
             <button
               className="toast-action"

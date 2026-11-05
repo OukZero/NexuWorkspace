@@ -34,6 +34,7 @@ const NAV: Array<[View, string, string]> = [
   ['board', '▦', 'Tablero'],
   ['hours', '⏱', 'Horas'],
   ['history', '☰', 'Historial'],
+  ['redmine', '✓', 'Redmine'],
   ['usage', '◔', 'Consumo'],
   ['groups', '🗂', 'Carpetas'],
   ['settings', '⚙', 'Ajustes']

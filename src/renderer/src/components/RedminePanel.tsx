@@ -34,7 +34,8 @@ export function RedminePanel({ day }: { day: string }): ReactNode {
     if (!r) return
     if (r.needLogin) return ui.toast('Inicia sesión en la ventana de Redmine y vuelve a pulsar «Imputar»', true)
     setErrors(Object.fromEntries(r.failed.map((f) => [f.key, f.error])))
-    ui.toast(r.failed.length ? `${r.sent} imputadas, ${r.failed.length} con error` : `${r.sent} imputadas en Redmine`, r.failed.length > 0)
+    if (r.notes?.length) ui.toast(r.notes.join(' · '), true)
+    else ui.toast(r.failed.length ? `${r.sent} imputadas, ${r.failed.length} con error` : `${r.sent} imputadas en Redmine`, r.failed.length > 0)
   }
 
   return (
@@ -65,6 +66,11 @@ export function RedminePanel({ day }: { day: string }): ReactNode {
               </div>
             )
           })}
+          {total > (db.settings.targetHours || 8) + 0.001 && (
+            <div className="meta" style={{ color: 'var(--warn)' }}>
+              ⚠ Sumas {total.toFixed(2)} h y el tope diario es {db.settings.targetHours || 8} h: lo que pase del tope (contando lo ya imputado ese día) no se enviará.
+            </div>
+          )}
           <div className="foot" style={{ marginTop: 10 }}>
             <button className="btn" onClick={() => void ui.run('redmine:login')}>
               Abrir Redmine / iniciar sesión
