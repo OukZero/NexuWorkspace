@@ -11,6 +11,7 @@ import { gitCommits, openClaude, openLogin, openTerminalHere, openVSCode, render
 import { createPty, killPty, killPtysOf, resizePty, writePty } from './pty'
 import { applyLoginItem } from './tray'
 import { deleteMockup, exportMockup, listMockups, revealMockups } from './mockups'
+import * as redmine from './redmine'
 import { generateRecurring } from './scheduler'
 import { askClaude, summarizeConversation } from './summary'
 import { activeEntry, startTimer, stopActive } from './timer'
@@ -229,6 +230,10 @@ export function registerIpc(): void {
     getDb().entries.push({ id: uid(), note: '', ...e })
     commit()
   })
+  api('redmine:lines', (day) => redmine.lines(day))
+  api('redmine:login', () => redmine.openLogin())
+  api('redmine:send', (day, keys) => redmine.send(day, keys))
+  api('redmine:catalog', () => redmine.loadCatalog())
   api('settings:save', (s) => {
     const db = getDb()
     db.settings = { ...db.settings, ...s }

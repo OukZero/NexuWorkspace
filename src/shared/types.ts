@@ -39,6 +39,12 @@ export interface Task {
   notes?: string
   tags?: string[]
   subtasks?: Subtask[]
+  /** Proyecto de Redmine donde se imputan las horas de esta tarea (texto tal como aparece en el selector «Project»). */
+  rmProject?: string
+  /** Tarea de Redmine («#523277 - Estimaciones», o solo el número). */
+  rmIssue?: string
+  /** Actividad de Redmine; vacío = la de Ajustes. */
+  rmActivity?: string
 }
 
 export interface Entry {
@@ -47,6 +53,25 @@ export interface Entry {
   start: number
   end: number | null
   note: string
+  /** Momento en que se imputó en Redmine (evita duplicados). */
+  rmSent?: number
+}
+
+/** Horas de un día agrupadas como se imputan en Redmine: una línea por proyecto + tarea + actividad. */
+export interface RedmineLine {
+  key: string
+  project: string
+  issue: string
+  activity: string
+  hours: number
+  comment: string
+  entryIds: string[]
+}
+
+export interface RedmineResult {
+  sent: number
+  failed: Array<{ key: string; error: string }>
+  needLogin?: boolean
 }
 
 export interface Hunk {
@@ -295,7 +320,16 @@ export interface Settings {
   launchAtLogin: boolean
   /** Aviso matutino con el daily listo (hora HH:MM; vacío = sin aviso). */
   dailyTime: string
+  /** Dirección base de Redmine (para imputar horas desde la app). */
+  redmineUrl: string
+  /** Actividad por defecto al imputar (texto de la lista «Activity»). */
+  redmineActivity: string
+  /** Proyectos de Redmine y sus tareas, leídos del formulario «Log time». */
+  redmineCatalog?: RedmineCatalog
 }
+
+/** Proyecto de Redmine (por nombre) con su id y las tareas conocidas. */
+export type RedmineCatalog = Record<string, { id: string; issues: Array<{ id: string; label: string }> }>
 
 export interface DB {
   tasks: Task[]
@@ -375,6 +409,10 @@ export interface IpcChannels {
   'chat:reopen': { args: [string]; ret: void }
   'group:save': { args: [FolderGroup]; ret: void }
   'group:delete': { args: [string]; ret: void }
+  'redmine:lines': { args: [string]; ret: RedmineLine[] }
+  'redmine:login': { args: []; ret: void }
+  'redmine:send': { args: [string, string[]]; ret: RedmineResult }
+  'redmine:catalog': { args: []; ret: { projects: number; issues: number } }
   'entry:update': { args: [EntryPatch]; ret: void }
   'entry:delete': { args: [string]; ret: void }
   'entry:add': { args: [{ taskId: string; start: number; end: number }]; ret: void }

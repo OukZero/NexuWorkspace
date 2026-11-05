@@ -34,7 +34,9 @@ export function SettingsView(): ReactNode {
       terminalMode: s.terminalMode,
       closeToTray: s.closeToTray,
       launchAtLogin: s.launchAtLogin,
-      dailyTime: s.dailyTime || ''
+      dailyTime: s.dailyTime || '',
+      redmineUrl: s.redmineUrl.trim() || 'https://redminemss.seidor.es',
+      redmineActivity: s.redmineActivity.trim() || 'Work (Office)'
     })
     ui.toast('Ajustes guardados')
   }
@@ -182,6 +184,20 @@ export function SettingsView(): ReactNode {
           <label>Comandos que Claude y Copilot pueden ejecutar sin preguntar (uno por línea)</label>
           <textarea style={{ minHeight: 90 }} value={s.allowedCommands} placeholder="git status&#10;npm run&#10;dotnet build" onChange={(e) => set('allowedCommands', e.target.value)} />
           <div className="meta">Se permite el comando y sus argumentos. Siempre se bloquean push forzado, reset --hard, borrados y similares.</div>
+        </div>
+        <div>
+          <label>Dirección de Redmine</label>
+          <input value={s.redmineUrl} onChange={(e) => set('redmineUrl', e.target.value)} />
+        </div>
+        <div>
+          <label>Actividad por defecto en Redmine</label>
+          <Select
+            ariaLabel="Actividad de Redmine"
+            value={s.redmineActivity}
+            onChange={(v) => set('redmineActivity', v)}
+            creatable
+            options={['Work (On customer)', 'Work (Remote)', 'Work (Office)', 'Travel'].map((v) => ({ value: v, label: v }))}
+          />
         </div>
         <div style={{ gridColumn: 'span 2' }}>
           <label>Autor git para commits del día (vacío = todos)</label>

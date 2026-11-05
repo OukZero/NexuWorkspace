@@ -33,6 +33,20 @@ export function TaskModal({ task: t }: { task: Partial<Task> }): ReactNode {
   const [tags, setTags] = useState((t.tags ?? []).join(', '))
   const [subtasks, setSubtasks] = useState<Subtask[]>(t.subtasks ?? [])
   const [newSub, setNewSub] = useState('')
+  const [rmProject, setRmProject] = useState(t.rmProject ?? '')
+  const [rmIssue, setRmIssue] = useState(t.rmIssue ?? '')
+  const catalog = db.settings.redmineCatalog ?? {}
+  // proyectos y tareas leídos de Redmine; las tareas se filtran por el proyecto elegido. Se suman los valores ya usados en otras tareas.
+  const rmOptions = (k: 'rmProject' | 'rmIssue'): Array<{ value: string; label: string }> => {
+    const used = db.tasks.filter((x) => k === 'rmProject' || !rmProject || x.rmProject === rmProject).map((x) => x[k]?.trim())
+    const fromRedmine = k === 'rmProject' ? Object.keys(catalog) : (catalog[rmProject]?.issues.map((i) => i.label) ?? [])
+    return [...new Set([...fromRedmine, ...used].filter((x): x is string => !!x))].sort().map((v) => ({ value: v, label: v }))
+  }
+  const loadCatalog = async (): Promise<void> => {
+    ui.toast('Leyendo proyectos y tareas de Redmine… puede tardar un poco')
+    const r = await ui.run('redmine:catalog')
+    if (r) ui.toast(`Cargados ${r.projects} proyectos y ${r.issues} tareas`)
+  }
 
   const addSub = (): void => {
     const text = newSub.trim()
@@ -58,6 +72,8 @@ export function TaskModal({ task: t }: { task: Partial<Task> }): ReactNode {
       client: client.trim(),
       project: project.trim(),
       folder: folder.trim(),
+      rmProject: rmProject.trim(),
+      rmIssue: rmIssue.trim(),
       priority,
       status,
       estimateMin: isNaN(hours) ? 0 : Math.round(hours * 60),
@@ -147,6 +163,33 @@ export function TaskModal({ task: t }: { task: Partial<Task> }): ReactNode {
           <label>Proyecto</label>
           <input value={project} onChange={(e) => setProject(e.target.value)} />
         </div>
+      </div>
+      <label>
+        Redmine · dónde se imputan las horas de esta tarea{' '}
+        <button className="btn sm" type="button" title="Abre Redmine con tu sesión y lee todos los proyectos y sus tareas" onClick={() => void loadCatalog()}>
+          ↻ Cargar proyectos y tareas
+        </button>
+      </label>
+      <div className="grid2">
+        <Select
+          ariaLabel="Proyecto de Redmine"
+          value={rmProject}
+          onChange={(v) => {
+            setRmProject(v)
+            // la tarea elegida debe ser del proyecto: si no lo es, se limpia
+            const known = catalog[v]?.issues.some((i) => i.label === rmIssue)
+            if (catalog[v] && !known) setRmIssue('')
+          }}
+          creatable
+          options={[{ value: '', label: '— Proyecto de Redmine —' }, ...rmOptions('rmProject')]}
+        />
+        <Select
+          ariaLabel="Tarea de Redmine"
+          value={rmIssue}
+          onChange={setRmIssue}
+          creatable
+          options={[{ value: '', label: '— Tarea de Redmine (#123 - nombre) —' }, ...rmOptions('rmIssue')]}
+        />
       </div>
       <label>Carpeta del proyecto</label>
       <div className="folder">

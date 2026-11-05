@@ -6,6 +6,7 @@ import { baseName, dayKey, fmtH, hhmm, isWorkTask, toTs } from '../utils'
 import { useUi } from '../ui'
 import { DailyView } from './DailyView'
 import { EmptyState } from './EmptyState'
+import { RedminePanel } from './RedminePanel'
 import { WeekView } from './WeekView'
 
 const dayEntries = (db: DB, day: string): Entry[] => {
@@ -280,6 +281,7 @@ export function Hours(): ReactNode {
           )}
         </>
       )}
+      <RedminePanel day={day} />
       <h3>Exportar a Excel</h3>
       <div className="toolbar">
         <div>
