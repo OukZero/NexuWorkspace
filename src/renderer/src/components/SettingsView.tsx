@@ -34,7 +34,9 @@ export function SettingsView(): ReactNode {
       terminalMode: s.terminalMode,
       closeToTray: s.closeToTray,
       launchAtLogin: s.launchAtLogin,
-      dailyTime: s.dailyTime || ''
+      dailyTime: s.dailyTime || '',
+      redmineUrl: s.redmineUrl.trim() || 'https://redminemss.seidor.es',
+      redmineActivity: s.redmineActivity.trim() || 'Work (Office)'
     })
     ui.toast('Ajustes guardados')
   }
@@ -45,7 +47,7 @@ export function SettingsView(): ReactNode {
       <div className="sub">Todo se guarda localmente</div>
       <div className="grid2" style={{ maxWidth: 700 }}>
         <div>
-          <label>Horas objetivo por día</label>
+          <label>Horas objetivo por día (también el tope a imputar en Redmine)</label>
           <input type="number" step="0.5" value={s.targetHours} onChange={(e) => set('targetHours', e.target.valueAsNumber)} />
         </div>
         <div>
@@ -183,6 +185,20 @@ export function SettingsView(): ReactNode {
           <textarea style={{ minHeight: 90 }} value={s.allowedCommands} placeholder="git status&#10;npm run&#10;dotnet build" onChange={(e) => set('allowedCommands', e.target.value)} />
           <div className="meta">Se permite el comando y sus argumentos. Siempre se bloquean push forzado, reset --hard, borrados y similares.</div>
         </div>
+        <div>
+          <label>Dirección de Redmine</label>
+          <input value={s.redmineUrl} onChange={(e) => set('redmineUrl', e.target.value)} />
+        </div>
+        <div>
+          <label>Actividad por defecto en Redmine</label>
+          <Select
+            ariaLabel="Actividad de Redmine"
+            value={s.redmineActivity}
+            onChange={(v) => set('redmineActivity', v)}
+            creatable
+            options={['Work (On customer)', 'Work (Remote)', 'Work (Office)', 'Travel'].map((v) => ({ value: v, label: v }))}
+          />
+        </div>
         <div style={{ gridColumn: 'span 2' }}>
           <label>Autor git para commits del día (vacío = todos)</label>
           <input value={s.gitAuthor || ''} placeholder="tu@correo.com" onChange={(e) => set('gitAuthor', e.target.value)} />
@@ -208,9 +224,13 @@ export function SettingsView(): ReactNode {
         </button>
         <button
           className="btn"
-          onClick={() => {
-            if (confirm('Importar reemplaza TODAS las tareas, horas y conversaciones actuales por las del archivo. Antes se guarda una copia de lo actual. ¿Continuar?'))
-              void ui.run('data:import').then((ok) => ok && ui.toast('Datos importados'))
+          onClick={async () => {
+            const ok = await ui.confirm('Importar reemplaza TODAS las tareas, horas y conversaciones actuales por las del archivo. Antes se guarda una copia de lo actual.', {
+              title: 'Importar datos',
+              confirmLabel: 'Importar',
+              danger: true
+            })
+            if (ok) void ui.run('data:import').then((done) => done && ui.toast('Datos importados'))
           }}
         >
           Importar datos…

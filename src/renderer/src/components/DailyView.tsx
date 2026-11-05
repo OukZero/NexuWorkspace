@@ -5,6 +5,7 @@ import { clip } from '../../../shared/util'
 import { findTask, useDB } from '../store'
 import { dayKey, fmtH, isWorkTask, toTs } from '../utils'
 import { useUi } from '../ui'
+import { DatePicker } from './DatePicker'
 
 const BLOCKED_TAGS = ['bloqueo', 'bloqueada', 'bloqueado', 'blocked']
 const BLOCKERS_KEY = 'shutoki.dailyBlockers'
@@ -137,7 +138,7 @@ export function DailyView(): ReactNode {
       <div className="toolbar">
         <div>
           <label>Ayer (día que se reporta)</label>
-          <input type="date" value={day} onChange={(e) => e.target.value && setDay(e.target.value)} />
+          <DatePicker value={day} ariaLabel="Día" onChange={setDay} />
         </div>
         <button className="btn sm" onClick={() => setDay(prevWorkday())}>
           Último día hábil

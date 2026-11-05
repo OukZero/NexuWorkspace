@@ -101,7 +101,7 @@ export function DesignView({ taskId }: { taskId: string }): ReactNode {
   }
 
   const remove = async (name: string): Promise<void> => {
-    if (!confirm(`¿Eliminar el mockup «${name}»?`)) return
+    if (!(await ui.confirm(`Se eliminará el mockup «${name}».`, { title: "Eliminar mockup", confirmLabel: "Eliminar", danger: true }))) return
     await ui.run('mockup:delete', taskId, name)
     void refresh()
   }

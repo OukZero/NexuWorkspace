@@ -42,6 +42,8 @@ export const DEFAULT_SETTINGS: Settings = {
   closeToTray: false,
   launchAtLogin: false,
   dailyTime: '09:00',
+  redmineUrl: 'https://redminemss.seidor.es',
+  redmineActivity: 'Work (Office)',
   promptTemplate:
     'Trabaja en esta tarea:\n\n# {{title}}\n\n{{description}}\n\nProyecto: {{project}}\nCliente: {{client}}\n\nAntes de editar, revisa el código relevante y propón un plan breve.'
 }

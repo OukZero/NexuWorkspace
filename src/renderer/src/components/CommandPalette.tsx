@@ -19,6 +19,7 @@ const VIEWS: Array<[View, string]> = [
   ['board', 'Tablero'],
   ['hours', 'Horas'],
   ['history', 'Historial'],
+  ['redmine', 'Redmine · horas imputadas'],
   ['usage', 'Consumo'],
   ['groups', 'Carpetas'],
   ['settings', 'Ajustes']
