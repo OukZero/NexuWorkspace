@@ -2,15 +2,18 @@
 import { app, BrowserWindow, dialog, protocol, shell } from 'electron'
 import fs from 'fs'
 import path from 'path'
-import type { MockupFile } from '../shared/types'
+import type { Attachment, MockupFile } from '../shared/types'
 import { getMain } from './windows'
 
 export const SCHEME = 'shutoki-mockup'
 
 // Sin red ni acceso a nada fuera del propio documento: el HTML generado se trata como no confiable.
-const CSP = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data:"
+// Las imágenes del propio mockup (logo, referencias) se sirven desde su carpeta assets/ y por eso img-src admite 'self'.
+const CSP = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data: blob:; font-src data:; media-src data:"
 
 const NAME_RE = /^[\w][\w .()-]*\.html?$/i
+const ASSET_RE = /^[\w][\w.-]*\.(png|jpe?g|gif|webp|svg)$/i
+const MIME: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml' }
 const idOk = (id: string): boolean => /^[\w-]+$/.test(id)
 
 export const mockupsRoot = (): string => path.join(app.getPath('userData'), 'mockups')
@@ -26,6 +29,13 @@ export function registerMockupProtocol(): void {
   protocol.handle(SCHEME, (req) => {
     const parts = new URL(req.url).pathname.split('/').filter(Boolean).map(decodeURIComponent)
     const [taskId, name] = parts
+    // shutoki-mockup://m/<tarea>/assets/<imagen>: logos e imágenes de referencia que el usuario adjuntó
+    if (parts.length === 3 && name === 'assets' && idOk(taskId) && ASSET_RE.test(parts[2])) {
+      const img = path.join(mockupsDir(taskId), 'assets', parts[2])
+      if (!fs.existsSync(img)) return new Response('No encontrado', { status: 404 })
+      const headers = { 'content-type': MIME[path.extname(img).slice(1).toLowerCase()] ?? 'application/octet-stream', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'", 'cache-control': 'no-store' }
+      return new Response(fs.readFileSync(img), { headers })
+    }
     if (parts.length !== 2 || !idOk(taskId) || !NAME_RE.test(name)) return new Response('No encontrado', { status: 404 })
     const file = path.join(mockupsDir(taskId), name)
     if (!fs.existsSync(file)) return new Response('No encontrado', { status: 404 })
@@ -60,6 +70,33 @@ export function revealMockups(taskId: string): void {
   void shell.openPath(dir)
 }
 
+/**
+ * Copia las imágenes adjuntas a <mockups>/<tarea>/assets/ para que el HTML las use con <img src="assets/x.png">
+ * (Claude no puede copiar binarios con sus herramientas). Devuelve las rutas relativas disponibles.
+ */
+export function stageAssets(taskId: string, files: Attachment[]): string[] {
+  const dir = path.join(mockupsDir(taskId), 'assets')
+  const out: string[] = []
+  for (const f of files) {
+    if (!f.image && !/\.svg$/i.test(f.name)) continue
+    let name = path.basename(f.name).replace(/[^\w.-]+/g, '-').replace(/^[^\w]+/, '')
+    if (!ASSET_RE.test(name)) continue
+    fs.mkdirSync(dir, { recursive: true })
+    // si ya hay otra imagen distinta con ese nombre, no se pisa
+    if (fs.existsSync(path.join(dir, name)) && fs.statSync(path.join(dir, name)).size !== f.size) {
+      const ext = path.extname(name)
+      name = `${path.basename(name, ext)}-${Date.now().toString(36)}${ext}`
+    }
+    try {
+      fs.copyFileSync(f.path, path.join(dir, name))
+      out.push(`assets/${name}`)
+    } catch {
+      /* adjunto inaccesible: se omite */
+    }
+  }
+  return out
+}
+
 /** Instrucciones de diseño para Claude (se pasan con --append-system-prompt-file). */
 export function designInstructions(taskId: string, taskTitle: string): string {
   const dir = mockupsDir(taskId)
@@ -72,6 +109,8 @@ export function designInstructions(taskId: string, taskTitle: string): string {
       `Cuando te pidan un mockup, diseño o pantalla, genéralo como UN solo archivo HTML autocontenido y guárdalo con la herramienta Write en esta carpeta: ${dir}`,
       '- Nombre en minúsculas con guiones y extensión .html (p. ej. login.html). Si es una variante o mejora de uno existente, guarda una versión nueva (login-v2.html) en vez de pisar el anterior.',
       '- CSS y JS en línea. Sin CDNs, fuentes ni imágenes externas: usa SVG en línea o data URIs. El visor bloquea la red.',
+      '- Referencias en la web: puedes usar WebFetch y WebSearch para consultar sitios (identidad de marca, colores, tipografías, estructura de una pantalla). Extrae los valores (hex, nombres de fuente, textos) y reprodúcelos en tu HTML; no enlaces a la web ni dependas de ella. Si una página no se puede leer, dilo y pide al usuario los hex y el logo.',
+      '- Imágenes del usuario: las fotos de referencia llegan como imágenes adjuntas (míralas con atención y toma de ellas colores, composición y estilo). Si el mensaje indica «Imágenes disponibles para el mockup», úsalas con <img src="assets/nombre.png"> (ruta relativa tal cual); un logo SVG adjunto también puedes leerlo con Read e incrustarlo en línea. Nunca inventes un logo si te dieron uno.',
       '- Diseño responsive (se previsualiza en escritorio, tableta y móvil), con datos de ejemplo realistas en español, sin lorem ipsum.',
       '- Cuida jerarquía visual, espaciado, contraste y estados (hover, vacío, error) cuando aporten.',
       '- Puedes consultar el código del proyecto para respetar su estilo, pero NO modifiques el proyecto: solo escribe en la carpeta de mockups.',

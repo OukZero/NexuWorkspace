@@ -1,12 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ClipboardEvent, DragEvent, KeyboardEvent, ReactNode } from 'react'
-import type { Attachment } from '../../../shared/types'
+import type { Attachment, Provider } from '../../../shared/types'
+import { workFolder } from '../../../shared/util'
 import { convLabel } from '../conversations'
 import { findTask, useDB } from '../store'
 import { baseName, hhmm } from '../utils'
 import { useUi } from '../ui'
 import { IconSend, IconStop } from './icons'
 import { Markdown } from './Markdown'
+import { Select, type SelectOption } from './Select'
 import { ContextMeter } from './SessionPanel'
 import { SidePanel } from './SidePanel'
 
@@ -48,7 +50,7 @@ function Thumb({ a }: { a: Attachment }): ReactNode {
   )
 }
 
-function AttachmentList({ items, onRemove }: { items: Attachment[]; onRemove?: (i: number) => void }): ReactNode {
+export function AttachmentList({ items, onRemove }: { items: Attachment[]; onRemove?: (i: number) => void }): ReactNode {
   return (
     <div className="atts">
       {items.map((a, i) => (
@@ -72,6 +74,7 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
   const chat = db.chats[convId]
   const taskId = chat?.taskId ?? ''
   const task = findTask(db, taskId)
+  const folder = task ? workFolder(task, db.groups) : ''
   const messages = chat?.messages ?? []
   const running = !!chat?.running
 
@@ -107,7 +110,7 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
   useLayoutEffect(() => {
     const el = box.current
     if (el && stick.current) el.scrollTop = el.scrollHeight
-  }, [messages.length, live, running])
+  }, [messages.length, live, running, chat?.pending?.length])
 
   useLayoutEffect(() => {
     const el = area.current
@@ -191,7 +194,24 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
   }
 
   // abre la terminal elegida en Ajustes, en la carpeta de la tarea, ya retomando esta conversación
+  const provider: Provider = chat?.provider ?? 'claude'
+  const copilotModels = db.settings.copilotModels
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+  const modelOptions: SelectOption[] =
+    provider === 'copilot'
+      ? [{ value: '', label: 'Modelo: predeterminado' }, ...copilotModels.map((m) => ({ value: m, label: m }))]
+      : [
+          { value: '', label: 'Modelo: predeterminado' },
+          { value: 'sonnet', label: 'sonnet' },
+          { value: 'opus', label: 'opus' },
+          { value: 'haiku', label: 'haiku' }
+        ]
+  if (chat?.model && !modelOptions.some((o) => o.value === chat.model)) modelOptions.push({ value: chat.model, label: chat.model })
+
   const continueInTerminal = async (): Promise<void> => {
+    if (provider === 'copilot') return ui.toast('Continuar en terminal solo está disponible para conversaciones con Claude', true)
     if (!chat?.sessionId) return ui.toast('Aún no hay conversación que continuar: envía un mensaje primero', true)
     ui.openTerminal(taskId, chat.sessionId)
   }
@@ -228,7 +248,7 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
           <b>{task?.title}</b>
           <div className="meta">
             {task?.client} {task?.project && <span className="chip">{task.project}</span>}{' '}
-            <span title={task?.folder}>📁 {task?.folder ? baseName(task.folder) : 'sin carpeta'}</span>
+            <span title={folder}>📁 {folder ? baseName(folder) : 'sin carpeta'}</span>
             {chat && <span title="Conversación actual"> · {convLabel(chat)}</span>}
           </div>
         </div>
@@ -280,6 +300,28 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
                   </div>
                 )}
                 {m.role !== 'system' && m.ts > 0 && <span className="time">{hhmm(m.ts)}</span>}
+              </div>
+            ))}
+            {chat?.pending?.map((p) => (
+              <div key={p.id} className="perm">
+                <div className="perm-title">
+                  Claude pide permiso · <b>{p.tool === 'Bash' ? 'ejecutar un comando' : p.tool}</b>
+                </div>
+                <pre className="perm-cmd">{p.target}</pre>
+                {p.description && <div className="meta">{p.description}</div>}
+                <div className="foot">
+                  <button className="btn sm primary" onClick={() => void ui.run('chat:permit', convId, p.id, 'allow')}>
+                    Permitir
+                  </button>
+                  {p.rule && (
+                    <button className="btn sm" title="Agrega este comando a la lista permitida de Ajustes" onClick={() => void ui.run('chat:permit', convId, p.id, 'always')}>
+                      Permitir siempre «{p.rule}»
+                    </button>
+                  )}
+                  <button className="btn sm danger" onClick={() => void ui.run('chat:permit', convId, p.id, 'deny')}>
+                    Rechazar
+                  </button>
+                </div>
               </div>
             ))}
             {running && (
@@ -356,8 +398,35 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
             </button>
           </div>
           <div className="composer-hint">
-            <span>Enter envía · Shift+Enter nueva línea</span>
-            <span>{running ? 'Claude está respondiendo…' : ''}</span>
+            <span className="hint-pick">
+              {chat?.kind !== 'design' && (
+                <Select
+                  className="mini-sel"
+                  ariaLabel="Proveedor"
+                  title={chat?.sessionId ? 'El proveedor no se puede cambiar una vez iniciada la conversación (reiníciala para cambiarlo)' : 'Con qué se ejecuta esta conversación'}
+                  disabled={running || !!chat?.sessionId}
+                  value={provider}
+                  onChange={(v) => void ui.run('chat:config', convId, { provider: v as Provider })}
+                  options={[
+                    { value: 'claude', label: 'Claude' },
+                    { value: 'copilot', label: 'GitHub Copilot' }
+                  ]}
+                />
+              )}
+              <Select
+                className="mini-sel"
+                ariaLabel="Modelo"
+                disabled={running}
+                value={chat?.model ?? ''}
+                onChange={(v) => void ui.run('chat:config', convId, { model: v })}
+                options={modelOptions}
+                menuMinWidth={220}
+                searchable
+                creatable
+              />
+              <span>Enter envía · Shift+Enter nueva línea</span>
+            </span>
+            <span>{running ? `${provider === 'copilot' ? 'Copilot' : 'Claude'} está respondiendo…` : ''}</span>
           </div>
         </div>
         <SidePanel convId={convId} />

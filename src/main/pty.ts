@@ -4,7 +4,7 @@ import fs from 'fs'
 import * as nodePty from 'node-pty'
 import type { Task } from '../shared/types'
 import { getDb } from './db'
-import { groupAccess } from './groups'
+import { effectiveTask, groupAccess } from './groups'
 import { emit } from './windows'
 
 interface Session {
@@ -15,7 +15,8 @@ interface Session {
 const sessions = new Map<string, Session>()
 let seq = 0
 
-export function createPty(task: Task, cols: number, rows: number, sessionId?: string): { id: string; title: string } {
+export function createPty(original: Task, cols: number, rows: number, sessionId?: string): { id: string; title: string } {
+  const task = effectiveTask(original)
   if (!task.folder || !fs.existsSync(task.folder)) throw new Error('La carpeta del proyecto no existe: ' + (task.folder || '(vacía)'))
   const { settings } = getDb()
   const cmd = settings.terminal === 'cmd'

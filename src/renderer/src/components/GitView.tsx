@@ -5,6 +5,7 @@ import { baseName } from '../utils'
 import { findTask, useDB } from '../store'
 import { useUi } from '../ui'
 import { EmptyState } from './EmptyState'
+import { Select, type SelectOption } from './Select'
 
 type Sel = { path: string; kind: 'staged' | 'work' | 'untracked' } | { hash: string }
 
@@ -189,36 +190,38 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
     void act('discard', () => window.api.call('git:discard', dir, f.untracked ? [] : [f.path], f.untracked ? [f.path] : []))
   }
 
+  const branchOptions: SelectOption[] = br
+    ? [
+        ...(br.local.includes(br.current) ? [] : [{ value: br.current, label: br.current }]),
+        ...br.local.map((b) => ({ value: b, label: b })),
+        ...br.remote
+          .filter((r) => !br.local.includes(r.replace(/^[^/]+\//, '')))
+          .map((r) => ({ value: r, label: r, group: 'Remotas (crea la rama local)' }))
+      ]
+    : []
+
   return (
     <div className="gitv">
       <div className="gbar">
         {repos.length > 1 && (
-          <select value={dir} aria-label="Repositorio" onChange={(e) => setDir(e.target.value)}>
-            {repos.map((r) => (
-              <option key={r.dir} value={r.dir} disabled={!r.isRepo}>
-                {r.name}
-                {r.isRepo ? '' : ' (sin Git)'}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={dir}
+            ariaLabel="Repositorio"
+            onChange={setDir}
+            options={repos.map((r) => ({ value: r.dir, label: r.name + (r.isRepo ? '' : ' (sin Git)'), disabled: !r.isRepo }))}
+          />
         )}
         <span className="gbranch" title={st?.root}>
           ⎇
-          <select value={br?.current ?? ''} aria-label="Rama" disabled={!!busy || !br} onChange={(e) => void act('checkout', () => window.api.call('git:checkout', dir, e.target.value, false), `Ahora en ${e.target.value}`)}>
-            {br && !br.local.includes(br.current) && <option value={br.current}>{br.current}</option>}
-            {br?.local.map((b) => (
-              <option key={b}>{b}</option>
-            ))}
-            {br && br.remote.filter((r) => !br.local.includes(r.replace(/^[^/]+\//, ''))).length > 0 && (
-              <optgroup label="Remotas (crea la rama local)">
-                {br.remote
-                  .filter((r) => !br.local.includes(r.replace(/^[^/]+\//, '')))
-                  .map((r) => (
-                    <option key={r}>{r}</option>
-                  ))}
-              </optgroup>
-            )}
-          </select>
+          <Select
+            value={br?.current ?? ''}
+            ariaLabel="Rama"
+            disabled={!!busy || !br}
+            searchable
+            menuMinWidth={320}
+            onChange={(b) => void act('checkout', () => window.api.call('git:checkout', dir, b, false), `Ahora en ${b}`)}
+            options={branchOptions}
+          />
         </span>
         {newBranch === null ? (
           <button className="btn sm" onClick={() => setNewBranch('')}>

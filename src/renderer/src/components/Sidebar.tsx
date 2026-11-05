@@ -2,6 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   ACCENTS,
+  PRESETS,
+  clearBgImage,
+  getBgDim,
+  getBgGlass,
+  setBgGlass,
+  getBgImage,
+  getPreset,
+  setBgDim,
+  setBgImageFile,
+  setPreset,
   getAccent,
   getDensity,
   getFontScale,
@@ -23,6 +33,7 @@ const NAV: Array<[View, string, string]> = [
   ['today', '☀', 'Hoy'],
   ['board', '▦', 'Tablero'],
   ['hours', '⏱', 'Horas'],
+  ['history', '☰', 'Historial'],
   ['usage', '◔', 'Consumo'],
   ['groups', '🗂', 'Carpetas'],
   ['settings', '⚙', 'Ajustes']
@@ -66,7 +77,16 @@ function Profile(): ReactNode {
   const [accent, setAccentState] = useState(getAccent())
   const [density, setDensityState] = useState<Density>(getDensity())
   const [font, setFontState] = useState(getFontScale())
+  const [preset, setPresetState] = useState(getPreset())
+  const [hasBg, setHasBg] = useState(!!getBgImage())
+  const [dim, setDimState] = useState(getBgDim())
+  const [glass, setGlassState] = useState(getBgGlass())
   const ref = useRef<HTMLDivElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const choosePreset = (k: string): void => {
+    setPreset(k)
+    setPresetState(k)
+  }
 
   useEffect(() => {
     if (!open) return
@@ -96,21 +116,104 @@ function Profile(): ReactNode {
               setName(e.target.value.trim())
             }}
           />
-          <label style={{ marginTop: 10 }}>Apariencia</label>
-          <div className="seg">
-            {THEMES.map(([k, l]) => (
+          <label style={{ marginTop: 10 }}>Estilo</label>
+          <div className="swatches">
+            <button
+              className={`swatch-btn style-btn ${preset === '' ? 'on' : ''}`}
+              style={{ background: 'linear-gradient(135deg, #0f1115 50%, #f4f5f9 50%)' }}
+              title="Clásico (día / noche)"
+              aria-label="Estilo clásico"
+              onClick={() => choosePreset('')}
+            />
+            {Object.entries(PRESETS).map(([k, p]) => (
               <button
                 key={k}
-                className={mode === k ? 'on' : ''}
-                onClick={() => {
-                  setMode(k)
-                  setModeState(k)
-                }}
-              >
-                {l}
-              </button>
+                className={`swatch-btn style-btn ${preset === k ? 'on' : ''}`}
+                style={{ background: `linear-gradient(135deg, ${p.swatch[0]} 45%, ${p.swatch[1]} 45% 70%, ${p.swatch[2]} 70%)` }}
+                title={p.label}
+                aria-label={`Estilo ${p.label}`}
+                onClick={() => choosePreset(k)}
+              />
             ))}
           </div>
+          {preset === '' && (
+            <>
+              <label style={{ marginTop: 10 }}>Apariencia</label>
+              <div className="seg">
+                {THEMES.map(([k, l]) => (
+                  <button
+                    key={k}
+                    className={mode === k ? 'on' : ''}
+                    onClick={() => {
+                      setMode(k)
+                      setModeState(k)
+                    }}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+          <label style={{ marginTop: 10 }}>Fondo</label>
+          <div className="seg">
+            <button onClick={() => fileRef.current?.click()}>{hasBg ? 'Cambiar imagen' : 'Elegir imagen…'}</button>
+            {hasBg && (
+              <button
+                onClick={() => {
+                  clearBgImage()
+                  setHasBg(false)
+                }}
+              >
+                Quitar
+              </button>
+            )}
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              e.target.value = ''
+              if (!f) return
+              setBgImageFile(f).then(
+                () => setHasBg(true),
+                () => ui.toast('No se pudo usar esa imagen (muy grande o no válida)', true)
+              )
+            }}
+          />
+          {hasBg && (
+            <>
+              <label style={{ marginTop: 10 }}>Atenuar fondo · {dim}%</label>
+              <input
+                type="range"
+                min={40}
+                max={95}
+                step={5}
+                value={dim}
+                aria-label="Atenuar fondo"
+                onChange={(e) => {
+                  setBgDim(Number(e.target.value))
+                  setDimState(Number(e.target.value))
+                }}
+              />
+              <label style={{ marginTop: 10 }}>Opacidad de paneles · {glass}%</label>
+              <input
+                type="range"
+                min={40}
+                max={100}
+                step={5}
+                value={glass}
+                aria-label="Opacidad de paneles"
+                onChange={(e) => {
+                  setBgGlass(Number(e.target.value))
+                  setGlassState(Number(e.target.value))
+                }}
+              />
+            </>
+          )}
           <label style={{ marginTop: 10 }}>Color de acento</label>
           <div className="swatches">
             {Object.entries(ACCENTS).map(([k, [dark]]) => (

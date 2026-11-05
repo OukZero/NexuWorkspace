@@ -5,7 +5,7 @@ import path from 'path'
 import { execFile, execFileSync, spawn } from 'child_process'
 import type { Task } from '../shared/types'
 import { getDb } from './db'
-import { groupAccess } from './groups'
+import { effectiveTask, groupAccess } from './groups'
 
 export function renderPrompt(t: Task): string {
   const base = getDb()
@@ -61,7 +61,8 @@ const q = (s: string): string => s.replace(/'/g, "''") // comillas simples de Po
  * Terminal en la carpeta de la tarea. Con `sessionId`, retoma esa conversación (`claude --resume`) con los mismos
  * grupos de carpetas; sin él, solo se posiciona en la carpeta.
  */
-export function openTerminalHere(task: Task, sessionId?: string): void {
+export function openTerminalHere(original: Task, sessionId?: string): void {
+  const task = effectiveTask(original)
   const { settings } = getDb()
   if (!task.folder || !fs.existsSync(task.folder)) throw new Error('La carpeta del proyecto no existe: ' + (task.folder || '(vacía)'))
   const resume = sessionId && /^[\w-]+$/.test(sessionId) ? `${settings.claudeCmd} --resume ${sessionId} ${groupAccess(task).args.join(' ')}`.trim() : ''
@@ -75,7 +76,8 @@ export function openTerminalHere(task: Task, sessionId?: string): void {
   )
 }
 
-export function openClaude(task: Task): void {
+export function openClaude(original: Task): void {
+  const task = effectiveTask(original)
   const { settings } = getDb()
   if (!task.folder || !fs.existsSync(task.folder)) {
     throw new Error('La carpeta del proyecto no existe: ' + (task.folder || '(vacía)'))

@@ -4,6 +4,7 @@ import type { Priority, RecurrenceType, Status, Subtask, Task, UndoPayload } fro
 import { useDB } from '../store'
 import { DOW, PRIO, STATUS, baseName } from '../utils'
 import { useUi } from '../ui'
+import { Select } from './Select'
 
 const REC: Array<[RecurrenceType, string]> = [
   ['none', 'No se repite'],
@@ -154,7 +155,7 @@ export function TaskModal({ task: t }: { task: Partial<Task> }): ReactNode {
           Elegir…
         </button>
       </div>
-      <label>Grupos de carpetas con acceso para Claude</label>
+      <label>Grupos de carpetas con acceso para Claude{!folder.trim() && ' · sin carpeta propia, se trabaja en la primera carpeta con permiso de escritura del grupo'}</label>
       {db.groups.length ? (
         <div className="days" style={{ flexWrap: 'wrap' }}>
           {db.groups.map((g) => (
@@ -174,23 +175,11 @@ export function TaskModal({ task: t }: { task: Partial<Task> }): ReactNode {
       <div className="grid2">
         <div>
           <label>Prioridad</label>
-          <select value={priority} onChange={(e) => setPriority(e.target.value as Priority)}>
-            {Object.entries(PRIO).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </select>
+          <Select value={priority} onChange={(v) => setPriority(v as Priority)} options={Object.entries(PRIO).map(([k, v]) => ({ value: k, label: v }))} />
         </div>
         <div>
           <label>Estado</label>
-          <select value={status} onChange={(e) => setStatus(e.target.value as Status)}>
-            {Object.entries(STATUS).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </select>
+          <Select value={status} onChange={(v) => setStatus(v as Status)} options={Object.entries(STATUS).map(([k, v]) => ({ value: k, label: v }))} />
         </div>
         <div>
           <label>Estimación (horas)</label>
@@ -198,13 +187,7 @@ export function TaskModal({ task: t }: { task: Partial<Task> }): ReactNode {
         </div>
         <div>
           <label>Repetir</label>
-          <select value={recType} onChange={(e) => setRecType(e.target.value as RecurrenceType)}>
-            {REC.map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </select>
+          <Select value={recType} onChange={(v) => setRecType(v as RecurrenceType)} options={REC.map(([k, v]) => ({ value: k, label: v }))} />
         </div>
       </div>
       {recType === 'weekly' && (

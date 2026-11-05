@@ -62,11 +62,12 @@ export function Usage(): ReactNode {
 
   const view = useMemo(() => {
     const t0 = startToday.getTime()
-    const within = (from: number): UsageRecord[] => db.usage.filter((r) => r.ts >= from)
+    const recs = db.usage.filter((r) => r.provider !== 'copilot') // lo de Copilot va en su propia sección
+    const within = (from: number): UsageRecord[] => recs.filter((r) => r.ts >= from)
     const days: Array<{ key: string; label: string; value: number }> = []
     for (let i = 13; i >= 0; i--) {
       const d = new Date(t0 - i * DAY)
-      const rs = db.usage.filter((r) => dayKey(new Date(r.ts)) === dayKey(d))
+      const rs = recs.filter((r) => dayKey(new Date(r.ts)) === dayKey(d))
       days.push({ key: dayKey(d), label: `${d.getDate()}/${d.getMonth() + 1}`, value: fresh(sum(rs)) })
     }
     const byTask = new Map<string, UsageRecord[]>()
@@ -80,6 +81,27 @@ export function Usage(): ReactNode {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [db.usage])
+
+  // Copilot: las solicitudes premium se reinician cada mes (el 1.º a las 00:00 UTC)
+  const cop = useMemo(() => {
+    const n = new Date()
+    const from = Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), 1)
+    const next = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth() + 1, 1))
+    const rs = db.usage.filter((r) => r.provider === 'copilot' && r.ts >= from)
+    const byModel = new Map<string, { premium: number; turns: number; tokens: number }>()
+    for (const r of rs) {
+      const m = byModel.get(r.model || '(desconocido)') ?? { premium: 0, turns: 0, tokens: 0 }
+      m.premium += r.premium ?? 0
+      m.turns += 1
+      m.tokens += r.input + r.output + r.cacheCreate
+      byModel.set(r.model || '(desconocido)', m)
+    }
+    return { used: rs.reduce((a, r) => a + (r.premium ?? 0), 0), turns: rs.length, next, models: [...byModel.entries()].sort((a, b) => b[1].premium - a[1].premium) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [db.usage])
+  const quota = db.settings.copilotQuota
+  const left = quota > 0 ? Math.max(0, quota - cop.used) : null
+  const copPct = quota > 0 ? Math.min(100, Math.round((cop.used / quota) * 100)) : 0
 
   const max = Math.max(1, ...view.days.map((d) => d.value))
   const periods: Array<[string, Totals]> = [
@@ -105,7 +127,55 @@ export function Usage(): ReactNode {
           : 'Se mostrará después de la primera respuesta de Claude en un chat.'}
       </div>
 
-      <h3>Tokens por periodo</h3>
+      <h3>GitHub Copilot (este mes)</h3>
+      <div className={`limit ${copPct >= 90 ? 'critical' : copPct >= 70 ? 'warn' : 'ok'}`} style={{ maxWidth: 520 }}>
+        <div className="limit-h">
+          <b>Solicitudes premium</b>
+          <span>
+            {Math.round(cop.used * 100) / 100}
+            {quota > 0 ? ` de ${quota} usadas` : ' usadas'}
+          </span>
+        </div>
+        {quota > 0 ? (
+          <>
+            <div className="ctx-bar big">
+              <i style={{ width: `${copPct}%` }} />
+            </div>
+            <div className="meta">
+              Te quedan aprox. <b>{Math.round((left ?? 0) * 100) / 100}</b> · se reinicia el {cop.next.toLocaleDateString('es', { day: 'numeric', month: 'long' })}
+            </div>
+          </>
+        ) : (
+          <div className="meta">Define tus solicitudes mensuales en Ajustes para ver cuántas te quedan.</div>
+        )}
+      </div>
+      <div className="meta" style={{ marginTop: 6, maxWidth: 520 }}>
+        Es una estimación: solo cuenta lo consumido desde esta app. El uso de Copilot en VS Code, la web u otras terminales no aparece aquí, así que el saldo real puede ser menor.
+      </div>
+      {cop.models.length > 0 && (
+        <table style={{ maxWidth: 520, marginTop: 10 }}>
+          <thead>
+            <tr>
+              <th>Modelo</th>
+              <th style={{ width: 90 }}>Respuestas</th>
+              <th style={{ width: 90 }}>Premium</th>
+              <th style={{ width: 90 }}>Tokens</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cop.models.map(([m, v]) => (
+              <tr key={m}>
+                <td>{m}</td>
+                <td>{v.turns}</td>
+                <td>{Math.round(v.premium * 100) / 100}</td>
+                <td>{fmtTokens(v.tokens)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <h3>Tokens por periodo (Claude)</h3>
       <div className="periods">
         {periods.map(([label, t]) => (
           <div key={label} className="period">

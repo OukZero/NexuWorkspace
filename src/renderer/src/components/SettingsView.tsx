@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import type { OpenMode, Settings, SummaryMode, TerminalKind, TerminalMode } from '../../../shared/types'
+import type { CommandPolicy, OpenMode, Settings, SummaryMode, TerminalKind, TerminalMode } from '../../../shared/types'
 import { useDB } from '../store'
 import { useUi } from '../ui'
+import { Select } from './Select'
 
 export function SettingsView(): ReactNode {
   const db = useDB()
@@ -18,6 +19,11 @@ export function SettingsView(): ReactNode {
       openMode: s.openMode,
       summaryMode: s.summaryMode,
       claudeCmd: s.claudeCmd.trim() || 'claude',
+      copilotCmd: s.copilotCmd.trim() || 'copilot',
+      copilotQuota: Math.max(0, Math.round(Number(s.copilotQuota) || 0)),
+      copilotModels: s.copilotModels,
+      allowedCommands: s.allowedCommands,
+      commandPolicy: s.commandPolicy,
       gitAuthor: (s.gitAuthor || '').trim(),
       promptTemplate: s.promptTemplate,
       autocompactTokens: Number(s.autocompactTokens) >= 100_000 ? Math.min(1_000_000, Math.round(Number(s.autocompactTokens))) : 0,
@@ -56,19 +62,27 @@ export function SettingsView(): ReactNode {
         </div>
         <div>
           <label>Dónde se abre la terminal de una tarea</label>
-          <select value={s.terminalMode} onChange={(e) => set('terminalMode', e.target.value as TerminalMode)}>
-            <option value="integrated">Integrada en la app, como VS Code (Ctrl+`)</option>
-            <option value="external">Ventana aparte</option>
-          </select>
+          <Select
+            value={s.terminalMode}
+            onChange={(v) => set('terminalMode', v as TerminalMode)}
+            options={[
+              { value: 'integrated', label: 'Integrada en la app, como VS Code (Ctrl+`)' },
+              { value: 'external', label: 'Ventana aparte' }
+            ]}
+          />
         </div>
         <div>
           <label>Terminal: shell integrado y programa de la ventana aparte</label>
-          <select value={s.terminal} onChange={(e) => set('terminal', e.target.value as TerminalKind)}>
-            <option value="auto">Automática (Windows Terminal si está instalado)</option>
-            <option value="wt">Windows Terminal</option>
-            <option value="powershell">PowerShell</option>
-            <option value="cmd">Símbolo del sistema (cmd)</option>
-          </select>
+          <Select
+            value={s.terminal}
+            onChange={(v) => set('terminal', v as TerminalKind)}
+            options={[
+              { value: 'auto', label: 'Automática (Windows Terminal si está instalado)' },
+              { value: 'wt', label: 'Windows Terminal' },
+              { value: 'powershell', label: 'PowerShell' },
+              { value: 'cmd', label: 'Símbolo del sistema (cmd)' }
+            ]}
+          />
         </div>
         <div style={{ gridColumn: 'span 2' }}>
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text)' }}>
@@ -82,19 +96,27 @@ export function SettingsView(): ReactNode {
         </div>
         <div style={{ gridColumn: 'span 2' }}>
           <label>Al hacer click en una tarea abrir con…</label>
-          <select value={s.openMode} onChange={(e) => set('openMode', e.target.value as OpenMode)}>
-            <option value="chat">Chat de esta app (prompt precargado)</option>
-            <option value="desktop">Claude Desktop (carpeta y prompt precargados)</option>
-            <option value="terminal">PowerShell con el comando claude</option>
-          </select>
+          <Select
+            value={s.openMode}
+            onChange={(v) => set('openMode', v as OpenMode)}
+            options={[
+              { value: 'chat', label: 'Chat de esta app (prompt precargado)' },
+              { value: 'desktop', label: 'Claude Desktop (carpeta y prompt precargados)' },
+              { value: 'terminal', label: 'PowerShell con el comando claude' }
+            ]}
+          />
         </div>
         <div style={{ gridColumn: 'span 2' }}>
           <label>Resumen automático de lo hecho en Claude (al pausar, detener o completar)</label>
-          <select value={s.summaryMode} onChange={(e) => set('summaryMode', e.target.value as SummaryMode)}>
-            <option value="ai">Con IA (usa tu Claude Code, gasta algo de uso)</option>
-            <option value="local">Local: primer pedido + archivos modificados</option>
-            <option value="off">Desactivado</option>
-          </select>
+          <Select
+            value={s.summaryMode}
+            onChange={(v) => set('summaryMode', v as SummaryMode)}
+            options={[
+              { value: 'ai', label: 'Con IA (usa tu Claude Code, gasta algo de uso)' },
+              { value: 'local', label: 'Local: primer pedido + archivos modificados' },
+              { value: 'off', label: 'Desactivado' }
+            ]}
+          />
         </div>
         <div style={{ gridColumn: 'span 2' }}>
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text)' }}>
@@ -129,6 +151,37 @@ export function SettingsView(): ReactNode {
         <div>
           <label>Comando de Claude (resumen IA y modo PowerShell)</label>
           <input value={s.claudeCmd} onChange={(e) => set('claudeCmd', e.target.value)} />
+        </div>
+        <div>
+          <label>Comando de GitHub Copilot (CLI)</label>
+          <input value={s.copilotCmd} onChange={(e) => set('copilotCmd', e.target.value)} />
+        </div>
+        <div>
+          <label>Solicitudes premium mensuales de Copilot (0 = sin definir)</label>
+          <input type="number" min={0} step={50} value={s.copilotQuota} onChange={(e) => set('copilotQuota', e.target.valueAsNumber || 0)} />
+        </div>
+        <div>
+          <label>Modelos de Copilot en el selector (uno por línea)</label>
+          <textarea style={{ minHeight: 90 }} value={s.copilotModels} onChange={(e) => set('copilotModels', e.target.value)} />
+        </div>
+        <div>
+          <label>Comandos fuera de la lista</label>
+          <Select
+            ariaLabel="Política de comandos"
+            value={s.commandPolicy}
+            onChange={(v) => set('commandPolicy', v as CommandPolicy)}
+            options={[
+              { value: 'ask', label: 'Preguntar cada vez (Claude)' },
+              { value: 'all', label: 'Permitir todos (salvo los bloqueados)' },
+              { value: 'list', label: 'Solo los de la lista' }
+            ]}
+          />
+          <div className="meta">Preguntar solo aplica a Claude; Copilot usa «solo la lista». Los comandos peligrosos se bloquean siempre.</div>
+        </div>
+        <div>
+          <label>Comandos que Claude y Copilot pueden ejecutar sin preguntar (uno por línea)</label>
+          <textarea style={{ minHeight: 90 }} value={s.allowedCommands} placeholder="git status&#10;npm run&#10;dotnet build" onChange={(e) => set('allowedCommands', e.target.value)} />
+          <div className="meta">Se permite el comando y sus argumentos. Siempre se bloquean push forzado, reset --hard, borrados y similares.</div>
         </div>
         <div style={{ gridColumn: 'span 2' }}>
           <label>Autor git para commits del día (vacío = todos)</label>

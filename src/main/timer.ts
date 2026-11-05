@@ -1,5 +1,6 @@
 import type { Entry } from '../shared/types'
 import { commit, getDb, uid } from './db'
+import { effectiveTask } from './groups'
 import { summarize } from './summary'
 
 export const activeEntry = (): Entry | undefined => getDb().entries.find((e) => !e.end)
@@ -18,8 +19,9 @@ function queueSummary(entryId: string): void {
       const db = getDb()
       const e = db.entries.find((x) => x.id === entryId)
       const t = e && db.tasks.find((x) => x.id === e.taskId)
-      if (!e || !e.end || !t || !t.folder || e.end - e.start < 120000) return
-      const r = await summarize({ folder: t.folder, from: e.start, to: e.end, mode: db.settings.summaryMode, claudeCmd: db.settings.claudeCmd })
+      const folder = t ? effectiveTask(t).folder : ''
+      if (!e || !e.end || !t || !folder || e.end - e.start < 120000) return
+      const r = await summarize({ folder, from: e.start, to: e.end, mode: db.settings.summaryMode, claudeCmd: db.settings.claudeCmd })
       if (!r) return
       if (!e.note) e.note = r.text
       ;(t.log = t.log || []).push({ ts: e.end, entryId, text: r.text, mode: r.mode })

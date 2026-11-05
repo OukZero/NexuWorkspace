@@ -5,6 +5,7 @@ import { useDB } from '../store'
 import { baseName } from '../utils'
 import { useUi } from '../ui'
 import { EmptyState } from './EmptyState'
+import { Select } from './Select'
 
 const newId = (): string => Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
 
@@ -47,16 +48,15 @@ function GroupCard({ group, isNew, onDone }: { group: FolderGroup; isNew?: boole
           <span title={f.path} className="grow">
             📁 <b>{baseName(f.path)}</b> <span className="meta">{f.path}</span>
           </span>
-          <select
+          <Select
             value={f.access}
             title="Con «Solo lectura», Claude puede leer pero no editar ni crear archivos en esa carpeta"
-            onChange={(e) =>
-              setDraft((d) => ({ ...d, folders: d.folders.map((x, j) => (j === i ? { ...x, access: e.target.value as FolderAccess } : x)) }))
-            }
-          >
-            <option value="write">Leer y modificar</option>
-            <option value="read">Solo lectura</option>
-          </select>
+            onChange={(v) => setDraft((d) => ({ ...d, folders: d.folders.map((x, j) => (j === i ? { ...x, access: v as FolderAccess } : x)) }))}
+            options={[
+              { value: 'write', label: 'Leer y modificar' },
+              { value: 'read', label: 'Solo lectura' }
+            ]}
+          />
           <button className="icon" title="Quitar" onClick={() => setDraft((d) => ({ ...d, folders: d.folders.filter((_, j) => j !== i) }))}>
             ✕
           </button>

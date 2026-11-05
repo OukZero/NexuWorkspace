@@ -96,12 +96,39 @@ export interface ChatUsage {
   cacheReadTokens: number
   cacheCreateTokens: number
   costUsd: number // a precio de lista; con suscripción no se cobra aparte
+  /** Copilot: solicitudes premium consumidas por esta conversación. */
+  premiumRequests?: number
   durationMs: number
   updatedAt: number
 }
 
+/** Con qué se ejecuta una conversación: Claude Code o el CLI de GitHub Copilot. */
+export type Provider = 'claude' | 'copilot'
+
+/** Solicitud de permiso de Claude Code para usar una herramienta (p. ej. ejecutar un comando). */
+export interface PermissionRequest {
+  id: string
+  tool: string
+  /** Comando o archivo/URL que se quiere usar, recortado. */
+  target: string
+  /** Descripción que da Claude de lo que hará (si la hay). */
+  description?: string
+  /** Para comandos: la regla que «Permitir siempre» agregaría a Ajustes (ej. «git checkout»). */
+  rule?: string
+  ts: number
+}
+
+export type PermissionChoice = 'allow' | 'always' | 'deny'
+
+/** Cómo se tratan los comandos de shell que no están en la lista permitida. */
+export type CommandPolicy = 'ask' | 'all' | 'list'
+
 /** Una conversación con Claude. Una tarea puede tener varias, cada una con su propio contexto. */
 export interface Chat {
+  /** Proveedor de la conversación (por defecto Claude). No se puede cambiar una vez iniciada la sesión. */
+  provider?: Provider
+  /** Modelo elegido ('' o ausente = el predeterminado del proveedor). */
+  model?: string
   /** 'design' = conversación de la pestaña Diseño (no aparece entre las conversaciones normales). */
   kind?: 'design'
   taskId: string
@@ -112,6 +139,8 @@ export interface Chat {
   messages: ChatMessage[]
   activity: Activity[]
   running: boolean
+  /** Herramientas que Claude quiere usar y esperan tu aprobación (solo mientras responde). */
+  pending?: PermissionRequest[]
   gotResult?: boolean
   cancelled?: boolean
   summarizedCount?: number
@@ -129,6 +158,10 @@ export interface UsageRecord {
   cacheRead: number
   cacheCreate: number
   costUsd: number
+  /** Ausente = Claude (registros anteriores a Copilot). */
+  provider?: Provider
+  /** Copilot: solicitudes premium de este turno. */
+  premium?: number
 }
 
 export interface LimitWindow {
@@ -233,6 +266,16 @@ export interface Settings {
   openModeChat?: boolean
   summaryMode: SummaryMode
   claudeCmd: string
+  /** Comando del CLI de GitHub Copilot. */
+  copilotCmd: string
+  /** Modelos de Copilot que se ofrecen en el selector, uno por línea. */
+  copilotModels: string
+  /** Comandos de shell que Claude y Copilot pueden ejecutar sin preguntar, uno por línea (ej. «git status», «npm run»). */
+  allowedCommands: string
+  /** ask = pregunta por los comandos fuera de la lista · all = permite todos (salvo los bloqueados) · list = solo la lista. */
+  commandPolicy: CommandPolicy
+  /** Solicitudes premium mensuales de tu plan de Copilot (0 = sin definir), para estimar cuántas quedan. */
+  copilotQuota: number
   targetHours: number
   reminderTime: string
   idleMinutes: number
@@ -292,6 +335,8 @@ export interface IpcChannels {
   'attach:save': { args: [string, string, Uint8Array]; ret: Attachment } // convId, nombre, bytes (pegar / arrastrar)
   'attach:preview': { args: [string]; ret: string | null } // ruta -> data URL (miniatura)
   'chat:cancel': { args: [string]; ret: void }
+  'chat:permit': { args: [string, string, PermissionChoice]; ret: void } // convId, id de la solicitud, decisión
+  'chat:config': { args: [string, { provider?: Provider; model?: string }]; ret: void } // proveedor y modelo de la conversación
   'chat:reset': { args: [string]; ret: void }
   'chat:summarize': { args: [string]; ret: { text: string; mode: 'ai' | 'local' } }
   'chat:new': { args: [string, 'design'?]; ret: string } // taskId -> id de la conversación creada

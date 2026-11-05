@@ -4,11 +4,13 @@ import path from 'path'
 import { BrowserWindow, Notification } from 'electron'
 import { ChildProcess, spawn } from 'child_process'
 import { attachRoot, trusted as trustedAttachments } from './attachments'
-import { designInstructions, mockupsDir } from './mockups'
-import type { Activity, Attachment, Chat, ChatMessage, ChatUsage, Hunk, LimitWindow, Task } from '../shared/types'
+import { designInstructions, mockupsDir, stageAssets } from './mockups'
+import type { Activity, Attachment, Chat, ChatMessage, ChatUsage, Hunk, LimitWindow, PermissionChoice, Provider, Task } from '../shared/types'
 import { clip } from '../shared/util'
+import { buildInvocation, readUsage, type CopilotEvent, type CopilotUsage } from './copilot'
 import { broadcast, commit, getDb, push } from './db'
-import { groupAccess } from './groups'
+import { copilotDirs, effectiveTask, groupAccess, groupNote, groupNoteFile } from './groups'
+import { allowForever, claudeAllow, claudeDeny, copilotAllow, copilotDeny, isAllowed, ruleFor } from './permissions'
 import { ensureTimer } from './timer'
 import { emit, getMain, showWin } from './windows'
 
@@ -27,6 +29,83 @@ const sysMsg = (text: string): ChatMessage => ({
 })
 
 const procs = new Map<string, ChildProcess>() // id de conversación -> proceso
+const asking = new Map<string, Map<string, Record<string, unknown>>>() // id de conversación -> (id de solicitud -> entrada de la herramienta)
+
+// ---------- permisos interactivos (control_request de Claude Code) ----------
+interface ControlEvent {
+  type?: string
+  request_id?: string
+  request?: { subtype?: string; tool_name?: string; input?: Record<string, unknown>; description?: string }
+}
+
+const reply = (child: ChildProcess, requestId: string, response: Record<string, unknown>, error?: string): void => {
+  const body = error ? { subtype: 'error', request_id: requestId, error } : { subtype: 'success', request_id: requestId, response }
+  child.stdin?.write(JSON.stringify({ type: 'control_response', response: body }) + '\n')
+}
+
+/** Resumen corto de lo que la herramienta quiere hacer (comando, archivo, URL…). */
+function targetOf(tool: string, input: Record<string, unknown>): string {
+  const s = (k: string): string | undefined => (typeof input[k] === 'string' ? (input[k] as string) : undefined)
+  return clip(s('command') ?? s('file_path') ?? s('notebook_path') ?? s('url') ?? s('query') ?? s('pattern') ?? (Object.keys(input).length ? JSON.stringify(input) : tool), 400)
+}
+
+function onControl(convId: string, child: ChildProcess, ev: ControlEvent): void {
+  const chat = chatOf(convId)
+  const id = ev.request_id
+  if (!id) return
+  if (ev.type === 'control_cancel_request') {
+    asking.get(convId)?.delete(id)
+    chat.pending = chat.pending?.filter((p) => p.id !== id)
+    push()
+    return
+  }
+  const r = ev.request
+  if (r?.subtype !== 'can_use_tool' || !r.tool_name) return reply(child, id, {}, 'Solicitud no soportada por Shutoki')
+  const tool = r.tool_name
+  const input = r.input ?? {}
+  // preguntas al usuario y planes necesitan una interfaz propia que el chat no tiene: Claude debe preguntar en texto
+  if (tool === 'AskUserQuestion' || tool === 'ExitPlanMode') {
+    return reply(child, id, { behavior: 'deny', message: 'Esta herramienta no está disponible en este chat. Haz la pregunta o presenta el plan como texto normal.' })
+  }
+  const command = tool === 'Bash' && typeof input['command'] === 'string' ? (input['command'] as string) : undefined
+  // ya permitido en Ajustes (p. ej. con «Permitir siempre» durante esta misma respuesta)
+  if (command !== undefined && isAllowed(command)) return reply(child, id, { behavior: 'allow', updatedInput: input })
+
+  const rule = command !== undefined ? ruleFor(command) : undefined
+  const pending = (chat.pending ??= [])
+  pending.push({ id, tool, target: targetOf(tool, input), ...(r.description ? { description: clip(r.description, 300) } : {}), ...(rule ? { rule } : {}), ts: Date.now() })
+  let m = asking.get(convId)
+  if (!m) asking.set(convId, (m = new Map()))
+  m.set(id, input)
+  push()
+  if (!BrowserWindow.getAllWindows().some((w) => w.isFocused())) {
+    const n = new Notification({ title: 'Claude pide permiso', body: clip(targetOf(tool, input), 140) })
+    n.on('click', () => {
+      showWin()
+      emit('goto', `chat:${convId}`)
+    })
+    n.show()
+    getMain()?.flashFrame(true)
+  }
+}
+
+/** Respuesta del usuario a una solicitud de permiso. «always» agrega el comando a la lista permitida de Ajustes. */
+export function permit(convId: string, id: string, choice: PermissionChoice): void {
+  const child = procs.get(convId)
+  const input = asking.get(convId)?.get(id)
+  const chat = chatOf(convId)
+  const req = chat.pending?.find((p) => p.id === id)
+  if (!child || !input || !req) throw new Error('Esta solicitud ya no está pendiente.')
+  asking.get(convId)?.delete(id)
+  chat.pending = chat.pending?.filter((p) => p.id !== id)
+  if (choice === 'deny') {
+    reply(child, id, { behavior: 'deny', message: 'El usuario rechazó esta acción. No la reintentes; pregunta cómo continuar.' })
+  } else {
+    if (choice === 'always' && req.rule) allowForever(req.rule)
+    reply(child, id, { behavior: 'allow', updatedInput: input })
+  }
+  commit()
+}
 
 const newChat = (taskId: string, title?: string): Chat => ({ taskId, createdAt: Date.now(), title, sessionId: null, messages: [], activity: [], running: false })
 
@@ -295,8 +374,112 @@ function handle(convId: string, folder: string, ev: StreamEvent): void {
   }
 }
 
+// ---------- GitHub Copilot ----------
+type ToolReq = Record<string, unknown>
+const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined)
+
+/** Actividad a partir de una solicitud de herramienta de Copilot (los nombres de herramienta son los de su CLI). */
+function describeCopilotTool(req: ToolReq, folder: string): { id: string; tool: string; d: Described } {
+  const tool = str(req['name']) ?? str(req['toolName']) ?? 'herramienta'
+  const rawArgs = req['arguments'] ?? req['args'] ?? req['input']
+  let args: Record<string, unknown> = {}
+  if (typeof rawArgs === 'string') {
+    try {
+      args = JSON.parse(rawArgs) as Record<string, unknown>
+    } catch {
+      /* argumentos no JSON */
+    }
+  } else if (rawArgs && typeof rawArgs === 'object') args = rawArgs as Record<string, unknown>
+  const p = str(args['path']) ?? str(args['file_path'])
+  const claudeLike: Record<string, string> = { powershell: 'Bash', bash: 'Bash', view: 'Read', create: 'Write', edit: 'Edit', grep: 'Grep', glob: 'Glob', web_fetch: 'WebFetch', web_search: 'WebSearch' }
+  const mapped = claudeLike[tool]
+  const d = mapped
+    ? describe(
+        {
+          name: mapped,
+          input: {
+            file_path: p,
+            command: str(args['command']),
+            pattern: str(args['pattern']),
+            url: str(args['url']),
+            query: str(args['query']),
+            old_string: str(args['old_str']) ?? str(args['old_string']),
+            new_string: str(args['new_str']) ?? str(args['new_string']),
+            content: str(args['file_text']) ?? str(args['content'])
+          }
+        },
+        folder
+      )
+    : ({ kind: 'other', label: tool, target: clip(p ?? str(args['command']) ?? '', 120) } as Described)
+  return { id: str(req['toolCallId']) ?? str(req['id']) ?? Math.random().toString(36).slice(2), tool, d }
+}
+
+function handleCopilot(convId: string, folder: string, ev: CopilotEvent): void {
+  const chat = chatOf(convId)
+  switch (ev.type) {
+    case 'assistant.message_delta':
+      if (ev.data?.deltaContent) broadcast('chat:delta', { convId, text: ev.data.deltaContent })
+      return
+    case 'assistant.message': {
+      const text = ev.data?.content?.trim()
+      if (text) chat.messages.push({ role: 'assistant', text, ts: Date.now() })
+      for (const req of ev.data?.toolRequests ?? []) {
+        const { id, tool, d } = describeCopilotTool(req, folder)
+        chat.activity.push({ id, ts: Date.now(), tool, status: 'running', ...d })
+      }
+      if (chat.activity.length > MAX_ACTIVITY) chat.activity.splice(0, chat.activity.length - MAX_ACTIVITY)
+      push()
+      return
+    }
+    case 'result':
+      chat.gotResult = true
+      if (ev.sessionId) chat.sessionId = ev.sessionId
+      if (ev.exitCode) chat.messages.push(sysMsg(`Copilot terminó con código ${ev.exitCode}.`))
+      push()
+  }
+}
+
+/** Uso de una ejecución de Copilot: tokens, solicitudes premium y tamaño del contexto. */
+function trackCopilot(taskId: string, chat: Chat, u: CopilotUsage): void {
+  const t = (k: string): number => u.tokenDetails?.[k]?.tokenCount ?? 0
+  const input = t('input')
+  const output = t('output')
+  const cacheRead = t('cache_read')
+  const cacheCreate = t('cache_write')
+  const premium = u.totalPremiumRequestCost ?? 0
+  const model = u.currentModel ?? chat.model ?? ''
+  const cu = (chat.usage ??= newUsage())
+  cu.model = model || cu.model
+  cu.inputTokens += input
+  cu.outputTokens += output
+  cu.cacheReadTokens += cacheRead
+  cu.cacheCreateTokens += cacheCreate
+  cu.premiumRequests = (cu.premiumRequests ?? 0) + premium
+  cu.turns += 1
+  cu.durationMs += u.totalApiDurationMs ?? 0
+  if (u.lastCallInputTokens) cu.contextTokens = u.lastCallInputTokens
+  cu.updatedAt = Date.now()
+  const db = getDb()
+  db.usage.push({ ts: Date.now(), taskId, model, input, output, cacheRead, cacheCreate, costUsd: 0, provider: 'copilot', premium })
+  if (db.usage.length > MAX_USAGE_RECORDS) db.usage.splice(0, db.usage.length - MAX_USAGE_RECORDS)
+}
+
+/** Proveedor y modelo de una conversación. El proveedor no cambia una vez iniciada la sesión (cada uno tiene la suya). */
+export function configure(convId: string, cfg: { provider?: Provider; model?: string }): void {
+  const chat = chatOf(convId)
+  if (chat.running) throw new Error('Espera a que termine la respuesta para cambiar el modelo.')
+  if (cfg.provider && cfg.provider !== (chat.provider ?? 'claude')) {
+    if (chat.sessionId) throw new Error('Esta conversación ya empezó con otro proveedor. Reiníciala o crea una nueva para cambiar.')
+    if (chat.kind === 'design' && cfg.provider !== 'claude') throw new Error('La pestaña Diseño solo funciona con Claude.')
+    chat.provider = cfg.provider
+    chat.model = ''
+  }
+  if (cfg.model !== undefined) chat.model = clip(cfg.model.trim(), 60)
+  commit()
+}
+
 /** Aviso de escritorio cuando Claude termina (o necesita atención) y la app no está en primer plano. */
-function notifyDone(convId: string, task: Task, chat: Chat, runStart: number, failed: string | null): void {
+function notifyDone(convId: string, task: Task, chat: Chat, runStart: number, failed: string | null, who = 'Claude'): void {
   if (!getDb().settings.notifyOnDone) return
   if (BrowserWindow.getAllWindows().some((w) => w.isFocused())) return // ya lo estás viendo; la pestaña muestra un indicador
   const edited = [...new Set(chat.activity.filter((a) => a.kind === 'edit' && a.status !== 'error' && a.ts >= runStart).map((a) => a.target))]
@@ -306,7 +489,7 @@ function notifyDone(convId: string, task: Task, chat: Chat, runStart: number, fa
     (edited.length
       ? `Modificó ${edited.length} archivo${edited.length > 1 ? 's' : ''}: ${clip(edited.slice(0, 3).join(', '), 110)}${edited.length > 3 ? '…' : ''}`
       : clip((last?.text ?? 'Respuesta lista').replace(/\s+/g, ' '), 140))
-  const n = new Notification({ title: `${failed ? 'Claude necesita atención' : 'Claude terminó'} · ${clip(task.title, 50)}`, body })
+  const n = new Notification({ title: `${failed ? `${who} necesita atención` : `${who} terminó`} · ${clip(task.title, 50)}`, body })
   n.on('click', () => {
     showWin()
     emit('goto', `chat:${convId}`)
@@ -329,9 +512,11 @@ function buildContent(text: string, files: Attachment[]): string | Array<Record<
 export function send(convId: string, rawText: string, rawFiles?: Attachment[]): void {
   const db = getDb()
   const chat = chatOf(convId)
-  const task = db.tasks.find((t) => t.id === chat.taskId)
-  if (!task) throw new Error('Tarea no encontrada')
-  if (!task.folder || !fs.existsSync(task.folder)) throw new Error('Asigna una carpeta de proyecto válida a la tarea para chatear.')
+  const found = db.tasks.find((t) => t.id === chat.taskId)
+  if (!found) throw new Error('Tarea no encontrada')
+  // carpeta propia de la tarea o, si no tiene, la primera de escritura de sus grupos
+  const task = effectiveTask(found)
+  if (!task.folder || !fs.existsSync(task.folder)) throw new Error('Asigna una carpeta de proyecto a la tarea, o un grupo de carpetas con permiso de escritura, para chatear.')
   const text = String(rawText || '').trim()
   const files = trustedAttachments(rawFiles)
   if (!text && !files.length) return
@@ -347,24 +532,88 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[]): 
   ensureTimer(task.id)
   commit()
 
-  // la entrada por stream-json (en vez de texto plano) es lo que permite ejecutar comandos / como /compact
-  const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--permission-mode', 'acceptEdits']
-  if (chat.sessionId) args.push('--resume', chat.sessionId)
-  if (db.settings.autocompactTokens >= 100_000) args.push('--autocompact', String(db.settings.autocompactTokens))
-  // grupos de carpetas: acceso de lectura/escritura (--add-dir) y solo lectura (regla de denegación de edición)
-  const access = groupAccess(task)
-  args.push(...access.args)
-  if (files.length) args.push('--add-dir', `"${attachRoot()}"`) // para que Claude pueda leer los adjuntos no gráficos
-  // pestaña Diseño: acceso a la carpeta de mockups de la tarea e instrucciones de diseño como parte del system prompt
-  if (chat.kind === 'design') {
-    args.push('--add-dir', `"${mockupsDir(task.id)}"`, '--append-system-prompt-file', `"${designInstructions(task.id, task.title)}"`)
-  }
-  if (access.skipped.length) {
-    chat.messages.push({ role: 'system', text: `Carpetas omitidas (no existen o no se pudo garantizar solo lectura): ${access.skipped.join(', ')}`, ts: Date.now() })
-  }
+  const provider: Provider = chat.provider ?? 'claude'
   const runStart = Date.now()
-  const isCommand = text.startsWith('/')
-  const child = spawn(`${db.settings.claudeCmd} ${args.join(' ')}`, { shell: true, cwd: task.folder, windowsHide: true })
+  const isCommand = provider === 'claude' && text.startsWith('/')
+  let child: ChildProcess
+  let usageFile = ''
+  let interactive = false
+  let onLine: (line: string) => void
+
+  if (provider === 'copilot') {
+    // CLI de GitHub Copilot: una ejecución no interactiva por mensaje; la sesión se retoma con el mismo --session-id
+    const dirs = copilotDirs(task)
+    if (dirs.skipped.length) {
+      chat.messages.push({ role: 'system', text: `Carpetas omitidas con Copilot (solo lectura no soportada, o no existen): ${dirs.skipped.join(', ')}`, ts: Date.now() })
+    }
+    let prompt = files.length ? `${text || 'Revisa los archivos adjuntos.'}\n\nArchivos adjuntos (puedes leerlos con tus herramientas):\n${files.map((f) => `- ${f.path}`).join('\n')}` : text
+    // Copilot no tiene system prompt adicional: la lista de carpetas del grupo va al inicio del primer mensaje (la sesión la conserva)
+    const note = chat.sessionId ? '' : groupNote(task)
+    if (note) prompt = `[Contexto de carpetas]\n${note}\n\n[Pedido]\n${prompt}`
+    const inv = buildInvocation({
+      cmd: db.settings.copilotCmd.trim() || 'copilot',
+      prompt,
+      sessionId: chat.sessionId,
+      model: chat.model,
+      allow: copilotAllow(),
+      deny: copilotDeny(),
+      addDirs: [...dirs.dirs, ...(files.length ? [attachRoot()] : [])],
+      images: files.filter((f) => f.image).map((f) => f.path)
+    })
+    chat.sessionId = inv.sessionId
+    usageFile = inv.usageFile
+    child = spawn(inv.file, inv.argv, { cwd: task.folder, windowsHide: true })
+    child.stdin?.on('error', () => {})
+    child.stdin?.end()
+    onLine = (line) => handleCopilot(convId, task.folder, JSON.parse(line) as CopilotEvent)
+  } else {
+    // la entrada por stream-json (en vez de texto plano) es lo que permite ejecutar comandos / como /compact
+    const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--permission-mode', 'acceptEdits']
+    // aprobación interactiva: lo que no esté permitido ni bloqueado llega como control_request y lo contesta la interfaz
+    interactive = db.settings.commandPolicy === 'ask'
+    if (interactive) args.push('--permission-prompt-tool', 'stdio')
+    if (chat.sessionId) args.push('--resume', chat.sessionId)
+    if (chat.model) args.push('--model', chat.model)
+    if (db.settings.autocompactTokens >= 100_000) args.push('--autocompact', String(db.settings.autocompactTokens))
+    // comandos de shell permitidos (Ajustes); el bloqueo fijo va junto con la denegación de edición de las carpetas de solo lectura
+    const allow = claudeAllow()
+    // Diseño: consultar la web para referencias (marca, colores, estructura). Un solo --allowedTools con todo.
+    if (chat.kind === 'design') allow.push('WebFetch', 'WebSearch')
+    if (allow.length) args.push('--allowedTools', ...allow.map((r) => `"${r}"`))
+    // grupos de carpetas: acceso de lectura/escritura (--add-dir) y solo lectura (regla de denegación de edición)
+    const access = groupAccess(task, claudeDeny())
+    args.push(...access.args)
+    if (files.length) args.push('--add-dir', `"${attachRoot()}"`) // para que Claude pueda leer los adjuntos no gráficos
+    // pestaña Diseño: acceso a la carpeta de mockups de la tarea e instrucciones de diseño como parte del system prompt
+    if (chat.kind === 'design') {
+      args.push('--add-dir', `"${mockupsDir(task.id)}"`, '--append-system-prompt-file', `"${designInstructions(task.id, task.title)}"`)
+    } else {
+      // todas las carpetas de los grupos de la tarea: Claude sabe que existen y que debe trabajar en el conjunto
+      const noteFile = groupNoteFile(task)
+      if (noteFile) args.push('--append-system-prompt-file', `"${noteFile}"`)
+    }
+    if (access.skipped.length) {
+      chat.messages.push({ role: 'system', text: `Carpetas omitidas (no existen o no se pudo garantizar solo lectura): ${access.skipped.join(', ')}`, ts: Date.now() })
+    }
+    child = spawn(`${db.settings.claudeCmd} ${args.join(' ')}`, { shell: true, cwd: task.folder, windowsHide: true })
+    child.stdin?.on('error', () => {})
+    // Diseño: las imágenes adjuntas se copian junto a los mockups y se le indica a Claude cómo referenciarlas
+    let promptText = text
+    if (chat.kind === 'design' && files.length) {
+      const assets = stageAssets(task.id, files)
+      if (assets.length) promptText = `${text || 'Revisa los archivos adjuntos.'}\n\nImágenes disponibles para el mockup (úsalas en el HTML con <img src="…"> tal cual):\n${assets.map((a) => `- ${a}`).join('\n')}`
+    }
+    const first = JSON.stringify({ type: 'user', message: { role: 'user', content: buildContent(promptText, files) } }) + '\n'
+    // con aprobación interactiva stdin queda abierto para las respuestas; se cierra al llegar el resultado
+    if (interactive) child.stdin?.write(first)
+    else child.stdin?.end(first)
+    onLine = (line) => {
+      const ev = JSON.parse(line) as StreamEvent & ControlEvent
+      if (ev.type === 'control_request' || ev.type === 'control_cancel_request') return onControl(convId, child, ev)
+      if (ev.type === 'result' && interactive) child.stdin?.end()
+      handle(convId, task.folder, ev)
+    }
+  }
   procs.set(convId, child)
 
   let buf = ''
@@ -377,25 +626,32 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[]): 
       buf = buf.slice(i + 1)
       if (!line) continue
       try {
-        handle(convId, task.folder, JSON.parse(line) as StreamEvent)
+        onLine(line)
       } catch {
         /* línea no JSON */
       }
     }
   })
   child.stderr?.on('data', (b: Buffer) => (err += b))
-  child.stdin?.on('error', () => {})
-  child.stdin?.end(JSON.stringify({ type: 'user', message: { role: 'user', content: buildContent(text, files) } }) + '\n')
 
   const finish = (code: number | null, spawnErr?: Error): void => {
     if (procs.get(convId) !== child) return
     procs.delete(convId)
+    asking.delete(convId)
+    delete chat.pending
     chat.running = false
     for (const a of chat.activity) if (a.status === 'running') a.status = chat.cancelled ? 'error' : 'ok'
+    if (provider === 'copilot') {
+      const u = readUsage(usageFile)
+      if (u) trackCopilot(chat.taskId, chat, u)
+    }
     let failed: string | null = null
+    const name = provider === 'copilot' ? 'copilot' : 'claude'
     if (chat.cancelled) chat.messages.push({ role: 'system', text: 'Respuesta cancelada.', ts: Date.now() })
     else if (spawnErr || (code !== 0 && !chat.gotResult)) {
-      const m = sysMsg(spawnErr?.message || err.trim() || `claude terminó con código ${code}. ¿Responde "${db.settings.claudeCmd} --version" en PowerShell?`)
+      const cmd = provider === 'copilot' ? db.settings.copilotCmd : db.settings.claudeCmd
+      const m = sysMsg(spawnErr?.message || err.trim() || `${name} terminó con código ${code}. ¿Responde "${cmd} --version" en PowerShell?${provider === 'copilot' ? ' Si no has iniciado sesión: copilot login.' : ''}`)
+      if (provider === 'copilot') delete m.action // el botón de inicio de sesión es de Claude (claude auth login)
       chat.messages.push(m)
       failed = m.text
     } else {
@@ -405,7 +661,7 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[]): 
     const wasCancelled = chat.cancelled
     chat.cancelled = false
     commit()
-    if (!wasCancelled && !isCommand) notifyDone(convId, task, chat, runStart, failed)
+    if (!wasCancelled && !isCommand) notifyDone(convId, task, chat, runStart, failed, provider === 'copilot' ? 'Copilot' : 'Claude')
   }
   child.on('error', (e) => finish(1, e))
   child.on('close', (code) => finish(code))
@@ -425,7 +681,7 @@ export function cancel(convId: string): void {
 export function reset(convId: string): void {
   if (procs.has(convId)) throw new Error('Espera a que termine o cancela la respuesta.')
   const old = chatOf(convId)
-  getDb().chats[convId] = { ...newChat(old.taskId, old.title), createdAt: old.createdAt }
+  getDb().chats[convId] = { ...newChat(old.taskId, old.title), createdAt: old.createdAt, ...(old.provider ? { provider: old.provider } : {}), ...(old.model ? { model: old.model } : {}) }
   commit()
 }
 
