@@ -1,13 +1,13 @@
 {
-  "name": "shutoki",
-  "productName": "Shutoki",
+  "name": "shutoki-ai-workspace",
+  "productName": "Shutoki AI Workspace",
   "version": "0.2.0",
   "description": "Gestor local de tareas con timer, horas en Excel y chat con Claude",
   "author": "Martin Escobedo",
   "license": "UNLICENSED",
   "main": "./out/main/index.js",
   "scripts": {
-    "icon": "node tools/make-icon.js",
+    "icon": "electron tools/make-icon.js",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "start": "electron-vite build && electron-vite preview",
@@ -19,8 +19,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json"
   },
   "build": {
-    "appId": "com.oukzero.shutoki",
-    "productName": "Shutoki",
+    "appId": "com.mescobedo.shutokiaiworkspace",
+    "productName": "Shutoki AI Workspace",
     "directories": {
       "output": "release"
     },
@@ -29,7 +29,7 @@
       "resources/**/*",
       "package.json"
     ],
-    "artifactName": "Shutoki-Setup-${version}.${ext}",
+    "artifactName": "Shutoki-AI-Workspace-Setup-${version}.${ext}",
     "npmRebuild": false,
     "asarUnpack": [
       "**/node_modules/node-pty/**"
@@ -43,12 +43,12 @@
           ]
         }
       ],
-      "icon": "resources/icon.ico"
+      "icon": "resources/shutoki-ai.ico"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "Shutoki"
+      "shortcutName": "Shutoki AI Workspace"
     }
   },
   "devDependencies": {

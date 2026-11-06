@@ -1,4 +1,5 @@
 import { app, globalShortcut, shell } from 'electron'
+import fs from 'fs'
 import path from 'path'
 import * as chat from './chat'
 import { getDb, initDb, save } from './db'
@@ -15,7 +16,7 @@ import { createWindows, emit, showWin } from './windows'
 // La app se llamaba "mis-tareas": se conserva esa carpeta de datos para no perder tareas, horas ni chats al renombrar.
 // SHUTOKI_DATA_DIR permite probar con datos descartables sin tocar los reales.
 app.setPath('userData', process.env['SHUTOKI_DATA_DIR'] || path.join(app.getPath('appData'), 'mis-tareas'))
-app.setAppUserModelId('com.oukzero.shutoki') // agrupa la app en la barra de tareas de Windows con su propio icono
+app.setAppUserModelId('com.mescobedo.shutokiaiworkspace') // agrupa la app en la barra de tareas de Windows con su propio icono
 registerMockupScheme() // debe registrarse antes de que la app esté lista
 
 /**
@@ -27,16 +28,18 @@ function ensureStartMenuShortcut(): void {
   try {
     const root = path.join(__dirname, '../..')
     const launcher = path.join(root, 'tools', 'launch.ps1')
-    const icon = path.join(root, 'resources', 'icon.ico')
-    const lnk = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Shutoki.lnk')
+    const icon = path.join(root, 'resources', 'shutoki-ai.ico')
+    const lnk = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Shutoki AI Workspace.lnk')
+    // los accesos antiguos («Shutoki», «Shutoki One») tenían otro identificador y mantenía el icono viejo
+    for (const old of ['Shutoki.lnk', 'Shutoki One.lnk']) fs.rmSync(path.join(path.dirname(lnk), old), { force: true })
     shell.writeShortcutLink(lnk, 'create', {
       target: path.join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
       args: `-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${launcher}"`,
       cwd: root,
       icon,
       iconIndex: 0,
-      description: 'Shutoki',
-      appUserModelId: 'com.oukzero.shutoki'
+      description: 'Shutoki AI Workspace',
+      appUserModelId: 'com.mescobedo.shutokiaiworkspace'
     })
   } catch {
     /* sin permiso para escribir el acceso directo: las notificaciones salen con el nombre de Electron */

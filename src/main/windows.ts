@@ -10,7 +10,7 @@ let mini: BrowserWindow | null = null
 const preload = (): string => path.join(__dirname, '../preload/index.js')
 
 // Icono de la ventana y de la barra de tareas; se genera con `npm run icon`. Sin el archivo, se usa el de Electron.
-const iconPath = path.join(__dirname, '../../resources/icon.ico')
+const iconPath = path.join(__dirname, '../../resources/shutoki-ai.ico')
 const icon = (): { icon?: string } => (fs.existsSync(iconPath) ? { icon: iconPath } : {})
 
 function loadPage(w: BrowserWindow, page: 'index' | 'mini'): void {
@@ -67,7 +67,7 @@ export function createWindows(): void {
     minWidth: 900,
     minHeight: 560,
     backgroundColor: '#0f1115',
-    title: 'Shutoki',
+    title: 'Shutoki AI Workspace',
     ...icon(),
     autoHideMenuBar: true,
     webPreferences: { preload: preload(), contextIsolation: true, nodeIntegration: false }
@@ -77,10 +77,10 @@ export function createWindows(): void {
   if (process.platform === 'win32' && fs.existsSync(iconPath)) {
     const launcher = path.join(app.getAppPath(), 'tools', 'launch.ps1')
     win.setAppDetails({
-      appId: 'com.oukzero.shutoki',
+      appId: 'com.mescobedo.shutokiaiworkspace',
       appIconPath: iconPath,
       appIconIndex: 0,
-      relaunchDisplayName: 'Shutoki',
+      relaunchDisplayName: 'Shutoki AI Workspace',
       // en desarrollo, fijarla en la barra la reabre compilando los últimos cambios
       ...(!app.isPackaged && fs.existsSync(launcher)
         ? { relaunchCommand: `powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${launcher}"` }

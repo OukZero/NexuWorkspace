@@ -62,7 +62,7 @@ function onControl(convId: string, child: ChildProcess, ev: ControlEvent): void 
     return
   }
   const r = ev.request
-  if (r?.subtype !== 'can_use_tool' || !r.tool_name) return reply(child, id, {}, 'Solicitud no soportada por Shutoki')
+  if (r?.subtype !== 'can_use_tool' || !r.tool_name) return reply(child, id, {}, 'Solicitud no soportada por Shutoki AI Workspace')
   const tool = r.tool_name
   const input = r.input ?? {}
   // preguntas al usuario y planes necesitan una interfaz propia que el chat no tiene: Claude debe preguntar en texto
