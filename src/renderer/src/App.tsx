@@ -17,10 +17,12 @@ import { StatusBar } from './components/StatusBar'
 import { ConvTabs, TaskTabs, type TaskMode } from './components/TabBar'
 import { DesignView } from './components/DesignView'
 import { GitView } from './components/GitView'
+import { FilesView, type FileRequest } from './components/FilesView'
 import { CommandPalette } from './components/CommandPalette'
 import { TerminalDock, type TermRequest } from './components/TerminalDock'
 import { Confetti } from './components/Confetti'
 import { ConfirmDialog } from './components/ConfirmDialog'
+import { TaskInfoModal } from './components/TaskInfoModal'
 import type { ConfirmRequest } from './components/ConfirmDialog'
 import { HelpModal } from './components/HelpModal'
 import { TaskModal } from './components/TaskModal'
@@ -33,6 +35,7 @@ import { UiContext, type Ui, type View } from './ui'
 
 type Modal =
   | { kind: 'task'; task: Partial<Task> }
+  | { kind: 'taskinfo'; taskId: string }
   | { kind: 'diff'; file: string; convId: string }
   | { kind: 'entry'; day: string }
   | { kind: 'newtab' }
@@ -68,6 +71,7 @@ export function App(): ReactNode {
   const [seen, setSeen] = useState<Record<string, number>>({}) // mensajes vistos por conversación
   const [modes, setModes] = useState<Record<string, TaskMode>>({}) // Chat o Diseño por tarea
   const [modal, setModal] = useState<Modal>(null)
+  const [fileReq, setFileReq] = useState<FileRequest | null>(null)
   const [toastState, setToastState] = useState<{ msg: string; err: boolean; action?: { label: string; run: () => void } } | null>(null)
   const [confetti, setConfetti] = useState(0)
   const [quickTick, setQuickTick] = useState(0)
@@ -189,12 +193,19 @@ export function App(): ReactNode {
       toast('Abriendo Claude en ' + workFolder(t, db.groups))
     },
     editTask: (t) => setModal({ kind: 'task', task: t }),
+    viewTask: (taskId) => setModal({ kind: 'taskinfo', taskId }),
+    openFile: (path) => {
+      if (!active) return
+      setModes((m) => ({ ...m, [active]: 'files' }))
+      setFileReq((r) => ({ taskId: active, path, nonce: (r?.nonce ?? 0) + 1 }))
+    },
     showDiff: (file) => activeConv && setModal({ kind: 'diff', file, convId: activeConv }),
     addEntry: (day) => {
       if (!db.tasks.length) return toast('Crea una tarea primero', true)
       setModal({ kind: 'entry', day })
     },
     closeModal: () => setModal(null),
+    goto: (target) => gotoRef.current(target),
     toast,
     confirm,
     openTerminal: (taskId, sessionId) => {
@@ -222,6 +233,25 @@ export function App(): ReactNode {
     if (c.closed) void run('chat:reopen', convId)
     showConv(c.taskId, convId)
   }
+  // destino de un aviso: 'chat:<id de conversación>' abre esa conversación; el resto son vistas del panel
+  const gotoRef = useRef<(v: string) => void>(() => {})
+  gotoRef.current = (v) => {
+    if (v.startsWith('chat:')) return gotoConvRef.current(v.slice(5))
+    if (v === 'daily') {
+      // el aviso matutino abre Horas en la pestaña Daily
+      try {
+        localStorage.setItem('shutoki.hoursMode', 'daily')
+      } catch {
+        /* sin storage */
+      }
+      window.dispatchEvent(new Event('shutoki:daily'))
+      setView('hours')
+      setPanel('hours')
+      return
+    }
+    setView(v as View)
+    setPanel(v as View)
+  }
   useEffect(() => {
     const offQuick = window.api.onQuickAdd(() => {
       setView('today')
@@ -229,23 +259,7 @@ export function App(): ReactNode {
       setQuickTick((n) => n + 1)
     })
     // 'chat:<id de conversación>' abre esa conversación (aviso de que Claude terminó); el resto son vistas del panel
-    const offGoto = window.api.onGoto((v) => {
-      if (v.startsWith('chat:')) return gotoConvRef.current(v.slice(5))
-      if (v === 'daily') {
-        // el aviso matutino abre Horas en la pestaña Daily
-        try {
-          localStorage.setItem('shutoki.hoursMode', 'daily')
-        } catch {
-          /* sin storage */
-        }
-        window.dispatchEvent(new Event('shutoki:daily'))
-        setView('hours')
-        setPanel('hours')
-        return
-      }
-      setView(v as View)
-      setPanel(v as View)
-    })
+    const offGoto = window.api.onGoto((v) => gotoRef.current(v))
     return () => {
       offQuick()
       offGoto()
@@ -337,7 +351,7 @@ export function App(): ReactNode {
       break
     case 'chat':
       content =
-        active && mode === 'design' ? <DesignView key={active} taskId={active} /> : active && mode === 'git' ? <GitView key={active} taskId={active} /> : activeConv ? <ChatView key={activeConv} convId={activeConv} /> : <Today />
+        active && mode === 'design' ? <DesignView key={active} taskId={active} /> : active && mode === 'files' ? <FilesView key={active} taskId={active} request={fileReq} /> : active && mode === 'git' ? <GitView key={active} taskId={active} /> : activeConv ? <ChatView key={activeConv} convId={activeConv} /> : <Today />
       break
     default:
       content = <Today />
@@ -384,6 +398,7 @@ export function App(): ReactNode {
       </main>
       {modal && (
         <div className="modal">
+          {modal.kind === 'taskinfo' && <TaskInfoModal key={modal.taskId} taskId={modal.taskId} />}
           {modal.kind === 'task' && <TaskModal key={modal.task.id ?? 'new'} task={modal.task} />}
           {modal.kind === 'diff' && <DiffModal file={modal.file} convId={modal.convId} />}
           {modal.kind === 'entry' && <AddEntryModal day={modal.day} />}

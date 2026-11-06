@@ -4,6 +4,7 @@ import type { CommandPolicy, OpenMode, Settings, SummaryMode, TerminalKind, Term
 import { useDB } from '../store'
 import { useUi } from '../ui'
 import { Select } from './Select'
+import { TelegramSettings } from './TelegramSettings'
 
 export function SettingsView(): ReactNode {
   const db = useDB()
@@ -35,7 +36,7 @@ export function SettingsView(): ReactNode {
       closeToTray: s.closeToTray,
       launchAtLogin: s.launchAtLogin,
       dailyTime: s.dailyTime || '',
-      redmineUrl: s.redmineUrl.trim() || 'https://redminemss.seidor.es',
+      redmineUrl: s.redmineUrl.trim(),
       redmineActivity: s.redmineActivity.trim() || 'Work (Office)'
     })
     ui.toast('Ajustes guardados')
@@ -187,7 +188,7 @@ export function SettingsView(): ReactNode {
         </div>
         <div>
           <label>Dirección de Redmine</label>
-          <input value={s.redmineUrl} onChange={(e) => set('redmineUrl', e.target.value)} />
+          <input value={s.redmineUrl} placeholder="https://redmine.tuempresa.com" onChange={(e) => set('redmineUrl', e.target.value)} />
         </div>
         <div>
           <label>Actividad por defecto en Redmine</label>
@@ -213,6 +214,8 @@ export function SettingsView(): ReactNode {
           Guardar
         </button>
       </div>
+
+      <TelegramSettings />
 
       <h3>Tus datos</h3>
       <div className="meta" style={{ maxWidth: 700, marginBottom: 8 }}>

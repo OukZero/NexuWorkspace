@@ -12,7 +12,11 @@ import { commit, getDb } from './db'
 const PARTITION = 'persist:redmine'
 let win: BrowserWindow | null = null
 
-const base = (): string => getDb().settings.redmineUrl.trim().replace(/\/+$/, '')
+const base = (): string => {
+  const u = getDb().settings.redmineUrl.trim().replace(/\/+$/, '')
+  if (!u) throw new Error('Falta la dirección de Redmine: ingrésala en Ajustes.')
+  return /^https?:\/\//i.test(u) ? u : `https://${u}`
+}
 
 function getWin(): BrowserWindow {
   if (win && !win.isDestroyed()) return win
@@ -199,8 +203,15 @@ const r2 = (n: number): number => Math.round(n * 100) / 100
 const norm = (s: string): string => s.toLowerCase().replace(/\s+/g, ' ').trim()
 
 /** Imputa en Redmine las líneas indicadas (sus `key`) del día. Marca como enviados los registros de las que salgan bien. */
-export async function send(day: string, keys: string[]): Promise<RedmineResult> {
-  const todo = lines(day).filter((l) => keys.includes(l.key) && l.project && l.issue)
+/** `hours` permite cambiar las horas de una línea (por su key) antes de enviarla. */
+export async function send(day: string, keys: string[], hours: Record<string, number> = {}, activities: Record<string, string> = {}): Promise<RedmineResult> {
+  const todo = lines(day)
+    .filter((l) => keys.includes(l.key) && l.project && l.issue)
+    .map((l) => {
+      const h = Number(hours[l.key])
+      const activity = (activities[l.key] ?? '').trim() || l.activity
+      return Number.isFinite(h) && h > 0 && h <= 24 ? { ...l, activity, hours: r2(h) } : { ...l, activity }
+    })
   const result: RedmineResult = { sent: 0, failed: [] }
   if (!todo.length) return result
   const s = await session()

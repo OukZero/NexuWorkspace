@@ -22,9 +22,15 @@ export interface Ui {
   /** Abre la tarea del click según el modo configurado (chat, Claude Desktop o terminal). */
   openTask(t: Task): void
   editTask(t: Partial<Task>): void
+  /** Abre la ficha de solo lectura de la tarea (con botón para editarla). */
+  viewTask(taskId: string): void
   showDiff(file: string): void
+  /** Abre un archivo en la pestaña «Archivos» de la tarea activa (ruta absoluta o relativa a sus carpetas). */
+  openFile(path: string): void
   addEntry(day: string): void
   closeModal(): void
+  /** Navega a un destino de notificación: una vista («hours», «daily»…) o «chat:<conversación>». */
+  goto(target: string): void
   /** Aviso temporal; con `action` muestra un botón (p. ej. «Deshacer»). */
   toast(msg: string, err?: boolean, action?: { label: string; run: () => void }): void
   /** Pide confirmación con un diálogo de la app (reemplaza a confirm() del navegador). Resuelve true si el usuario acepta. */

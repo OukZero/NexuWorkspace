@@ -34,6 +34,17 @@ function Files({ activity }: { activity: Activity[] }): ReactNode {
           <span className="ico">✎</span>
           <code className="grow">{f}</code>
           {n > 1 && <span className="chip">×{n}</span>}
+          <button
+            className="icon"
+            title="Ver el archivo completo"
+            aria-label="Ver el archivo completo"
+            onClick={(e) => {
+              e.stopPropagation()
+              ui.openFile(f)
+            }}
+          >
+            {'</>'}
+          </button>
           <span className="st">›</span>
         </div>
       ))}

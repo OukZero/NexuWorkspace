@@ -1,8 +1,8 @@
-import { Notification, powerMonitor } from 'electron'
+import { powerMonitor } from 'electron'
 import { dayKey } from '../shared/util'
 import { commit, getDb, save, uid } from './db'
 import { activeEntry, minutesToday, stopActive } from './timer'
-import { emit, showWin } from './windows'
+import { notify } from './notify'
 
 // Una tarea con recurrence != none es plantilla. Cada día genera una copia para hoy.
 export function generateRecurring(): void {
@@ -64,10 +64,7 @@ export function checkIdle(): void {
     db.paused = e.taskId
     idleNotified = true
     commit()
-    new Notification({
-      title: 'Timer pausado por inactividad',
-      body: `Descontamos ${Math.round(idleSec / 60)} min. Reanúdalo cuando vuelvas.`
-    }).show()
+    notify({ kind: 'idle', title: 'Timer pausado por inactividad', body: `Descontamos ${Math.round(idleSec / 60)} min. Reanúdalo cuando vuelvas.`, goto: 'today' })
   }
   if (idleSec < 10) idleNotified = false
 }
@@ -86,18 +83,15 @@ export function checkReminder(): void {
   const hours = minutesToday() / 60
   const pending = db.tasks.filter((t) => t.status === 'today' || t.status === 'doing').length
   const missing = db.settings.targetHours - hours
-  const n = new Notification({
+  notify({
+    kind: 'reminder',
     title: 'Cierre del día',
     body:
       (missing > 0
         ? `Llevas ${hours.toFixed(1)} h de ${db.settings.targetHours} h: te faltan ${missing.toFixed(1)} h por registrar.`
-        : `Objetivo cumplido: ${hours.toFixed(1)} h registradas.`) + ` ${pending} tareas pendientes hoy. Abre el borrador del día para revisarlo.`
+        : `Objetivo cumplido: ${hours.toFixed(1)} h registradas.`) + ` ${pending} tareas pendientes hoy. Abre el borrador del día para revisarlo.`,
+    goto: 'hours'
   })
-  n.on('click', () => {
-    showWin()
-    emit('goto', 'hours')
-  })
-  n.show()
 }
 
 /** Aviso matutino (días hábiles) de que el daily está listo. Si la app se abre muy tarde, ese día se omite. */
@@ -115,10 +109,5 @@ export function checkDaily(): void {
   db.lastDailyDay = key
   save()
   if (minutes > 180) return
-  const n = new Notification({ title: 'Tu daily está listo', body: 'Revisa lo de ayer y lo de hoy, y cópialo para tu equipo.' })
-  n.on('click', () => {
-    showWin()
-    emit('goto', 'daily')
-  })
-  n.show()
+  notify({ kind: 'daily', title: 'Tu daily está listo', body: 'Revisa lo de ayer y lo de hoy, y cópialo para tu equipo.', goto: 'daily' })
 }
