@@ -108,7 +108,7 @@ export const backupsDir = (): string => path.join(path.dirname(dataFile), 'backu
 
 /** Reemplaza todos los datos (importar): antes se guarda una copia de lo actual. */
 export function replaceDb(raw: Partial<DB>): void {
-  if (!Array.isArray(raw.tasks) || !Array.isArray(raw.entries)) throw new Error('El archivo no parece una exportación de Shutoki (faltan tareas u horas).')
+  if (!Array.isArray(raw.tasks) || !Array.isArray(raw.entries)) throw new Error('El archivo no parece una exportación de Shutoki AI Workspace (faltan tareas u horas).')
   fs.copyFileSync(dataFile, path.join(path.dirname(dataFile), `data.pre-importacion-${Date.now()}.json`))
   db = normalize(raw)
   commit()

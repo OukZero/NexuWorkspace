@@ -1,8 +1,10 @@
+import { APP_ID } from './appid'
 import { app, BrowserWindow, screen } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import { getDb, registerWindow } from './db'
 import { lifecycle } from './lifecycle'
+import { closeSplash } from './splash'
 
 let win: BrowserWindow | null = null
 let mini: BrowserWindow | null = null
@@ -10,7 +12,7 @@ let mini: BrowserWindow | null = null
 const preload = (): string => path.join(__dirname, '../preload/index.js')
 
 // Icono de la ventana y de la barra de tareas; se genera con `npm run icon`. Sin el archivo, se usa el de Electron.
-const iconPath = path.join(__dirname, '../../resources/icon.ico')
+const iconPath = path.join(__dirname, '../../resources/shutoki-ai.ico')
 const icon = (): { icon?: string } => (fs.existsSync(iconPath) ? { icon: iconPath } : {})
 
 function loadPage(w: BrowserWindow, page: 'index' | 'mini'): void {
@@ -61,26 +63,27 @@ function createMini(): void {
 export function createWindows(): void {
   const hidden = process.argv.includes('--hidden') // arranque con Windows: empieza en la bandeja
   win = new BrowserWindow({
-    show: !hidden,
+    show: false, // se muestra al terminar de cargar (mientras tanto se ve la pantalla de inicio)
     width: 1200,
     height: 780,
     minWidth: 900,
     minHeight: 560,
     backgroundColor: '#0f1115',
-    title: 'Shutoki',
+    title: 'Shutoki AI Workspace',
     ...icon(),
     autoHideMenuBar: true,
     webPreferences: { preload: preload(), contextIsolation: true, nodeIntegration: false }
   })
   registerWindow(win)
+  win.once('ready-to-show', () => closeSplash(() => !hidden && win?.show()))
   // Sin esto, al fijar la app en la barra de tareas (o en su menú de salto) Windows usa el icono de electron.exe.
   if (process.platform === 'win32' && fs.existsSync(iconPath)) {
     const launcher = path.join(app.getAppPath(), 'tools', 'launch.ps1')
     win.setAppDetails({
-      appId: 'com.oukzero.shutoki',
+      appId: APP_ID,
       appIconPath: iconPath,
       appIconIndex: 0,
-      relaunchDisplayName: 'Shutoki',
+      relaunchDisplayName: 'Shutoki AI Workspace',
       // en desarrollo, fijarla en la barra la reabre compilando los últimos cambios
       ...(!app.isPackaged && fs.existsSync(launcher)
         ? { relaunchCommand: `powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${launcher}"` }

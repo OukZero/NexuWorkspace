@@ -1,6 +1,6 @@
 # Lista de mejoras
 
-Ideas y pendientes de Shutoki, sin orden estricto. Marca con `[x]` lo que se vaya haciendo.
+Ideas y pendientes de Shutoki AI Workspace, sin orden estricto. Marca con `[x]` lo que se vaya haciendo.
 
 ## Ideas
 

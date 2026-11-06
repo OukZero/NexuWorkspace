@@ -15,14 +15,14 @@ export function applyLoginItem(): void {
 }
 
 export function initTray(): void {
-  const icon = path.join(__dirname, '../../resources/icon.ico')
+  const icon = path.join(__dirname, '../../resources/shutoki-ai.ico')
   if (!fs.existsSync(icon)) return // sin icono no hay bandeja (se genera con `npm run icon`)
   tray = new Tray(nativeImage.createFromPath(icon))
-  tray.setToolTip('Shutoki')
+  tray.setToolTip('Shutoki AI Workspace')
   tray.on('click', showWin)
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: 'Abrir Shutoki', click: showWin },
+      { label: 'Abrir Shutoki AI Workspace', click: showWin },
       {
         label: 'Detener el timer',
         click: () => {

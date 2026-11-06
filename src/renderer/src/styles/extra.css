@@ -654,3 +654,7 @@ tbody tr:first-child td { border-top: 0; }
 .design-run { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .design-run .meta { flex: 1; min-width: 160px; }
 .design-run .btn svg { width: 12px; height: 12px; vertical-align: -2px; }
+
+/* marca: nombre y subtítulo */
+.brand-text { display: flex; flex-direction: column; line-height: 1.1; }
+.brand-text small { font-size: 9px; font-weight: 600; letter-spacing: 1.6px; text-transform: uppercase; color: var(--muted); }

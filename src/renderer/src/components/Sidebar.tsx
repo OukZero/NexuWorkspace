@@ -316,7 +316,7 @@ function Brand(): ReactNode {
   return (
     <div className="brand">
       {ok ? <img className="brand-icon" src={`${import.meta.env.BASE_URL}icon.png`} alt="" onError={() => setOk(false)} /> : <span>◆</span>}
-      <span className="brand-text">Shutoki</span>
+      <span className="brand-text">Shutoki<small>AI Workspace</small></span>
     </div>
   )
 }

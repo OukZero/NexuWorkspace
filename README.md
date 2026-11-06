@@ -1,4 +1,4 @@
-# Shutoki
+# Shutoki AI Workspace
 
 Gestor local de tareas con timer, horas en Excel, imputación en Redmine y chat con Claude / Copilot.
 
