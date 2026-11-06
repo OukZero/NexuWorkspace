@@ -1,0 +1,26 @@
+Shutoki
+Copyright (c) 2026 Martin Escobedo. Todos los derechos reservados.
+Copyright (c) 2026 Martin Escobedo. All rights reserved.
+
+Este software y su código fuente son propiedad de Martin Escobedo y se
+entregan solo para consulta. Sin autorización previa y por escrito del titular
+queda prohibido usar, copiar, modificar, fusionar, publicar, distribuir,
+sublicenciar, vender o crear obras derivadas de este software, total o
+parcialmente.
+
+This software and its source code are the property of Martin Escobedo and are
+provided for viewing only. Without the prior written permission of the
+copyright holder, you may not use, copy, modify, merge, publish, distribute,
+sublicense, sell, or create derivative works of this software, in whole or in
+part.
+
+EL SOFTWARE SE ENTREGA «TAL CUAL», SIN GARANTÍA DE NINGÚN TIPO. EL TITULAR NO
+SERÁ RESPONSABLE POR DAÑOS DERIVADOS DE SU USO.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. THE COPYRIGHT
+HOLDER SHALL NOT BE LIABLE FOR ANY DAMAGES ARISING FROM ITS USE.
+
+Las dependencias de terceros (Electron, React, CodeMirror, etc.) mantienen sus
+propias licencias.
+Third-party dependencies (Electron, React, CodeMirror, etc.) retain their own
+licenses.

@@ -2,9 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Attachment, MockupFile } from '../../../shared/types'
 import { designConv } from '../conversations'
-import { findTask, useDB } from '../store'
+import { findTask, useDB, useNow } from '../store'
 import { useUi } from '../ui'
 import { AttachmentList } from './Chat'
+import { IconStop } from './icons'
 import { Markdown } from './Markdown'
 
 type Device = 'desktop' | 'tablet' | 'mobile'
@@ -20,6 +21,17 @@ export function DesignView({ taskId }: { taskId: string }): ReactNode {
   const task = findTask(db, taskId)
   const conv = designConv(db, taskId)
   const running = !!conv?.chat.running
+  const now = useNow(1000)
+  const [since, setSince] = useState(0)
+  useEffect(() => setSince(running ? Date.now() : 0), [running])
+  const act = conv?.chat.activity ?? []
+  const lastAct = act[act.length - 1]
+  const pending = conv?.chat.pending ?? []
+  const quiet = running && lastAct ? Math.floor((now - lastAct.ts) / 1000) : 0
+  const mmss = (ms: number): string => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`
+  const cancel = (): void => {
+    if (conv?.id) void ui.run('chat:cancel', conv.id)
+  }
   const last = [...(conv?.chat.messages ?? [])].reverse().find((m) => m.role === 'assistant' || m.role === 'system')
 
   const [files, setFiles] = useState<MockupFile[]>([])
@@ -174,17 +186,44 @@ export function DesignView({ taskId }: { taskId: string }): ReactNode {
           {(running || last) && (
             <div className={`design-say ${last?.role === 'system' ? 'err' : ''}`}>
               {running ? (
-                <span className="typing">
-                  <i />
-                  <i />
-                  <i />
-                  &nbsp;Claude está diseñando…
-                </span>
+                <div className="design-run">
+                  <span className="typing">
+                    <i />
+                    <i />
+                    <i />
+                    &nbsp;{pending.length ? 'Esperando tu permiso…' : 'Claude está diseñando…'} {since > 0 && mmss(now - since)}
+                  </span>
+                  {lastAct && (
+                    <small className="meta" title={lastAct.target}>
+                      Última acción: {lastAct.label} {lastAct.target ? `· ${lastAct.target.slice(0, 60)}` : ''} · hace {quiet}s
+                      {quiet > 90 && !pending.length ? ' — sin actividad, quizá esté trabado: cancela y reintenta' : ''}
+                    </small>
+                  )}
+                  <button className="btn sm danger" onClick={cancel}>
+                    <IconStop /> Cancelar
+                  </button>
+                </div>
               ) : (
                 last && <Markdown text={last.text} />
               )}
             </div>
           )}
+          {pending.map((p) => (
+            <div key={p.id} className="perm">
+              <div className="perm-title">
+                Claude pide permiso · <b>{p.tool === 'Bash' ? 'ejecutar un comando' : p.tool}</b>
+              </div>
+              <pre className="perm-cmd">{p.target}</pre>
+              <div className="foot">
+                <button className="btn sm primary" onClick={() => void ui.run('chat:permit', conv!.id, p.id, 'allow')}>
+                  Permitir
+                </button>
+                <button className="btn sm danger" onClick={() => void ui.run('chat:permit', conv!.id, p.id, 'deny')}>
+                  Rechazar
+                </button>
+              </div>
+            </div>
+          ))}
           {!files.length && !running && (
             <div className="suggest">
               {IDEAS.map((i) => (

@@ -1,7 +1,7 @@
 // Conversaciones con Claude: cada una ejecuta `claude -p` (stream-json) en la carpeta de su tarea y reanuda su propia sesión.
 import fs from 'fs'
 import path from 'path'
-import { BrowserWindow, Notification } from 'electron'
+import { BrowserWindow } from 'electron'
 import { ChildProcess, spawn } from 'child_process'
 import { attachRoot, trusted as trustedAttachments } from './attachments'
 import { designInstructions, mockupsDir, stageAssets } from './mockups'
@@ -11,6 +11,8 @@ import { buildInvocation, readUsage, type CopilotEvent, type CopilotUsage } from
 import { broadcast, commit, getDb, push } from './db'
 import { copilotDirs, effectiveTask, groupAccess, groupNote, groupNoteFile } from './groups'
 import { allowForever, claudeAllow, claudeDeny, copilotAllow, copilotDeny, isAllowed, ruleFor } from './permissions'
+import { notify } from './notify'
+import { sendPermission } from './telegram'
 import { ensureTimer } from './timer'
 import { emit, getMain, showWin } from './windows'
 
@@ -78,15 +80,10 @@ function onControl(convId: string, child: ChildProcess, ev: ControlEvent): void 
   if (!m) asking.set(convId, (m = new Map()))
   m.set(id, input)
   push()
-  if (!BrowserWindow.getAllWindows().some((w) => w.isFocused())) {
-    const n = new Notification({ title: 'Claude pide permiso', body: clip(targetOf(tool, input), 140) })
-    n.on('click', () => {
-      showWin()
-      emit('goto', `chat:${convId}`)
-    })
-    n.show()
-    getMain()?.flashFrame(true)
-  }
+  const unfocused = !BrowserWindow.getAllWindows().some((w) => w.isFocused())
+  notify({ kind: 'permission', title: 'Claude pide permiso', body: clip(targetOf(tool, input), 140), goto: `chat:${convId}`, os: unfocused, flash: unfocused, tg: false })
+  const req = pending[pending.length - 1]
+  sendPermission(convId, req, getDb().tasks.find((t) => t.id === chat.taskId)?.title ?? 'Tarea')
 }
 
 /** Respuesta del usuario a una solicitud de permiso. «always» agrega el comando a la lista permitida de Ajustes. */
@@ -480,8 +477,8 @@ export function configure(convId: string, cfg: { provider?: Provider; model?: st
 
 /** Aviso de escritorio cuando Claude termina (o necesita atención) y la app no está en primer plano. */
 function notifyDone(convId: string, task: Task, chat: Chat, runStart: number, failed: string | null, who = 'Claude'): void {
-  if (!getDb().settings.notifyOnDone) return
-  if (BrowserWindow.getAllWindows().some((w) => w.isFocused())) return // ya lo estás viendo; la pestaña muestra un indicador
+  // el aviso del sistema solo sale si lo permiten los Ajustes y la app no está en primer plano; en la campanita queda siempre
+  const os = getDb().settings.notifyOnDone && !BrowserWindow.getAllWindows().some((w) => w.isFocused())
   const edited = [...new Set(chat.activity.filter((a) => a.kind === 'edit' && a.status !== 'error' && a.ts >= runStart).map((a) => a.target))]
   const last = [...chat.messages].reverse().find((m) => m.role === 'assistant')
   const body =
@@ -489,13 +486,7 @@ function notifyDone(convId: string, task: Task, chat: Chat, runStart: number, fa
     (edited.length
       ? `Modificó ${edited.length} archivo${edited.length > 1 ? 's' : ''}: ${clip(edited.slice(0, 3).join(', '), 110)}${edited.length > 3 ? '…' : ''}`
       : clip((last?.text ?? 'Respuesta lista').replace(/\s+/g, ' '), 140))
-  const n = new Notification({ title: `${failed ? `${who} necesita atención` : `${who} terminó`} · ${clip(task.title, 50)}`, body })
-  n.on('click', () => {
-    showWin()
-    emit('goto', `chat:${convId}`)
-  })
-  n.show()
-  getMain()?.flashFrame(true)
+  notify({ kind: failed ? 'attention' : 'done', title: `${failed ? `${who} necesita atención` : `${who} terminó`} · ${clip(task.title, 50)}`, body, goto: `chat:${convId}`, os, flash: os })
 }
 
 /** Contenido del mensaje para Claude: las fotos van como bloques de imagen; todos los adjuntos se mencionan por ruta. */

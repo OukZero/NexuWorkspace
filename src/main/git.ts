@@ -270,9 +270,19 @@ export async function checkout(dir: string, name: string, create: boolean): Prom
     throw new Error('Nombre de rama no válido: sin espacios, sin «..» ni caracteres especiales.')
   })
   if (create) return void (await git(top, ['switch', '-c', name]))
-  const local = await git(top, ['show-ref', '--verify', '--quiet', `refs/heads/${name}`], { ok: [0, 1] }).then(() => true).catch(() => false)
-  const isRemote = !local && (await git(top, ['show-ref', '--verify', '--quiet', `refs/remotes/${name}`], { ok: [0, 1] }).then(() => true).catch(() => false))
-  await git(top, isRemote ? ['switch', '--track', name] : ['switch', name])
+  const exists = (ref: string): Promise<boolean> =>
+    git(top, ['show-ref', '--verify', '--quiet', ref]).then(
+      () => true,
+      () => false
+    )
+  if (await exists(`refs/heads/${name}`)) return void (await git(top, ['switch', name]))
+  if (await exists(`refs/remotes/${name}`)) {
+    // rama remota («origin/x»): se crea la local «x» siguiéndola; si ya existe, se cambia a ella
+    const localName = name.slice(name.indexOf('/') + 1)
+    if (await exists(`refs/heads/${localName}`)) return void (await git(top, ['switch', localName]))
+    return void (await git(top, ['switch', '-c', localName, '--track', name]))
+  }
+  await git(top, ['switch', name])
 }
 
 export async function sync(dir: string, op: 'fetch' | 'pull' | 'push'): Promise<string> {

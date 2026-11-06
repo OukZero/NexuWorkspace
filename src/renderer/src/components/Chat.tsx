@@ -8,6 +8,7 @@ import { baseName, hhmm } from '../utils'
 import { useUi } from '../ui'
 import { IconSend, IconStop } from './icons'
 import { Markdown } from './Markdown'
+import { Menu } from './Menu'
 import { Select, type SelectOption } from './Select'
 import { ContextMeter } from './SessionPanel'
 import { SidePanel } from './SidePanel'
@@ -241,8 +242,8 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
   return (
     <>
       <div className="chat-head">
-        <button className="btn sm" onClick={() => ui.go(ui.panel)}>
-          ← Volver
+        <button className="icon back" title="Volver" aria-label="Volver" onClick={() => ui.go(ui.panel)}>
+          ←
         </button>
         <div className="grow">
           <b>{task?.title}</b>
@@ -253,24 +254,26 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
           </div>
         </div>
         {chat?.usage?.contextTokens ? <ContextMeter usage={chat.usage} settings={db.settings} /> : null}
-        <button className="btn sm" disabled={summarizing} onClick={summarize} title="Genera un resumen de la conversación y lo agrega a «Lo realizado» de la tarea">
-          {summarizing ? 'Generando resumen…' : '✦ Resumir en la tarea'}
+        <button className="btn sm accent" disabled={summarizing} onClick={summarize} title="Genera un resumen de la conversación y lo agrega a «Lo realizado» de la tarea">
+          {summarizing ? 'Resumiendo…' : '✦ Resumir'}
         </button>
-        <button className="btn sm" onClick={() => task && ui.editTask(task)} title="Ver / editar la tarea">
+        <button className="btn sm" onClick={() => ui.viewTask(taskId)} title="Ver el detalle de la tarea">
           Ver tarea
-        </button>
-        <button className="btn sm" onClick={desktop} title="Abre una sesión nueva en Claude Desktop con el prompt de la tarea">
-          Abrir en Claude Desktop
         </button>
         <button className="btn sm" onClick={() => ui.openTerminal(taskId)} title="Terminal en la carpeta del proyecto (Ctrl+`)">
           &gt;_ Terminal
         </button>
-        <button className="btn sm" onClick={() => void continueInTerminal()} title="Abre la terminal en la carpeta del proyecto y retoma esta misma conversación con claude --resume">
-          Continuar en terminal
-        </button>
-        <button className="btn sm danger" onClick={reset}>
-          Reiniciar
-        </button>
+        <Menu
+          trigger="⋯"
+          title="Más acciones"
+          items={[
+            { label: 'Editar tarea', icon: '✎', onSelect: () => task && ui.editTask(task) },
+            { label: 'Abrir en Claude Desktop', icon: '🖥', hint: 'Sesión nueva con el prompt de la tarea', onSelect: () => void desktop() },
+            { label: 'Continuar en terminal', icon: '⏎', hint: 'Retoma esta conversación con claude --resume', onSelect: () => void continueInTerminal() },
+            { kind: 'sep' },
+            { label: 'Reiniciar conversación', icon: '↺', danger: true, onSelect: () => void reset() }
+          ]}
+        />
       </div>
       <div className="chat-wrap">
         <div className="chat-main">

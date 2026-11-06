@@ -4,6 +4,7 @@ import type { CommandPolicy, OpenMode, Settings, SummaryMode, TerminalKind, Term
 import { useDB } from '../store'
 import { useUi } from '../ui'
 import { Select } from './Select'
+import { TelegramSettings } from './TelegramSettings'
 
 export function SettingsView(): ReactNode {
   const db = useDB()
@@ -213,6 +214,8 @@ export function SettingsView(): ReactNode {
           Guardar
         </button>
       </div>
+
+      <TelegramSettings />
 
       <h3>Tus datos</h3>
       <div className="meta" style={{ maxWidth: 700, marginBottom: 8 }}>

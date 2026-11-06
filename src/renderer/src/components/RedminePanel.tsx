@@ -3,6 +3,9 @@ import type { ReactNode } from 'react'
 import type { RedmineLine } from '../../../shared/types'
 import { useDB } from '../store'
 import { useUi } from '../ui'
+import { Select } from './Select'
+
+const ACTIVITIES = ['Work (On customer)', 'Work (Remote)', 'Work (Office)', 'Travel']
 
 /** Vista previa de lo que se imputará en Redmine ese día, con confirmación antes de enviar. */
 export function RedminePanel({ day }: { day: string }): ReactNode {
@@ -11,7 +14,16 @@ export function RedminePanel({ day }: { day: string }): ReactNode {
   const [lines, setLines] = useState<RedmineLine[]>([])
   const [off, setOff] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
+  // horas que el usuario cambió a mano por línea (si no, se usan las registradas con el timer)
+  const [edited, setEdited] = useState<Record<string, number>>({})
+  // actividad elegida por línea (si no, la de la tarea o la de Ajustes)
+  const [acts, setActs] = useState<Record<string, string>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    setEdited({})
+    setActs({})
+  }, [day])
 
   useEffect(() => {
     let live = true
@@ -23,13 +35,14 @@ export function RedminePanel({ day }: { day: string }): ReactNode {
 
   const ready = lines.filter((l) => l.project && l.issue)
   const chosen = ready.filter((l) => !off.has(l.key))
-  const total = chosen.reduce((a, l) => a + l.hours, 0)
+  const hoursOf = (l: RedmineLine): number => edited[l.key] ?? l.hours
+  const total = chosen.reduce((a, l) => a + hoursOf(l), 0)
 
   const send = async (): Promise<void> => {
     if (!chosen.length || busy) return
     setBusy(true)
     setErrors({})
-    const r = await ui.run('redmine:send', day, chosen.map((l) => l.key))
+    const r = await ui.run('redmine:send', day, chosen.map((l) => l.key), edited, acts)
     setBusy(false)
     if (!r) return
     if (r.needLogin) return ui.toast('Inicia sesión en la ventana de Redmine y vuelve a pulsar «Imputar»', true)
@@ -58,11 +71,45 @@ export function RedminePanel({ day }: { day: string }): ReactNode {
                 <div className="main">
                   <div className="title">{ok ? `${l.project} → ${l.issue}` : 'Falta proyecto o tarea de Redmine (edita la tarea)'}</div>
                   <div className="meta">
-                    {l.activity} · Billable: no · {l.comment || 'sin comentario'}
+                    Billable: no · {l.comment || 'sin comentario'}
                   </div>
+                  {ok && (
+                    <div style={{ marginTop: 4, maxWidth: 220 }}>
+                      <Select
+                        ariaLabel="Actividad"
+                        title="Actividad en Redmine (remoto, oficina…)"
+                        value={acts[l.key] ?? l.activity}
+                        onChange={(v) => setActs((p) => ({ ...p, [l.key]: v }))}
+                        options={[...new Set([acts[l.key] ?? l.activity, ...ACTIVITIES])].map((v) => ({ value: v, label: v }))}
+                      />
+                    </div>
+                  )}
                   {errors[l.key] && <div className="meta" style={{ color: 'var(--danger, #e5484d)' }}>⚠ {errors[l.key]}</div>}
                 </div>
-                <b>{l.hours} h</b>
+                {ok ? (
+                  <label className="rm-hours" title="Horas que se imputarán (puedes cambiarlas)">
+                    <input
+                      type="number"
+                      min={0.25}
+                      max={24}
+                      step={0.25}
+                      value={edited[l.key] ?? l.hours}
+                      aria-label="Horas a imputar"
+                      onChange={(e) => {
+                        const v = e.target.valueAsNumber
+                        setEdited((p) => (Number.isFinite(v) ? { ...p, [l.key]: v } : Object.fromEntries(Object.entries(p).filter(([k]) => k !== l.key))))
+                      }}
+                    />
+                    <span>h</span>
+                    {edited[l.key] !== undefined && edited[l.key] !== l.hours && (
+                      <button type="button" className="icon" title={`Volver a ${l.hours} h (lo registrado)`} aria-label="Restablecer horas" onClick={() => setEdited((p) => Object.fromEntries(Object.entries(p).filter(([k]) => k !== l.key)))}>
+                        ↺
+                      </button>
+                    )}
+                  </label>
+                ) : (
+                  <b>{l.hours} h</b>
+                )}
               </div>
             )
           })}

@@ -11,8 +11,11 @@ import { gitCommits, openClaude, openLogin, openTerminalHere, openVSCode, render
 import { createPty, killPty, killPtysOf, resizePty, writePty } from './pty'
 import { applyLoginItem } from './tray'
 import { deleteMockup, exportMockup, listMockups, revealMockups } from './mockups'
+import * as files from './files'
+import { clearAll, markRead } from './notify'
 import * as redmine from './redmine'
 import { generateRecurring } from './scheduler'
+import * as telegram from './telegram'
 import { askClaude, summarizeConversation } from './summary'
 import { activeEntry, startTimer, stopActive } from './timer'
 import { getMain, showWin } from './windows'
@@ -230,10 +233,34 @@ export function registerIpc(): void {
     getDb().entries.push({ id: uid(), note: '', ...e })
     commit()
   })
+  api('files:roots', (taskId) => files.roots(taskId))
+  api('files:list', (taskId, root, rel) => files.list(taskId, root, rel))
+  api('files:read', (taskId, root, rel) => files.read(taskId, root, rel))
+  api('files:find', (taskId, root, q) => files.find(taskId, root, q))
+  api('notif:read', (id) => markRead(id))
+  api('notif:clear', () => clearAll())
+  api('telegram:status', () => telegram.getStatus())
+  api('telegram:save', (c) => {
+    const s = getDb().settings
+    const token = c.token.trim()
+    if (token !== (s.telegramToken ?? '')) delete s.telegramChat // otro bot: hay que vincular de nuevo
+    s.telegramToken = token
+    s.telegramOn = c.on && !!token
+    s.telegramDetails = c.details
+    commit()
+    telegram.restart()
+    return telegram.getStatus()
+  })
+  api('telegram:link', () => telegram.newLinkCode())
+  api('telegram:unlink', () => {
+    telegram.unlink()
+    return telegram.getStatus()
+  })
+  api('telegram:test', () => telegram.test())
   api('redmine:lines', (day) => redmine.lines(day))
   api('redmine:login', () => redmine.openLogin())
   api('redmine:days', (from, to) => redmine.days(from, to))
-  api('redmine:send', (day, keys) => redmine.send(day, keys))
+  api('redmine:send', (day, keys, hours, acts) => redmine.send(day, keys, hours, acts))
   api('redmine:catalog', () => redmine.loadCatalog())
   api('settings:save', (s) => {
     const db = getDb()

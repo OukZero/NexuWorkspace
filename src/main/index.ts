@@ -7,6 +7,7 @@ import { killPtysOf } from './pty'
 import { lifecycle } from './lifecycle'
 import { registerMockupProtocol, registerMockupScheme } from './mockups'
 import { checkDaily, checkIdle, checkReminder, generateRecurring } from './scheduler'
+import { restart as startTelegram, stop as stopTelegram } from './telegram'
 import { activeEntry } from './timer'
 import { applyLoginItem, initTray } from './tray'
 import { createWindows, emit, showWin } from './windows'
@@ -56,6 +57,7 @@ if (!app.requestSingleInstanceLock()) {
     // los timers abiertos de una sesión anterior se cierran al último latido
     if (db.heartbeat) for (const e of db.entries) if (!e.end) e.end = Math.max(e.start, db.heartbeat)
     createWindows()
+    startTelegram()
     initTray()
     applyLoginItem()
     generateRecurring()
@@ -80,6 +82,7 @@ if (!app.requestSingleInstanceLock()) {
   })
   app.on('will-quit', () => {
     globalShortcut.unregisterAll()
+    stopTelegram()
     chat.killAll()
     killPtysOf()
     try {

@@ -75,6 +75,38 @@ export interface RedmineDay {
   max: number
 }
 
+export type NotificationKind = 'daily' | 'reminder' | 'done' | 'attention' | 'permission' | 'idle'
+
+export interface AppNotification {
+  id: string
+  ts: number
+  kind: NotificationKind
+  title: string
+  body: string
+  /** A dónde lleva al hacer click: una vista (p. ej. «hours», «daily») o «chat:<conversación>». */
+  goto?: string
+  read: boolean
+}
+
+/** Carpeta que se puede explorar en el visor de archivos de una tarea. */
+export interface FileRoot {
+  name: string
+  path: string
+}
+
+export interface FileEntry {
+  name: string
+  dir: boolean
+}
+
+export interface FileContent {
+  text: string
+  size: number
+  binary: boolean
+  /** El archivo es más grande que el límite del visor y solo se muestra el principio. */
+  truncated: boolean
+}
+
 export interface RedmineResult {
   sent: number
   failed: Array<{ key: string; error: string }>
@@ -335,6 +367,20 @@ export interface Settings {
   redmineActivity: string
   /** Proyectos de Redmine y sus tareas, leídos del formulario «Log time». */
   redmineCatalog?: RedmineCatalog
+  /** Bot de Telegram: token de BotFather, activado, chat vinculado y si los avisos llevan detalle (tarea / comando). */
+  telegramToken?: string
+  telegramOn?: boolean
+  telegramChat?: number
+  telegramDetails?: boolean
+  /** Conversación a la que van los mensajes escritos en Telegram. */
+  telegramConv?: string
+}
+
+export interface TelegramStatus {
+  running: boolean
+  linked: boolean
+  bot?: string
+  error?: string
 }
 
 /** Proyecto de Redmine (por nombre) con su id y las tareas conocidas. */
@@ -354,6 +400,8 @@ export interface DB {
   limits?: RateLimits
   heartbeat?: number
   lastDailyDay?: string
+  /** Centro de notificaciones: lo que la app avisó (también lo que no llegó a mostrarse como aviso del sistema). */
+  notifications?: AppNotification[]
 }
 
 /** Tarea nueva o parcial: sin id se crea una nueva. */
@@ -419,9 +467,20 @@ export interface IpcChannels {
   'group:save': { args: [FolderGroup]; ret: void }
   'group:delete': { args: [string]; ret: void }
   'redmine:lines': { args: [string]; ret: RedmineLine[] }
+  'files:roots': { args: [string]; ret: FileRoot[] }
+  'files:list': { args: [string, string, string]; ret: FileEntry[] }
+  'files:read': { args: [string, string, string]; ret: FileContent }
+  'files:find': { args: [string, string, string]; ret: string[] }
+  'notif:read': { args: [string]; ret: void }
+  'notif:clear': { args: []; ret: void }
+  'telegram:status': { args: []; ret: TelegramStatus }
+  'telegram:save': { args: [{ token: string; on: boolean; details: boolean }]; ret: TelegramStatus }
+  'telegram:link': { args: []; ret: string }
+  'telegram:unlink': { args: []; ret: TelegramStatus }
+  'telegram:test': { args: []; ret: void }
   'redmine:login': { args: []; ret: void }
   'redmine:days': { args: [string, string]; ret: RedmineDay[] }
-  'redmine:send': { args: [string, string[]]; ret: RedmineResult }
+  'redmine:send': { args: [string, string[], Record<string, number>, Record<string, string>?]; ret: RedmineResult }
   'redmine:catalog': { args: []; ret: { projects: number; issues: number } }
   'entry:update': { args: [EntryPatch]; ret: void }
   'entry:delete': { args: [string]; ret: void }

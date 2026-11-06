@@ -6,6 +6,8 @@ const PANEL_LABEL: Record<string, string> = {
   today: 'Hoy',
   board: 'Tablero',
   hours: 'Horas',
+  redmine: 'Redmine',
+  history: 'Historial',
   usage: 'Consumo',
   groups: 'Carpetas',
   settings: 'Ajustes'
@@ -65,7 +67,7 @@ export function TaskTabs({ tasks, active, panel, unread, onPanel, onSelect, onCl
   )
 }
 
-export type TaskMode = 'chat' | 'design' | 'git'
+export type TaskMode = 'chat' | 'design' | 'git' | 'files'
 
 interface ConvTabsProps {
   taskId: string
@@ -95,6 +97,9 @@ export function ConvTabs({ taskId, active, mode, unread, onMode, onSelect, onClo
         </button>
         <button className={mode === 'git' ? 'on' : ''} onClick={() => onMode('git')} title="Control de Git del proyecto: cambios, commit, ramas e historial">
           ⎇ Git
+        </button>
+        <button className={mode === 'files' ? 'on' : ''} onClick={() => onMode('files')} title="Explorar y leer el código de la tarea (solo lectura)">
+          {'</>'} Archivos
         </button>
       </div>
       {mode === 'chat' && convs.map(({ id, chat }) => (
