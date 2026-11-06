@@ -12,7 +12,11 @@ import { commit, getDb } from './db'
 const PARTITION = 'persist:redmine'
 let win: BrowserWindow | null = null
 
-const base = (): string => getDb().settings.redmineUrl.trim().replace(/\/+$/, '')
+const base = (): string => {
+  const u = getDb().settings.redmineUrl.trim().replace(/\/+$/, '')
+  if (!u) throw new Error('Falta la dirección de Redmine: ingrésala en Ajustes.')
+  return /^https?:\/\//i.test(u) ? u : `https://${u}`
+}
 
 function getWin(): BrowserWindow {
   if (win && !win.isDestroyed()) return win

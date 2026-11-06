@@ -36,7 +36,7 @@ export function SettingsView(): ReactNode {
       closeToTray: s.closeToTray,
       launchAtLogin: s.launchAtLogin,
       dailyTime: s.dailyTime || '',
-      redmineUrl: s.redmineUrl.trim() || 'https://redminemss.seidor.es',
+      redmineUrl: s.redmineUrl.trim(),
       redmineActivity: s.redmineActivity.trim() || 'Work (Office)'
     })
     ui.toast('Ajustes guardados')
@@ -188,7 +188,7 @@ export function SettingsView(): ReactNode {
         </div>
         <div>
           <label>Dirección de Redmine</label>
-          <input value={s.redmineUrl} onChange={(e) => set('redmineUrl', e.target.value)} />
+          <input value={s.redmineUrl} placeholder="https://redmine.tuempresa.com" onChange={(e) => set('redmineUrl', e.target.value)} />
         </div>
         <div>
           <label>Actividad por defecto en Redmine</label>
