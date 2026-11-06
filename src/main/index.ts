@@ -1,3 +1,4 @@
+import { APP_ID } from './appid'
 import { app, globalShortcut, shell } from 'electron'
 import fs from 'fs'
 import path from 'path'
@@ -7,6 +8,7 @@ import { registerIpc } from './ipc'
 import { killPtysOf } from './pty'
 import { lifecycle } from './lifecycle'
 import { registerMockupProtocol, registerMockupScheme } from './mockups'
+import { showSplash } from './splash'
 import { checkDaily, checkIdle, checkReminder, generateRecurring } from './scheduler'
 import { restart as startTelegram, stop as stopTelegram } from './telegram'
 import { activeEntry } from './timer'
@@ -16,7 +18,7 @@ import { createWindows, emit, showWin } from './windows'
 // La app se llamaba "mis-tareas": se conserva esa carpeta de datos para no perder tareas, horas ni chats al renombrar.
 // SHUTOKI_DATA_DIR permite probar con datos descartables sin tocar los reales.
 app.setPath('userData', process.env['SHUTOKI_DATA_DIR'] || path.join(app.getPath('appData'), 'mis-tareas'))
-app.setAppUserModelId('com.mescobedo.shutokiaiworkspace') // agrupa la app en la barra de tareas de Windows con su propio icono
+app.setAppUserModelId(APP_ID) // agrupa la app en la barra de tareas de Windows con su propio icono
 registerMockupScheme() // debe registrarse antes de que la app esté lista
 
 /**
@@ -39,7 +41,7 @@ function ensureStartMenuShortcut(): void {
       icon,
       iconIndex: 0,
       description: 'Shutoki AI Workspace',
-      appUserModelId: 'com.mescobedo.shutokiaiworkspace'
+      appUserModelId: APP_ID
     })
   } catch {
     /* sin permiso para escribir el acceso directo: las notificaciones salen con el nombre de Electron */
@@ -52,6 +54,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('second-instance', showWin)
 
   void app.whenReady().then(() => {
+    if (!process.argv.includes('--hidden')) showSplash() // primero: lo demás tarda un poco
     ensureStartMenuShortcut()
     initDb()
     registerMockupProtocol()

@@ -19,7 +19,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json"
   },
   "build": {
-    "appId": "com.mescobedo.shutokiaiworkspace",
+    "appId": "com.mescobedo.shutoki.aiworkspace",
     "productName": "Shutoki AI Workspace",
     "directories": {
       "output": "release"

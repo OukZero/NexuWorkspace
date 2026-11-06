@@ -1,8 +1,10 @@
+import { APP_ID } from './appid'
 import { app, BrowserWindow, screen } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import { getDb, registerWindow } from './db'
 import { lifecycle } from './lifecycle'
+import { closeSplash } from './splash'
 
 let win: BrowserWindow | null = null
 let mini: BrowserWindow | null = null
@@ -61,7 +63,7 @@ function createMini(): void {
 export function createWindows(): void {
   const hidden = process.argv.includes('--hidden') // arranque con Windows: empieza en la bandeja
   win = new BrowserWindow({
-    show: !hidden,
+    show: false, // se muestra al terminar de cargar (mientras tanto se ve la pantalla de inicio)
     width: 1200,
     height: 780,
     minWidth: 900,
@@ -73,11 +75,12 @@ export function createWindows(): void {
     webPreferences: { preload: preload(), contextIsolation: true, nodeIntegration: false }
   })
   registerWindow(win)
+  win.once('ready-to-show', () => closeSplash(() => !hidden && win?.show()))
   // Sin esto, al fijar la app en la barra de tareas (o en su menú de salto) Windows usa el icono de electron.exe.
   if (process.platform === 'win32' && fs.existsSync(iconPath)) {
     const launcher = path.join(app.getAppPath(), 'tools', 'launch.ps1')
     win.setAppDetails({
-      appId: 'com.mescobedo.shutokiaiworkspace',
+      appId: APP_ID,
       appIconPath: iconPath,
       appIconIndex: 0,
       relaunchDisplayName: 'Shutoki AI Workspace',

@@ -13,7 +13,16 @@ $electron = Join-Path $root 'node_modules\electron\dist\electron.exe'
 
 # Si ya está abierta, no se recompila (los archivos de out/ pueden estar en uso): solo se le avisa con una segunda instancia.
 $running = Get-Process -Name 'electron' -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $electron }
-if (-not $running) {
+# Solo se compila si hay cambios nuevos en el código (así abrir la app es casi instantáneo).
+$built = Join-Path $root 'out\main\index.js'
+$needBuild = $true
+if (Test-Path $built) {
+  $stamp = (Get-Item $built).LastWriteTime
+  $newer = Get-ChildItem (Join-Path $root 'src') -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -gt $stamp } | Select-Object -First 1
+  $cfg = Get-Item (Join-Path $root 'package.json'), (Join-Path $root 'electron.vite.config.ts') | Where-Object { $_.LastWriteTime -gt $stamp } | Select-Object -First 1
+  $needBuild = [bool]($newer -or $cfg)
+}
+if (-not $running -and $needBuild) {
   & $builder build *> $log
   if ($LASTEXITCODE -ne 0 -and -not (Test-Path (Join-Path $root 'out\main\index.js'))) {
     Add-Type -AssemblyName PresentationFramework
