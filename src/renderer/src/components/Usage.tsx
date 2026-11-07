@@ -34,7 +34,16 @@ const sum = (rs: UsageRecord[]): Totals =>
 // tokens "nuevos" procesados: lo que se paga a precio completo (la lectura de caché va aparte)
 const fresh = (t: Totals): number => t.input + t.output + t.cacheCreate
 
-function Limit({ label, w }: { label: string; w?: LimitWindow }): ReactNode {
+/** Tiempo que falta para el reinicio: «en 2 h 10 min», «en 3 d 4 h»… */
+export function untilReset(epochSec: number): string {
+  const mins = Math.max(0, Math.round((epochSec * 1000 - Date.now()) / 60000))
+  if (mins < 1) return 'en instantes'
+  if (mins < 60) return `en ${mins} min`
+  if (mins < 1440) return `en ${Math.floor(mins / 60)} h ${mins % 60} min`
+  return `en ${Math.floor(mins / 1440)} d ${Math.floor((mins % 1440) / 60)} h`
+}
+
+export function Limit({ label, w }: { label: string; w?: LimitWindow }): ReactNode {
   if (!w) return <div className="limit meta">{label}: sin datos todavía</div>
   const pct = Math.min(100, Math.round(w.utilization * 100))
   const cls = pct >= 90 ? 'critical' : pct >= 70 ? 'warn' : 'ok'
@@ -49,7 +58,7 @@ function Limit({ label, w }: { label: string; w?: LimitWindow }): ReactNode {
       <div className="ctx-bar big">
         <i style={{ width: `${pct}%` }} />
       </div>
-      <div className="meta">Se reinicia {when}</div>
+      <div className="meta">Se reinicia {untilReset(w.resetsAt)} · {when}</div>
     </div>
   )
 }

@@ -1,15 +1,18 @@
-import type { MouseEvent, ReactNode } from 'react'
+import type { CSSProperties, MouseEvent, ReactNode } from 'react'
 import type { Task } from '../../../shared/types'
 import { workFolder } from '../../../shared/util'
 import { activeEntry, taskMs, useDB, useNow } from '../store'
 import { PRIO, baseName, fmtH } from '../utils'
 import { useUi } from '../ui'
+import { taskColor, useAppearance } from '../theme'
 
 const stop = (e: MouseEvent): void => e.stopPropagation()
 
 export function TaskRow({ task: t }: { task: Task }): ReactNode {
   const db = useDB()
   const ui = useUi()
+  useAppearance() // repinta si cambian los colores de proyecto
+  const pc = taskColor(t)
   const now = useNow(30000)
   const running = activeEntry(db)?.taskId === t.id
   const spent = taskMs(db, t.id, now)
@@ -17,7 +20,7 @@ export function TaskRow({ task: t }: { task: Task }): ReactNode {
   const subtasks = t.subtasks ?? []
 
   return (
-    <div className={`row ${t.status} p-${t.priority} ${running ? 'doing' : ''}`} onClick={() => ui.openTask(t)}>
+    <div className={`row ${t.status} p-${t.priority} ${running ? 'doing' : ''}`} data-pc={pc ? '1' : undefined} style={pc ? ({ '--pc': pc } as CSSProperties) : undefined} onClick={() => ui.openTask(t)}>
       <button
         className={`check ${t.status === 'done' ? 'on' : ''}`}
         title="Completar"

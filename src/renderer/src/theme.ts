@@ -1,7 +1,12 @@
-// Apariencia y perfil, compartidos con la ventana flotante vía localStorage:
-// tema día/noche/sistema, color de acento, densidad, tamaño de letra y nombre.
+// Apariencia de la app, compartida con la ventana flotante vía localStorage y respaldada en los datos (Ajustes).
+// Todo vive en un solo objeto `Appearance`: tema (día/noche/estilos/colores propios), acento, tipografía, forma,
+// movimiento, burbujas del chat, resaltado de código, tema por horario, menú lateral y color por proyecto.
+import { useSyncExternalStore } from 'react'
+
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type Density = 'comfortable' | 'compact'
+export type Radius = 'sharp' | 'soft' | 'round'
+export type Bubbles = 'solid' | 'soft' | 'outline'
 
 /** Color de acento por perfil: [tema oscuro, tema claro]. */
 export const ACCENTS: Record<string, [string, string]> = {
@@ -9,7 +14,12 @@ export const ACCENTS: Record<string, [string, string]> = {
   verde: ['#5ee0b0', '#12936a'],
   rosa: ['#ff7ab6', '#d6336c'],
   ambar: ['#ffb454', '#b86e00'],
-  cian: ['#5ad1ff', '#0a7fa8']
+  cian: ['#5ad1ff', '#0a7fa8'],
+  violeta: ['#b794f6', '#7c3aed'],
+  rojo: ['#ff7a7a', '#d62839'],
+  lima: ['#b6e35a', '#5f8a00'],
+  turquesa: ['#4fe3d0', '#0b8f83'],
+  naranja: ['#ff9a5a', '#d4560a']
 }
 
 /** Estilos completos (paleta + fondo decorativo). 'clasico' usa solo el tema día/noche. */
@@ -21,6 +31,57 @@ export interface Preset {
   vars: Record<string, string>
   /** Fondo decorativo (CSS background-image) cuando no hay imagen propia. */
   deco: string
+  /** Acento propio del estilo (se usa cuando el acento está en «Del tema»). */
+  accent?: [string, string]
+}
+
+// ---------- utilidades de color ----------
+const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i
+export const isHex = (s: string): boolean => HEX.test(s)
+function rgb(hex: string): [number, number, number] {
+  let h = hex.replace('#', '')
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('')
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
+}
+/** Luminosidad relativa 0..1 (para elegir texto claro u oscuro sobre un color). */
+export function luminance(hex: string): number {
+  const [r, g, b] = rgb(hex).map((v) => {
+    const s = v / 255
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+const rgba = (hex: string, a: number): string => {
+  const [r, g, b] = rgb(hex)
+  return `rgba(${r},${g},${b},${a})`
+}
+
+interface Palette {
+  bg: string
+  panel: string
+  panel2: string
+  line: string
+  text: string
+  muted: string
+  user: string
+  code: string
+  over: string
+}
+
+function mk(label: string, base: 'light' | 'dark', c: Palette, accent: string | [string, string]): Preset {
+  const acc: [string, string] = typeof accent === 'string' ? [accent, accent] : accent
+  const a = acc[base === 'dark' ? 0 : 1]
+  return {
+    label,
+    base,
+    swatch: [c.bg, c.panel2, a],
+    accent: acc,
+    vars: {
+      '--bg': c.bg, '--panel': c.panel, '--panel2': c.panel2, '--line': c.line, '--text': c.text, '--muted': c.muted,
+      '--user-bg': c.user, '--code-bg': c.code, '--over-bg': c.over, '--timer-grad': `linear-gradient(90deg, ${c.user}, ${c.over})`
+    },
+    deco: `radial-gradient(900px 500px at 90% -10%, ${rgba(a, base === 'dark' ? 0.16 : 0.14)}, transparent 70%)`
+  }
 }
 
 export const PRESETS: Record<string, Preset> = {
@@ -67,17 +128,164 @@ export const PRESETS: Record<string, Preset> = {
       '--timer-grad': 'linear-gradient(90deg, #f0e0b8, #d9ecd0)'
     },
     deco: 'radial-gradient(900px 500px at 90% -10%, rgba(255,190,90,.22), transparent 70%)'
-  }
+  },
+  // ----- oscuros populares -----
+  dracula: mk('Dracula', 'dark', { bg: '#282a36', panel: '#2f3142', panel2: '#383a4e', line: '#44475a', text: '#f8f8f2', muted: '#9ba3c9', user: '#3d3f63', code: '#1e1f29', over: '#2c2e3e' }, '#bd93f9'),
+  nord: mk('Nord', 'dark', { bg: '#2e3440', panel: '#3b4252', panel2: '#434c5e', line: '#4c566a', text: '#eceff4', muted: '#9aa5b8', user: '#40586f', code: '#272c36', over: '#353c4a' }, '#88c0d0'),
+  tokyo: mk('Tokyo Night', 'dark', { bg: '#1a1b26', panel: '#1f2335', panel2: '#292e42', line: '#3b4261', text: '#c0caf5', muted: '#8089b3', user: '#2f3b6b', code: '#16161e', over: '#202336' }, '#7aa2f7'),
+  gruvbox: mk('Gruvbox', 'dark', { bg: '#282828', panel: '#32302f', panel2: '#3c3836', line: '#504945', text: '#ebdbb2', muted: '#a89984', user: '#504a2a', code: '#1d2021', over: '#302d2b' }, '#fabd2f'),
+  mocha: mk('Catppuccin Mocha', 'dark', { bg: '#1e1e2e', panel: '#262637', panel2: '#313244', line: '#45475a', text: '#cdd6f4', muted: '#a6adc8', user: '#3b3556', code: '#181825', over: '#292a3c' }, '#cba6f7'),
+  monokai: mk('Monokai', 'dark', { bg: '#272822', panel: '#2f302a', panel2: '#3a3b33', line: '#49483e', text: '#f8f8f2', muted: '#9d9a85', user: '#3d4a24', code: '#1e1f1c', over: '#2d2e27' }, '#a6e22e'),
+  githubdark: mk('GitHub Dark', 'dark', { bg: '#0d1117', panel: '#161b22', panel2: '#21262d', line: '#30363d', text: '#e6edf3', muted: '#8b949e', user: '#17304f', code: '#010409', over: '#12171e' }, '#58a6ff'),
+  solardark: mk('Solarized Dark', 'dark', { bg: '#002b36', panel: '#073642', panel2: '#0d4452', line: '#1d5563', text: '#a3b1b1', muted: '#6f8a92', user: '#0f4f5c', code: '#00212b', over: '#04323d' }, '#2aa198'),
+  rosepine: mk('Rosé Pine', 'dark', { bg: '#191724', panel: '#1f1d2e', panel2: '#26233a', line: '#403d52', text: '#e0def4', muted: '#908caa', user: '#3a2e4f', code: '#14121f', over: '#1d1b2b' }, '#ebbcba'),
+  onedark: mk('One Dark', 'dark', { bg: '#282c34', panel: '#2c313a', panel2: '#353b45', line: '#3e4451', text: '#c3cad6', muted: '#7f8798', user: '#2d4466', code: '#21252b', over: '#2a2f38' }, '#61afef'),
+  contrastedark: mk('Alto contraste (oscuro)', 'dark', { bg: '#000000', panel: '#0a0a0a', panel2: '#1a1a1a', line: '#6b6b6b', text: '#ffffff', muted: '#c8c8c8', user: '#0b3a66', code: '#000000', over: '#111111' }, '#4dd0ff'),
+  // ----- claros populares -----
+  githublight: mk('GitHub Light', 'light', { bg: '#f6f8fa', panel: '#ffffff', panel2: '#eaeef2', line: '#d0d7de', text: '#1f2328', muted: '#656d76', user: '#ddf4ff', code: '#f0f3f6', over: '#eef6ff' }, '#0969da'),
+  solarlight: mk('Solarized Light', 'light', { bg: '#fdf6e3', panel: '#fefaf0', panel2: '#eee8d5', line: '#ddd6c1', text: '#586e75', muted: '#7c8f90', user: '#dbe9f0', code: '#eee8d5', over: '#f5eed9' }, '#268bd2'),
+  latte: mk('Catppuccin Latte', 'light', { bg: '#eff1f5', panel: '#f7f8fb', panel2: '#e6e9ef', line: '#ccd0da', text: '#4c4f69', muted: '#6c6f85', user: '#e4d8fb', code: '#e6e9ef', over: '#e9ecf4' }, '#8839ef'),
+  gruvlight: mk('Gruvbox Claro', 'light', { bg: '#fbf1c7', panel: '#f9f5d7', panel2: '#ebdbb2', line: '#d5c4a1', text: '#3c3836', muted: '#7c6f64', user: '#f2e5b5', code: '#f2e5bc', over: '#f5ebbf' }, '#b57614'),
+  dawn: mk('Rosé Pine Dawn', 'light', { bg: '#faf4ed', panel: '#fffaf3', panel2: '#f2e9e1', line: '#dfdad9', text: '#575279', muted: '#797593', user: '#f0dfe3', code: '#f2e9e1', over: '#f6eee6' }, '#b4637a'),
+  nieve: mk('Nord Claro', 'light', { bg: '#eceff4', panel: '#f5f7fa', panel2: '#e5e9f0', line: '#d8dee9', text: '#2e3440', muted: '#5e6a7e', user: '#d9e3ef', code: '#e5e9f0', over: '#e8ecf3' }, '#5e81ac'),
+  contrastelight: mk('Alto contraste (claro)', 'light', { bg: '#ffffff', panel: '#ffffff', panel2: '#f0f0f0', line: '#1a1a1a', text: '#000000', muted: '#333333', user: '#cfe0ff', code: '#f0f0f0', over: '#f5f5f5' }, '#0040d0')
 }
 const PRESET_VARS = Object.keys(PRESETS.medianoche.vars)
 
-const mq = matchMedia('(prefers-color-scheme: light)')
+// ---------- colores propios ----------
+export interface CustomColors {
+  bg: string
+  panel: string
+  text: string
+  accent: string
+}
+export const DEFAULT_CUSTOM: CustomColors = { bg: '#1b1d27', panel: '#242736', text: '#e8eaf4', accent: '#7c8cff' }
 
-const read = (k: string, d: string): string => {
+/** Estilo armado a partir de 4 colores; el resto se deriva mezclándolos, así siempre queda coherente. */
+function customPreset(c: CustomColors): Preset {
+  const dark = luminance(c.bg) < 0.4
+  return {
+    label: 'Personalizado',
+    base: dark ? 'dark' : 'light',
+    swatch: [c.bg, c.panel, c.accent],
+    accent: [c.accent, c.accent],
+    vars: {
+      '--bg': c.bg,
+      '--panel': c.panel,
+      '--text': c.text,
+      '--panel2': 'color-mix(in srgb, var(--panel) 90%, var(--text))',
+      '--line': 'color-mix(in srgb, var(--panel) 78%, var(--text))',
+      '--muted': 'color-mix(in srgb, var(--text) 62%, var(--bg))',
+      '--user-bg': 'color-mix(in srgb, var(--accent) 28%, var(--panel))',
+      '--code-bg': dark ? 'color-mix(in srgb, var(--bg) 80%, black)' : 'color-mix(in srgb, var(--bg) 90%, var(--text))',
+      '--over-bg': 'color-mix(in srgb, var(--panel) 92%, var(--accent))',
+      '--timer-grad': 'linear-gradient(90deg, color-mix(in srgb, var(--accent) 28%, var(--panel)), color-mix(in srgb, var(--panel) 92%, var(--accent)))'
+    },
+    deco: `radial-gradient(900px 500px at 90% -10%, ${rgba(c.accent, 0.15)}, transparent 70%)`
+  }
+}
+
+// ---------- resaltado de código ----------
+export const SYNTAX: Record<string, { label: string; vars: Record<string, string> }> = {
+  github: { label: 'GitHub', vars: { kw: '#ff7b72', str: '#a5d6ff', num: '#79c0ff', com: '#8b949e', fn: '#d2a8ff', type: '#ffa657', tag: '#7ee787', attr: '#79c0ff' } },
+  monokai: { label: 'Monokai', vars: { kw: '#f92672', str: '#e6db74', num: '#ae81ff', com: '#88846f', fn: '#a6e22e', type: '#66d9ef', tag: '#f92672', attr: '#a6e22e' } },
+  dracula: { label: 'Dracula', vars: { kw: '#ff79c6', str: '#f1fa8c', num: '#bd93f9', com: '#6272a4', fn: '#50fa7b', type: '#8be9fd', tag: '#ff79c6', attr: '#50fa7b' } },
+  solarized: { label: 'Solarized', vars: { kw: '#859900', str: '#2aa198', num: '#d33682', com: '#93a1a1', fn: '#268bd2', type: '#b58900', tag: '#268bd2', attr: '#93a1a1' } },
+  nord: { label: 'Nord', vars: { kw: '#81a1c1', str: '#a3be8c', num: '#b48ead', com: '#7b88a1', fn: '#88c0d0', type: '#8fbcbb', tag: '#81a1c1', attr: '#8fbcbb' } },
+  tokyo: { label: 'Tokyo Night', vars: { kw: '#bb9af7', str: '#9ece6a', num: '#ff9e64', com: '#6b7399', fn: '#7aa2f7', type: '#2ac3de', tag: '#f7768e', attr: '#e0af68' } }
+}
+const SYN_KEYS = ['kw', 'str', 'num', 'com', 'fn', 'type', 'tag', 'attr']
+
+// ---------- tipografía ----------
+export const UI_FONTS = ['Segoe UI', 'Calibri', 'Verdana', 'Trebuchet MS', 'Tahoma', 'Georgia', 'Cambria', 'Inter', 'Roboto', 'Open Sans', 'Lato', 'Atkinson Hyperlegible']
+export const CODE_FONTS = ['Cascadia Mono', 'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'Source Code Pro', 'Courier New', 'Lucida Console']
+
+const UI_STACK = '"Segoe UI Variable", "Segoe UI", system-ui, sans-serif'
+const CODE_STACK = 'Consolas, "Cascadia Code", monospace'
+
+let fontCache: Record<string, boolean> = {}
+/** ¿Está instalada esa fuente? Se compara el ancho del texto con el de una fuente genérica de respaldo. */
+export function fontInstalled(name: string): boolean {
+  if (name in fontCache) return fontCache[name]
+  const ctx = document.createElement('canvas').getContext('2d')
+  let found = false
+  if (ctx) {
+    const sample = 'mmmmmmmmmmlliWWW0123456789'
+    for (const base of ['monospace', 'serif', 'sans-serif']) {
+      ctx.font = `72px ${base}`
+      const w0 = ctx.measureText(sample).width
+      ctx.font = `72px "${name}", ${base}`
+      if (ctx.measureText(sample).width !== w0) {
+        found = true
+        break
+      }
+    }
+  }
+  return (fontCache[name] = found)
+}
+
+// ---------- estado ----------
+export interface AutoTheme {
+  on: boolean
+  lightFrom: string
+  darkFrom: string
+  /** Estilo de día y de noche ('' = clásico). */
+  light: string
+  dark: string
+}
+
+/** Todo lo que define el aspecto (sin la imagen de fondo, que pesa demasiado). */
+export interface Look {
+  mode: ThemeMode
+  preset: string
+  custom: CustomColors
+  accent: string
+  uiFont: string
+  codeFont: string
+  lineHeight: number
+  radius: Radius
+  shadow: 0 | 1 | 2
+  bubbles: Bubbles
+  syntax: string
+}
+
+export interface SavedTheme {
+  id: string
+  name: string
+  look: Look
+}
+
+export interface Appearance extends Look {
+  density: Density
+  fontScale: number
+  motion: boolean
+  confetti: boolean
+  auto: AutoTheme
+  nav: { order: string[]; hidden: string[] }
+  /** Color por proyecto ('p:Nombre') o cliente ('c:Nombre'). */
+  colors: Record<string, string>
+  bgDim: number
+  bgGlass: number
+  saved: SavedTheme[]
+}
+
+const DEFAULT_LOOK: Look = {
+  mode: 'system', preset: '', custom: DEFAULT_CUSTOM, accent: 'auto', uiFont: '', codeFont: '', lineHeight: 145,
+  radius: 'soft', shadow: 1, bubbles: 'solid', syntax: 'auto'
+}
+export const DEFAULT_APPEARANCE: Appearance = {
+  ...DEFAULT_LOOK,
+  density: 'comfortable', fontScale: 100, motion: true, confetti: true,
+  auto: { on: false, lightFrom: '07:00', darkFrom: '19:00', light: 'papel', dark: 'medianoche' },
+  nav: { order: [], hidden: [] }, colors: {}, bgDim: 80, bgGlass: 78, saved: []
+}
+
+const KEY = 'shutoki.appearance'
+const read = (k: string): string | null => {
   try {
-    return localStorage.getItem(k) || d
+    return localStorage.getItem(k)
   } catch {
-    return d
+    return null
   }
 }
 const write = (k: string, v: string): void => {
@@ -88,63 +296,245 @@ const write = (k: string, v: string): void => {
   }
 }
 
-export const getMode = (): ThemeMode => read('theme', 'system') as ThemeMode
-export const getAccent = (): string => (read('accent', 'indigo') in ACCENTS ? read('accent', 'indigo') : 'indigo')
-export const getDensity = (): Density => (read('density', 'comfortable') === 'compact' ? 'compact' : 'comfortable')
-/** Tamaño de letra en % (90–120). */
-export const getFontScale = (): number => Math.min(120, Math.max(90, Number(read('fontScale', '100')) || 100))
+const num = (v: unknown, min: number, max: number, d: number): number => (typeof v === 'number' && isFinite(v) ? Math.min(max, Math.max(min, v)) : d)
+const str = (v: unknown, d: string, max = 60): string => (typeof v === 'string' ? v.slice(0, max) : d)
+const hex = (v: unknown, d: string): string => (typeof v === 'string' && isHex(v) ? v : d)
+const time = (v: unknown, d: string): string => (typeof v === 'string' && /^\d\d:\d\d$/.test(v) ? v : d)
+const oneOf = <T extends string>(v: unknown, list: readonly T[], d: T): T => (list.includes(v as T) ? (v as T) : d)
+const strs = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').slice(0, 60) : [])
+const fontName = (v: unknown): string => (typeof v === 'string' ? v.replace(/[^\p{L}\p{N} _-]/gu, '').trim().slice(0, 40) : '')
 
-/** Estilo elegido ('' = clásico, solo día/noche). */
-export const getPreset = (): string => (read('preset', '') in PRESETS ? read('preset', '') : '')
-/** Imagen de fondo propia (data URL) o ''. */
-export const getBgImage = (): string => read('bgImage', '')
-/** Cuánto se atenúa la imagen con el color de fondo, en % (40–95). */
-export const getBgDim = (): number => Math.min(95, Math.max(40, Number(read('bgDim', '80')) || 80))
+function sanitizeLook(r: Record<string, unknown>, d: Look): Look {
+  const c = (r.custom ?? {}) as Record<string, unknown>
+  return {
+    mode: oneOf(r.mode, ['light', 'dark', 'system'], d.mode),
+    preset: typeof r.preset === 'string' && (r.preset === '' || r.preset === 'custom' || r.preset in PRESETS) ? r.preset : d.preset,
+    custom: { bg: hex(c.bg, d.custom.bg), panel: hex(c.panel, d.custom.panel), text: hex(c.text, d.custom.text), accent: hex(c.accent, d.custom.accent) },
+    accent: typeof r.accent === 'string' && (r.accent === 'auto' || r.accent in ACCENTS || isHex(r.accent)) ? r.accent : d.accent,
+    uiFont: fontName(r.uiFont),
+    codeFont: fontName(r.codeFont),
+    lineHeight: num(r.lineHeight, 125, 180, d.lineHeight),
+    radius: oneOf(r.radius, ['sharp', 'soft', 'round'], d.radius),
+    shadow: num(r.shadow, 0, 2, d.shadow) as 0 | 1 | 2,
+    bubbles: oneOf(r.bubbles, ['solid', 'soft', 'outline'], d.bubbles),
+    syntax: typeof r.syntax === 'string' && (r.syntax === 'auto' || r.syntax in SYNTAX) ? r.syntax : d.syntax
+  }
+}
 
-/** Opacidad de los paneles sobre la imagen, en % (40 = muy transparentes, 100 = opacos). */
-export const getBgGlass = (): number => Math.min(100, Math.max(40, Number(read('bgGlass', '78')) || 78))
+/** Valida cualquier JSON (de disco, de la base de datos o importado) y lo completa con los valores por defecto. */
+export function sanitize(raw: unknown): Appearance {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const d = DEFAULT_APPEARANCE
+  const a = (r.auto ?? {}) as Record<string, unknown>
+  const nav = (r.nav ?? {}) as Record<string, unknown>
+  const colors: Record<string, string> = {}
+  for (const [k, v] of Object.entries((r.colors ?? {}) as Record<string, unknown>)) if (/^[pc]:/.test(k) && typeof v === 'string' && isHex(v)) colors[k.slice(0, 80)] = v
+  const presetOrEmpty = (v: unknown, def: string): string => (typeof v === 'string' && (v === '' || v in PRESETS) ? v : def)
+  return {
+    ...sanitizeLook(r, d),
+    density: r.density === 'compact' ? 'compact' : 'comfortable',
+    fontScale: num(r.fontScale, 90, 120, d.fontScale),
+    motion: r.motion !== false,
+    confetti: r.confetti !== false,
+    auto: { on: a.on === true, lightFrom: time(a.lightFrom, d.auto.lightFrom), darkFrom: time(a.darkFrom, d.auto.darkFrom), light: presetOrEmpty(a.light, d.auto.light), dark: presetOrEmpty(a.dark, d.auto.dark) },
+    nav: { order: strs(nav.order), hidden: strs(nav.hidden) },
+    colors,
+    bgDim: num(r.bgDim, 40, 95, d.bgDim),
+    bgGlass: num(r.bgGlass, 40, 100, d.bgGlass),
+    saved: Array.isArray(r.saved)
+      ? r.saved
+          .filter((s): s is Record<string, unknown> => !!s && typeof s === 'object')
+          .slice(0, 30)
+          .map((s) => ({ id: str(s.id, String(Math.random()), 30), name: str(s.name, 'Tema', 40) || 'Tema', look: sanitizeLook((s.look ?? {}) as Record<string, unknown>, DEFAULT_LOOK) }))
+      : []
+  }
+}
+
+/** Primera carga: lee el formato nuevo o, si no existe, migra las claves sueltas de versiones anteriores. */
+function load(): Appearance {
+  const raw = read(KEY)
+  if (raw) {
+    try {
+      return sanitize(JSON.parse(raw))
+    } catch {
+      /* ilegible: se parte de cero */
+    }
+  }
+  return sanitize({
+    mode: read('theme') ?? undefined,
+    preset: read('preset') ?? undefined,
+    accent: read('accent') ?? undefined,
+    density: read('density') ?? undefined,
+    fontScale: Number(read('fontScale')) || undefined,
+    bgDim: Number(read('bgDim')) || undefined,
+    bgGlass: Number(read('bgGlass')) || undefined
+  })
+}
+
+let A: Appearance = DEFAULT_APPEARANCE
+let focus = false
+const listeners = new Set<() => void>()
+const emit = (): void => listeners.forEach((l) => l())
+const subscribe = (cb: () => void): (() => void) => {
+  listeners.add(cb)
+  return () => listeners.delete(cb)
+}
+
+export const getAppearance = (): Appearance => A
+export const useAppearance = (): Appearance => useSyncExternalStore(subscribe, () => A)
+export const useFocusMode = (): boolean => useSyncExternalStore(subscribe, () => focus)
+
+/** Imagen de fondo propia (data URL) o ''. Va aparte: es grande y no se guarda en los datos. */
+export const getBgImage = (): string => read('bgImage') ?? ''
+
+// ---------- aplicar al documento ----------
+const mq = matchMedia('(prefers-color-scheme: light)')
+const minutes = (t: string): number => {
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + m
+}
+
+/** Estilo que corresponde ahora: el elegido o, con el horario activado, el de día / noche. */
+function effectivePreset(): { key: string; mode: ThemeMode } {
+  if (!A.auto.on) return { key: A.preset, mode: A.mode }
+  const now = new Date().getHours() * 60 + new Date().getMinutes()
+  const l = minutes(A.auto.lightFrom)
+  const d = minutes(A.auto.darkFrom)
+  const day = l <= d ? now >= l && now < d : now >= l || now < d
+  const key = day ? A.auto.light : A.auto.dark
+  return { key, mode: day ? 'light' : 'dark' }
+}
+
+export function presetFor(key: string): Preset | undefined {
+  return key === 'custom' ? customPreset(A.custom) : PRESETS[key]
+}
 
 function apply(): void {
   const root = document.documentElement
-  const m = getMode()
-  const p = PRESETS[getPreset()] as Preset | undefined
-  const theme = p ? p.base : m === 'system' ? (mq.matches ? 'light' : 'dark') : m
+  const { key, mode } = effectivePreset()
+  const p = presetFor(key)
+  const theme = p ? p.base : mode === 'system' ? (mq.matches ? 'light' : 'dark') : mode
   root.dataset.theme = theme
-  root.dataset.density = getDensity()
-  for (const k of PRESET_VARS) {
-    if (p) root.style.setProperty(k, p.vars[k])
+  root.dataset.density = A.density
+  root.dataset.bubbles = A.bubbles
+  if (!A.motion) root.dataset.motion = 'off'
+  else delete root.dataset.motion
+  const allVars = new Set([...PRESET_VARS, ...Object.keys(customPreset(A.custom).vars)])
+  for (const k of allVars) {
+    if (p && k in p.vars) root.style.setProperty(k, p.vars[k])
     else root.style.removeProperty(k)
   }
   root.style.setProperty('--bg-deco', p?.deco ?? 'none')
+
   const img = getBgImage()
   if (img) {
     root.dataset.bg = 'image'
     root.style.setProperty('--bg-image', `url("${img}")`)
-    root.style.setProperty('--bg-dim', `${getBgDim()}%`)
-    root.style.setProperty('--glass', `${getBgGlass()}%`)
+    root.style.setProperty('--bg-dim', `${A.bgDim}%`)
+    root.style.setProperty('--glass', `${A.bgGlass}%`)
   } else {
     delete root.dataset.bg
     root.style.removeProperty('--bg-image')
     root.style.removeProperty('--bg-dim')
     root.style.removeProperty('--glass')
   }
-  const [dark, light] = ACCENTS[getAccent()]
-  root.style.setProperty('--accent', theme === 'light' ? light : dark)
-  root.style.setProperty('zoom', String(getFontScale() / 100))
+
+  // acento: propio (#hex), de la lista, o el del estilo
+  let accent: string
+  if (isHex(A.accent)) accent = A.accent
+  else if (A.accent in ACCENTS) accent = ACCENTS[A.accent][theme === 'light' ? 1 : 0]
+  else accent = (p?.accent ?? ACCENTS.indigo)[theme === 'light' ? 1 : 0]
+  root.style.setProperty('--accent', accent)
+  root.style.setProperty('--on-accent', luminance(accent) > 0.4 ? '#0b0d14' : '#ffffff')
+
+  // tipografía
+  const ui = A.uiFont ? `"${A.uiFont}", ${UI_STACK}` : UI_STACK
+  const code = A.codeFont ? `"${A.codeFont}", ${CODE_STACK}` : CODE_STACK
+  root.style.setProperty('--font-ui', ui)
+  root.style.setProperty('--font-code', code)
+  root.style.setProperty('--lh', String(A.lineHeight / 100))
+
+  // forma
+  root.style.setProperty('--rs', A.radius === 'sharp' ? '0' : A.radius === 'round' ? '1.7' : '1')
+  if (A.shadow === 1) root.style.removeProperty('--shadow')
+  else root.style.setProperty('--shadow', A.shadow === 0 ? 'none' : '0 14px 40px rgba(0,0,0,.55)')
+
+  // resaltado de código
+  const syn = SYNTAX[A.syntax]
+  for (const k of SYN_KEYS) {
+    if (syn) root.style.setProperty(`--syn-${k}`, syn.vars[k])
+    else root.style.removeProperty(`--syn-${k}`)
+  }
+
+  if (focus) root.dataset.focus = '1'
+  else delete root.dataset.focus
+  root.style.setProperty('zoom', String(A.fontScale / 100))
 }
 
-export function setPreset(k: string): void {
-  write('preset', k)
-  apply()
+let syncTimer: ReturnType<typeof setTimeout> | undefined
+/** Guarda también en los datos de la app (entra en las copias de seguridad) sin saturar con cada movimiento de un control. */
+function queueSync(): void {
+  clearTimeout(syncTimer)
+  syncTimer = setTimeout(() => {
+    try {
+      void window.api?.call('settings:save', { appearance: A as unknown as Record<string, unknown> }).catch(() => undefined)
+    } catch {
+      /* ventana sin API */
+    }
+  }, 700)
 }
-export function setBgDim(n: number): void {
-  write('bgDim', String(n))
+
+/** Cambia la apariencia: se aplica al instante, se recuerda y se respalda. */
+export function update(patch: Partial<Appearance>): void {
+  A = { ...A, ...patch }
+  write(KEY, JSON.stringify(A))
   apply()
+  emit()
+  queueSync()
 }
-export function setBgGlass(n: number): void {
-  write('bgGlass', String(n))
+
+/** Reemplaza todo el aspecto por uno guardado o importado (sin tocar menú, colores por proyecto ni horario). */
+export function applyLook(look: Look): void {
+  update({ ...look })
+}
+
+export const currentLook = (): Look => {
+  const { mode, preset, custom, accent, uiFont, codeFont, lineHeight, radius, shadow, bubbles, syntax } = A
+  return { mode, preset, custom, accent, uiFont, codeFont, lineHeight, radius, shadow, bubbles, syntax }
+}
+
+/** Si esta máquina no tiene preferencias guardadas (instalación nueva, datos importados) usa las de los datos de la app. */
+export function hydrate(fromDb: unknown): void {
+  if (read(KEY) || !fromDb) return
+  A = sanitize(fromDb)
+  write(KEY, JSON.stringify(A))
   apply()
+  emit()
 }
+
+export const getFocus = (): boolean => focus
+
+export function setFocusMode(on: boolean): void {
+  focus = on
+  apply()
+  emit()
+}
+
+// ---------- API de siempre (la usan Sidebar y la paleta de comandos) ----------
+export const getMode = (): ThemeMode => A.mode
+export const getAccent = (): string => A.accent
+export const getDensity = (): Density => A.density
+export const getFontScale = (): number => A.fontScale
+export const getPreset = (): string => A.preset
+export const getBgDim = (): number => A.bgDim
+export const getBgGlass = (): number => A.bgGlass
+export const setMode = (m: ThemeMode): void => update({ mode: m })
+export const setAccent = (k: string): void => update({ accent: k })
+export const setDensity = (d: Density): void => update({ density: d })
+export const setFontScale = (n: number): void => update({ fontScale: n })
+export const setPreset = (k: string): void => update({ preset: k })
+export const setBgDim = (n: number): void => update({ bgDim: n })
+export const setBgGlass = (n: number): void => update({ bgGlass: n })
 export function clearBgImage(): void {
   try {
     localStorage.removeItem('bgImage')
@@ -152,6 +542,7 @@ export function clearBgImage(): void {
     /* sin storage */
   }
   apply()
+  emit()
 }
 /** Reduce la imagen (máx. 1920 px, JPEG) para que quepa en localStorage y la guarda como fondo. */
 export async function setBgImageFile(file: File): Promise<void> {
@@ -164,31 +555,46 @@ export async function setBgImageFile(file: File): Promise<void> {
   const url = c.toDataURL('image/jpeg', 0.82)
   localStorage.setItem('bgImage', url) // lanza si no cabe: lo captura quien llama
   apply()
+  emit()
 }
 
-export function setMode(m: ThemeMode): void {
-  write('theme', m)
-  apply()
-}
-export function setAccent(k: string): void {
-  write('accent', k)
-  apply()
-}
-export function setDensity(d: Density): void {
-  write('density', d)
-  apply()
-}
-export function setFontScale(n: number): void {
-  write('fontScale', String(n))
-  apply()
-}
-
-export const getName = (): string => read('userName', '')
+export const getName = (): string => read('userName') ?? ''
 export const setName = (n: string): void => write('userName', n)
+
+// ---------- color por proyecto, menú y confeti ----------
+/** Color de la tarea: el de su proyecto o, si no tiene, el de su cliente. */
+export function taskColor(t: { project?: string; client?: string }): string | undefined {
+  return (t.project && A.colors['p:' + t.project]) || (t.client && A.colors['c:' + t.client]) || undefined
+}
+export const confettiEnabled = (): boolean => A.confetti && A.motion
+
+/** Ordena y filtra los elementos de un grupo del menú según la configuración. */
+export function navOrder<T extends { id: string }>(items: T[], includeHidden = false): T[] {
+  const order = A.nav.order
+  const rank = (id: string): number => {
+    const i = order.indexOf(id)
+    return i < 0 ? 1000 + items.findIndex((x) => x.id === id) : i
+  }
+  return [...items].filter((x) => includeHidden || !A.nav.hidden.includes(x.id)).sort((a, b) => rank(a.id) - rank(b.id))
+}
 
 /** Aplica la apariencia antes del primer pintado y la mantiene sincronizada entre ventanas. */
 export function initTheme(): void {
+  A = load()
   mq.addEventListener('change', apply)
-  addEventListener('storage', apply)
+  addEventListener('storage', (e) => {
+    if (e.key === KEY || e.key === 'bgImage' || e.key === null) {
+      A = load()
+      apply()
+      emit()
+    }
+  })
+  // el tema por horario cambia solo al llegar la hora
+  setInterval(() => {
+    if (A.auto.on) apply()
+  }, 60_000)
   apply()
 }
+
+/** Interpreta un tema exportado/importado: solo toma los campos del aspecto, ignorando todo lo demás. */
+export const parseLook = (raw: unknown): Look => sanitizeLook((raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>, DEFAULT_LOOK)

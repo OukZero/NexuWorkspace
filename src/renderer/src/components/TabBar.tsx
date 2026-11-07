@@ -1,6 +1,8 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { closedConvs, convLabel, designConv, openConvs, taskRunning } from '../conversations'
+import type { CSSProperties } from 'react'
 import { findTask, useDB } from '../store'
+import { taskColor, useAppearance } from '../theme'
 
 const PANEL_LABEL: Record<string, string> = {
   today: 'Hoy',
@@ -22,11 +24,15 @@ interface TaskTabsProps {
   onSelect(taskId: string): void
   onClose(taskId: string): void
   onNew(): void
+  onMove(from: string, to: string): void
+  onPop(taskId: string, atCursor: boolean): void
 }
 
 /** Nivel 1: el panel y una pestaña por tarea abierta. */
-export function TaskTabs({ tasks, active, panel, unread, onPanel, onSelect, onClose, onNew }: TaskTabsProps): ReactNode {
+export function TaskTabs({ tasks, active, panel, unread, onPanel, onSelect, onClose, onNew, onMove, onPop }: TaskTabsProps): ReactNode {
   const db = useDB()
+  const [over, setOver] = useState<string | null>(null)
+  useAppearance()
   return (
     <div className="tabs">
       <button className={`tab panel ${active === null ? 'active' : ''}`} onClick={onPanel} title="Volver al panel">
@@ -38,8 +44,34 @@ export function TaskTabs({ tasks, active, panel, unread, onPanel, onSelect, onCl
         return (
           <div
             key={id}
-            className={`tab ${active === id ? 'active' : ''}`}
-            title={t.title}
+            className={`tab ${active === id ? 'active' : ''} ${over === id ? 'drop' : ''}`}
+            data-pc={taskColor(t) ? '1' : undefined}
+            style={taskColor(t) ? ({ '--pc': taskColor(t) } as CSSProperties) : undefined}
+            title={`${t.title}
+Arrastra para reordenar; suéltala fuera de la ventana para abrirla aparte`}
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData('text/shutoki-tab', id)
+              e.dataTransfer.effectAllowed = 'move'
+            }}
+            onDragOver={(e) => {
+              if (!e.dataTransfer.types.includes('text/shutoki-tab')) return
+              e.preventDefault()
+              setOver(id)
+            }}
+            onDragLeave={() => setOver((o) => (o === id ? null : o))}
+            onDrop={(e) => {
+              e.preventDefault()
+              setOver(null)
+              const from = e.dataTransfer.getData('text/shutoki-tab')
+              if (from && from !== id) onMove(from, id)
+            }}
+            onDragEnd={(e) => {
+              setOver(null)
+              // soltada fuera de la ventana: sale a una ventana propia, donde se soltó
+              const out = e.clientX < 0 || e.clientY < 0 || e.clientX > window.innerWidth || e.clientY > window.innerHeight
+              if (e.dataTransfer.dropEffect === 'none' && out) onPop(id, true)
+            }}
             onClick={() => onSelect(id)}
             onAuxClick={(e) => {
               if (e.button === 1) onClose(id)
@@ -47,6 +79,16 @@ export function TaskTabs({ tasks, active, panel, unread, onPanel, onSelect, onCl
           >
             <i className={`tdot ${taskRunning(db, id) ? 'run' : unread.has(id) ? 'unread' : ''}`} />
             <span className="tt">{t.title}</span>
+            <button
+              className="x pop"
+              title="Abrir en una ventana aparte"
+              onClick={(e) => {
+                e.stopPropagation()
+                onPop(id, false)
+              }}
+            >
+              ⧉
+            </button>
             <button
               className="x"
               title="Cerrar la tarea (sus conversaciones se conservan)"
@@ -78,10 +120,12 @@ interface ConvTabsProps {
   onSelect(convId: string): void
   onClose(convId: string): void
   onNew(): void
+  onPop?(): void
+  docked?: boolean // ventana suelta: el botón la devuelve a la principal
 }
 
 /** Nivel 2: Chat / Diseño de la tarea activa y, en Chat, sus conversaciones (cambian al cambiar de tarea). */
-export function ConvTabs({ taskId, active, mode, unread, onMode, onSelect, onClose, onNew }: ConvTabsProps): ReactNode {
+export function ConvTabs({ taskId, active, mode, unread, onMode, onSelect, onClose, onNew, onPop, docked }: ConvTabsProps): ReactNode {
   const db = useDB()
   const convs = openConvs(db, taskId)
   const hidden = closedConvs(db, taskId).length
@@ -129,6 +173,11 @@ export function ConvTabs({ taskId, active, mode, unread, onMode, onSelect, onClo
       {mode === 'chat' && (
         <button className="tab plus" title="Nueva conversación en esta tarea, u otra tarea" onClick={onNew}>
           ＋
+        </button>
+      )}
+      {onPop && (
+        <button className="tab plus" title={docked ? 'Devolver esta tarea a la ventana principal' : 'Sacar esta tarea a una ventana aparte'} onClick={onPop}>
+          {docked ? '⇱' : '⧉'}
         </button>
       )}
       {mode === 'chat' && hidden > 0 && <span className="sublabel">{hidden} cerrada{hidden > 1 ? 's' : ''}</span>}

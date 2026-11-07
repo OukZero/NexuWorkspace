@@ -1,23 +1,15 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import type { ReactNode } from 'react'
 import type { Activity, ActivityKind } from '../../../shared/types'
+import { setLayout, useLayout } from '../layout'
 import { useDB } from '../store'
+import { Resizer } from './Resizer'
 import { useUi } from '../ui'
 import { SessionPanel } from './SessionPanel'
 
 const ACT_ICON: Record<ActivityKind, string> = { edit: '✎', read: '👁', run: '⌘', search: '⌕', other: '•' }
 
 type Tab = 'session' | 'files' | 'activity'
-const KEY = 'shutoki.sidepanel'
-
-function load(): { open: boolean; tab: Tab } {
-  try {
-    const v = JSON.parse(localStorage.getItem(KEY) ?? 'null') as { open?: boolean; tab?: Tab } | null
-    return { open: v?.open ?? true, tab: v?.tab && ['session', 'files', 'activity'].includes(v.tab) ? v.tab : 'session' }
-  } catch {
-    return { open: true, tab: 'session' }
-  }
-}
 
 function Files({ activity }: { activity: Activity[] }): ReactNode {
   const ui = useUi()
@@ -79,16 +71,10 @@ function Feed({ activity }: { activity: Activity[] }): ReactNode {
  */
 export function SidePanel({ convId }: { convId: string }): ReactNode {
   const db = useDB()
-  const [st, setSt] = useState(load)
+  const lay = useLayout()
+  const st = { open: lay.sideOpen, tab: lay.sideTab as Tab }
+  const setSt = (v: { open: boolean; tab: Tab }): void => setLayout({ sideOpen: v.open, sideTab: v.tab })
   const activity = db.chats[convId]?.activity ?? []
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(st))
-    } catch {
-      /* sin storage */
-    }
-  }, [st])
 
   const files = new Set(activity.filter((a) => a.kind === 'edit' && a.status !== 'error').map((a) => a.target)).size
   const working = activity.some((a) => a.status === 'running')
@@ -101,6 +87,7 @@ export function SidePanel({ convId }: { convId: string }): ReactNode {
 
   return (
     <aside className={`side-panel ${st.open ? 'open' : 'closed'}`}>
+      {st.open && <Resizer value={lay.sideW} invert onChange={(w) => setLayout({ sideW: w })} onReset={() => setLayout({ sideW: 320 })} label="Ancho del panel" />}
       {st.open && (
         <div className="panel-body">
           <h4>{current.label}</h4>

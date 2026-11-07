@@ -21,6 +21,8 @@ import { FilesView, type FileRequest } from './components/FilesView'
 import { CommandPalette } from './components/CommandPalette'
 import { TerminalDock, type TermRequest } from './components/TerminalDock'
 import { Confetti } from './components/Confetti'
+import { confettiEnabled, getFocus, setFocusMode, useFocusMode } from './theme'
+import { getLayout, setLayout, useLayout } from './layout'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { TaskInfoModal } from './components/TaskInfoModal'
 import type { ConfirmRequest } from './components/ConfirmDialog'
@@ -45,12 +47,18 @@ type Modal =
 
 const TABS_KEY = 'shutoki.tabs'
 
+// ventana suelta: ?pop=<tarea>&conv=<conversación> (una tarea sacada de la ventana principal)
+const POP = new URLSearchParams(location.search)
+const popTask = POP.get('pop')
+const popConv = POP.get('conv')
+
 interface Saved {
   tasks: string[] // pestañas de tarea abiertas
   sel: Record<string, string> // conversación visible por tarea
 }
 
 function loadSaved(): Saved {
+  if (popTask) return { tasks: [popTask], sel: popConv ? { [popTask]: popConv } : {} }
   try {
     const v = JSON.parse(localStorage.getItem(TABS_KEY) ?? 'null') as Partial<Saved> | string[] | null
     if (Array.isArray(v)) return { tasks: [], sel: {} } // formato anterior (una pestaña por tarea): se descarta
@@ -62,12 +70,13 @@ function loadSaved(): Saved {
 
 export function App(): ReactNode {
   const db = useDB()
+  const focus = useFocusMode()
   const saved = useRef(loadSaved()).current
-  const [view, setView] = useState<View>('today')
+  const [view, setView] = useState<View>(popTask ? 'chat' : 'today')
   const [panel, setPanel] = useState<View>('today') // última vista del panel (para volver desde una tarea)
   const [taskTabs, setTaskTabs] = useState<string[]>(saved.tasks)
   const [sel, setSel] = useState<Record<string, string>>(saved.sel)
-  const [activeTask, setActiveTask] = useState<string | null>(null)
+  const [activeTask, setActiveTask] = useState<string | null>(popTask)
   const [seen, setSeen] = useState<Record<string, number>>({}) // mensajes vistos por conversación
   const [modes, setModes] = useState<Record<string, TaskMode>>({}) // Chat o Diseño por tarea
   const [modal, setModal] = useState<Modal>(null)
@@ -75,8 +84,11 @@ export function App(): ReactNode {
   const [toastState, setToastState] = useState<{ msg: string; err: boolean; action?: { label: string; run: () => void } } | null>(null)
   const [confetti, setConfetti] = useState(0)
   const [quickTick, setQuickTick] = useState(0)
-  const [dockOpen, setDockOpen] = useState(() => localStorage.getItem('shutoki.dock') === '1') // panel de terminal integrada
-  const [dockH, setDockH] = useState(() => Number(localStorage.getItem('shutoki.dockH')) || 280)
+  const lay = useLayout() // terminal integrada y anchos de paneles (se guardan como disposición)
+  const dockOpen = lay.dockOpen
+  const dockH = lay.dockH
+  const setDockOpen = (v: boolean | ((o: boolean) => boolean)): void => setLayout({ dockOpen: typeof v === 'function' ? v(getLayout().dockOpen) : v })
+  const setDockH = (h: number): void => setLayout({ dockH: h })
   const [termReq, setTermReq] = useState<TermRequest | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const [confirmReq, setConfirmReq] = useState<(ConfirmRequest & { resolve: (ok: boolean) => void }) | null>(null)
@@ -150,11 +162,32 @@ export function App(): ReactNode {
     const rest = tabs.filter((x) => x !== taskId)
     setTaskTabs(rest)
     if (active !== taskId) return
+    if (popTask) return window.close() // en una ventana suelta, cerrar la tarea cierra la ventana
     if (rest.length) setActiveTask(rest[Math.min(tabs.indexOf(taskId), rest.length - 1)])
     else {
       setActiveTask(null)
       setView(panel)
     }
+  }
+
+  const moveTab = (from: string, to: string): void =>
+    setTaskTabs((t) => {
+      const a = t.indexOf(from)
+      const b = t.indexOf(to)
+      if (a < 0 || b < 0) return t
+      const next = t.filter((x) => x !== from)
+      next.splice(b, 0, from)
+      return next
+    })
+
+  /** Saca la tarea a su propia ventana y la quita de las pestañas de esta. */
+  const popOut = async (taskId: string, atCursor = false): Promise<void> => {
+    try {
+      await call('window:popout', taskId, sel[taskId] ?? openConvs(db, taskId).pop()?.id, atCursor)
+    } catch (e) {
+      return toast((e as Error).message, true)
+    }
+    closeTaskTab(taskId)
   }
 
   const closeConv = async (convId: string): Promise<void> => {
@@ -219,7 +252,7 @@ export function App(): ReactNode {
         setTermReq((r) => ({ taskId, sessionId, nonce: (r?.nonce ?? 0) + 1 }))
       })
     },
-    celebrate: () => setConfetti((n) => n + 1),
+    celebrate: () => confettiEnabled() && setConfetti((n) => n + 1),
     openHelp: () => setModal({ kind: 'help' }),
     run
   }
@@ -290,6 +323,10 @@ export function App(): ReactNode {
       } else if ((e.ctrlKey || e.metaKey) && e.key === '/') {
         e.preventDefault()
         setModal({ kind: 'help' })
+      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+        // Ctrl+Mayús+F : modo foco (sin menú, pestañas ni barra de estado)
+        e.preventDefault()
+        setFocusMode(!getFocus())
       } else if ((e.ctrlKey || e.metaKey) && e.key === '`') {
         // Ctrl+` : mostrar u ocultar la terminal de la tarea activa (como en VS Code)
         e.preventDefault()
@@ -304,6 +341,7 @@ export function App(): ReactNode {
   // las pestañas sobreviven a un reinicio
   const savedKey = JSON.stringify({ tasks: tabs, sel })
   useEffect(() => {
+    if (popTask) return // las pestañas guardadas son las de la ventana principal
     try {
       localStorage.setItem(TABS_KEY, savedKey)
     } catch {
@@ -359,10 +397,10 @@ export function App(): ReactNode {
 
   return (
     <UiContext.Provider value={ui}>
-      <Sidebar />
+      {!popTask && <Sidebar />}
       <main>
         <div className="topstack">
-          {tabs.length > 0 && (
+          {!popTask && tabs.length > 0 && (
             <TaskTabs
               tasks={tabs}
               active={active}
@@ -372,6 +410,8 @@ export function App(): ReactNode {
               onSelect={(id) => void openChat(id)}
               onClose={closeTaskTab}
               onNew={ui.openNewTab}
+              onMove={moveTab}
+              onPop={(id, atCursor) => void popOut(id, atCursor)}
             />
           )}
           {active && (
@@ -384,14 +424,19 @@ export function App(): ReactNode {
               onSelect={(id) => showConv(active, id)}
               onClose={(id) => void closeConv(id)}
               onNew={ui.openNewTab}
+              docked={!!popTask}
+              onPop={() => {
+                if (!popTask) return void popOut(active)
+                void run('window:dock', active, activeConv ?? undefined)
+              }}
             />
           )}
-          <TimerBar />
+          {!popTask && <TimerBar />}
         </div>
         <div className="scroll">
           <section id="view">{content}</section>
         </div>
-        {active && dockOpen && db.settings.terminalMode !== 'external' && (
+        {!popTask && active && dockOpen && db.settings.terminalMode !== 'external' && (
           <TerminalDock taskId={active} request={termReq} height={dockH} onHeight={setDockH} onClose={() => setDockOpen(false)} />
         )}
         {active && <StatusBar taskId={active} onOpenGit={() => setModes((s) => ({ ...s, [active]: 'git' }))} />}
@@ -426,6 +471,11 @@ export function App(): ReactNode {
             </button>
           )}
         </div>
+      )}
+      {focus && (
+        <button className="focus-exit" title="Salir del modo foco (Ctrl+Mayús+F)" onClick={() => setFocusMode(false)}>
+          ✕ Salir del modo foco
+        </button>
       )}
       {confetti > 0 && <Confetti key={confetti} onDone={() => setConfetti(0)} />}
     </UiContext.Provider>

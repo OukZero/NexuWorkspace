@@ -281,6 +281,88 @@ export type PermissionChoice = 'allow' | 'always' | 'deny'
 
 /** Cómo se tratan los comandos de shell que no están en la lista permitida. */
 export type CommandPolicy = 'ask' | 'all' | 'list'
+export type MiniFormat = 'full' | 'compact' | 'timer'
+export type ChatMode = 'agent' | 'ask'
+
+/** Copia del trabajo guardada antes de cada respuesta de la IA, para poder volver atrás. */
+export interface Checkpoint {
+  id: string
+  ts: number
+  /** Marca de tiempo del mensaje del usuario que la originó. */
+  msgTs: number
+  /** Confirmación (commit) de Git que guarda el estado de todos los archivos. */
+  sha: string
+}
+
+/** Copia aislada del repositorio (git worktree) donde trabaja una conversación, en su propia rama. */
+export interface ChatWorktree {
+  dir: string
+  branch: string
+  base: string
+  /** Raíz del repositorio original. */
+  repo: string
+}
+
+/** Forma de trabajar de la IA: modo, modelo e instrucciones guardados con nombre. */
+export interface AgentProfile {
+  id: string
+  name: string
+  icon: string
+  mode: ChatMode
+  /** '' = el modelo predeterminado. */
+  model: string
+  /** Solo lectura: no puede editar ni crear archivos. */
+  readOnly: boolean
+  instructions: string
+}
+
+/** Tarea tipo: al crear una tarea con ella se rellenan datos y subtareas. */
+export interface TaskTemplate {
+  id: string
+  name: string
+  icon: string
+  titlePrefix: string
+  description: string
+  priority: Priority
+  estimateMin: number
+  tags: string[]
+  subtasks: string[]
+}
+
+/** Disposición guardada de la ventana (paneles, terminal, modo foco). */
+export interface LayoutPreset {
+  id: string
+  name: string
+  sideOpen: boolean
+  sideTab: 'session' | 'files' | 'activity'
+  sideW: number
+  sidebarW: number
+  dockOpen: boolean
+  dockH: number
+  focus: boolean
+}
+
+export interface SkillInfo {
+  name: string
+  description: string
+  installed: boolean
+  custom?: boolean // instalada por ti, no es del catálogo oficial
+}
+
+export interface CheckDef {
+  name: string
+  cmd: string
+}
+
+export interface CheckResult {
+  name: string
+  cmd: string
+  ok: boolean
+  code: number | null
+  ms: number
+  output: string
+  truncated: boolean
+}
 
 /** Una conversación con Claude. Una tarea puede tener varias, cada una con su propio contexto. */
 export interface Chat {
@@ -288,6 +370,16 @@ export interface Chat {
   provider?: Provider
   /** Modelo elegido ('' o ausente = el predeterminado del proveedor). */
   model?: string
+  /** 'agent' = actúa sin pedir permiso; 'ask' = pregunta antes de editar o ejecutar. Ausente = según la política de Ajustes. */
+  mode?: ChatMode
+  /** Perfil de agente aplicado (instrucciones y solo lectura vienen de él). */
+  profileId?: string
+  /** Copia aislada del repositorio donde trabaja esta conversación. */
+  worktree?: ChatWorktree
+  /** Puntos de restauración, uno por mensaje enviado (los más recientes al final). */
+  checkpoints?: Checkpoint[]
+  /** Aviso de límite de la cuenta ya mostrado en este chat (para no repetirlo). */
+  limitHint?: string
   /** 'design' = conversación de la pestaña Diseño (no aparece entre las conversaciones normales). */
   kind?: 'design' | 'review'
   taskId: string
@@ -453,6 +545,19 @@ export interface Settings {
   terminalMode: TerminalMode
   /** Al cerrar la ventana la app sigue en la bandeja (el timer no se detiene). */
   closeToTray: boolean
+  /** Ventana flotante: se muestra al minimizar la principal (por defecto sí). */
+  miniEnabled?: boolean
+  /** Avisar al acercarse a los límites de la cuenta (por defecto sí). */
+  limitAlerts?: boolean
+  /** Pasar al modelo más barato desde este % de uso de la cuenta (0 = nunca). */
+  cheapAt?: number
+  profiles?: AgentProfile[]
+  taskTemplates?: TaskTemplate[]
+  layouts?: LayoutPreset[]
+  /** Formato: completa (chat y timer), compacta (selector y timer) o solo timer. */
+  miniFormat?: MiniFormat
+  /** Siempre por encima de las demás ventanas (por defecto sí). */
+  miniOnTop?: boolean
   launchAtLogin: boolean
   /** Aviso matutino con el daily listo (hora HH:MM; vacío = sin aviso). */
   dailyTime: string
@@ -481,6 +586,10 @@ export interface Settings {
   autoSessionNotes?: boolean
   /** Rama base de los PR cuando no se puede detectar. */
   baseBranch?: string
+  /** Buscar y descargar versiones nuevas sola (por defecto sí). */
+  autoUpdate?: boolean
+  /** Copia de la apariencia (temas, tipografía, menú…); la interfaz la valida al leerla. */
+  appearance?: Record<string, unknown>
 }
 
 export interface TelegramStatus {
@@ -524,7 +633,17 @@ export interface IpcChannels {
   'timer:stop': { args: []; ret: void }
   'timer:pause': { args: []; ret: void }
   'timer:resume': { args: []; ret: void }
+  'chat:worktree': { args: [string, 'create' | 'remove' | 'merge']; ret: string } // aislar la conversación en su propia rama; devuelve un mensaje para mostrar
+  'chat:worktreeInfo': { args: [string]; ret: { dir: string; branch: string; base: string; changed: number; ahead: number; exists: boolean } | null }
+  'chat:restore': { args: [string, string]; ret: string } // vuelve los archivos al punto de restauración
+  'check:list': { args: [string]; ret: CheckDef[] }
+  'check:run': { args: [string, string, string | undefined]; ret: CheckResult }
+  'skills:list': { args: []; ret: SkillInfo[] }
+  'skills:install': { args: [string]; ret: string }
+  'skills:remove': { args: [string]; ret: string }
+  'window:skills': { args: []; ret: void } // abre la ventana del catálogo de skills
   'win:restore': { args: []; ret: void }
+  'mini:hide': { args: []; ret: void } // oculta la ventana flotante hasta la próxima vez que se minimice la principal
   'claude:login': { args: []; ret: void }
   'claude:open': { args: [string]; ret: void }
   'vscode:open': { args: [string]; ret: void }
@@ -534,6 +653,12 @@ export interface IpcChannels {
   'session:note': { args: [string]; ret: SessionNote | null } // conversación -> nota guardada en la tarea
   'session:delete': { args: [string, string]; ret: void }
   'session:toSubtask': { args: [string, string]; ret: void } // tarea, texto pendiente
+  'update:state': { args: []; ret: UpdateState }
+  'update:check': { args: []; ret: UpdateState }
+  'update:download': { args: []; ret: void }
+  'update:install': { args: []; ret: void }
+  'window:popout': { args: [string, string | undefined, boolean | undefined]; ret: void } // abre la tarea en una ventana aparte (tarea, conversación, junto al cursor)
+  'window:dock': { args: [string, string | undefined]; ret: void } // devuelve la tarea de una ventana suelta a la principal
   'url:open': { args: [string]; ret: void } // abre un enlace http(s) en el navegador
   'git:remote': { args: [string]; ret: RemoteInfo | null }
   'git:push': { args: [string, string?]; ret: PushResult } // repo, tarea -> resultado con enlace al PR
@@ -548,7 +673,7 @@ export interface IpcChannels {
   'attach:preview': { args: [string]; ret: string | null } // ruta -> data URL (miniatura)
   'chat:cancel': { args: [string]; ret: void }
   'chat:permit': { args: [string, string, PermissionChoice]; ret: void } // convId, id de la solicitud, decisión
-  'chat:config': { args: [string, { provider?: Provider; model?: string }]; ret: void } // proveedor y modelo de la conversación
+  'chat:config': { args: [string, { provider?: Provider; model?: string; mode?: ChatMode; profileId?: string }]; ret: void } // proveedor y modelo de la conversación
   'chat:reset': { args: [string]; ret: void }
   'chat:summarize': { args: [string]; ret: { text: string; mode: 'ai' | 'local' } }
   'chat:new': { args: [string, 'design'?]; ret: string } // taskId -> id de la conversación creada
@@ -613,6 +738,18 @@ export interface IpcChannels {
   'excel:export': { args: [string, string]; ret: string | null }
 }
 
+/** Estado de las actualizaciones automáticas. 'dev' = la app no está instalada (no se actualiza sola). */
+export interface UpdateState {
+  status: 'dev' | 'idle' | 'checking' | 'none' | 'available' | 'downloading' | 'ready' | 'error'
+  current: string
+  version?: string
+  /** Notas de la versión nueva (texto plano). */
+  notes?: string
+  percent?: number
+  error?: string
+  checkedAt?: number
+}
+
 export type Unsubscribe = () => void
 
 /** API que el preload expone en `window.api`. */
@@ -624,4 +761,5 @@ export interface Api {
   onPtyExit(cb: (d: { id: string; code: number }) => void): Unsubscribe
   onQuickAdd(cb: () => void): Unsubscribe
   onGoto(cb: (view: string) => void): Unsubscribe
+  onUpdate(cb: (s: UpdateState) => void): Unsubscribe
 }

@@ -132,15 +132,17 @@ export function Mini(): ReactNode {
     }
   }
 
+  const format = db.settings.miniFormat ?? 'full'
   const err = flash && flash.until > now ? flash.text : null
   const name = target ? `${target.task.title}${chat ? ` · ${convLabel(chat)}` : ''}` : ''
-  const placeholder = err ?? (!target ? 'Elige una tarea para escribirle a Claude' : running ? 'Claude está trabajando…' : `Escribe a Claude (${name})…`)
+  const ai = chat?.provider === 'copilot' ? 'Copilot' : 'Claude'
+  const placeholder = err ?? (!target ? 'Elige una tarea para escribirle' : running ? `${ai} está trabajando…` : `Escribe a ${ai} (${name})…`)
 
   return (
     <>
       <div className="top">
         <span className={`dot ${a ? '' : 'off'}`} />
-        <select value={value} title="Conversación a la que se envía el mensaje" onChange={(e) => pick(e.target.value)}>
+        <select hidden={format === 'timer'} value={value} title="Conversación a la que se envía el mensaje" onChange={(e) => pick(e.target.value)}>
           <option value="auto">{`Auto · ${autoLabel}`}</option>
           {openTasks.map((t) => {
             const convs = openConvs(db, t.id)
@@ -165,6 +167,7 @@ export function Mini(): ReactNode {
             </optgroup>
           )}
         </select>
+        {format === 'timer' && <span className="grow" />}
         <div className="t">{a ? fmtDur(now - a.start) : ''}</div>
         <button title="Pausar / reanudar" style={{ visibility: hasTimer ? 'visible' : 'hidden' }} onClick={() => call(a ? 'timer:pause' : 'timer:resume')}>
           {a ? '⏸' : '▶'}
@@ -175,7 +178,11 @@ export function Mini(): ReactNode {
         <button title="Abrir ventana principal" onClick={() => call('win:restore')}>
           ⤢
         </button>
+        <button title="Ocultar la ventana flotante (vuelve al minimizar la principal; se configura en Ajustes)" onClick={() => call('mini:hide')}>
+          –
+        </button>
       </div>
+      {format === 'full' && (
       <form className="send-row" autoComplete="off" onSubmit={submit}>
         <input
           id="msg"
@@ -191,6 +198,7 @@ export function Mini(): ReactNode {
           {running ? <IconStop /> : <IconSend />}
         </button>
       </form>
+      )}
     </>
   )
 }

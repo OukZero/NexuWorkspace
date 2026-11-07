@@ -82,21 +82,21 @@ async function language(file: string): Promise<Extension | null> {
 
 // colores del resaltado: salen de las variables del tema, así que siguen el modo claro/oscuro y los temas
 const highlight = HighlightStyle.define([
-  { tag: [t.keyword, t.modifier, t.controlKeyword, t.operatorKeyword], color: 'var(--accent)', fontWeight: '600' },
-  { tag: [t.string, t.special(t.string), t.regexp], color: 'var(--accent2)' },
-  { tag: [t.number, t.bool, t.null, t.atom], color: 'var(--warn)' },
-  { tag: [t.comment, t.lineComment, t.blockComment], color: 'var(--muted)', fontStyle: 'italic' },
-  { tag: [t.function(t.variableName), t.function(t.propertyName), t.definition(t.variableName)], color: '#58a6ff' },
-  { tag: [t.typeName, t.className, t.namespace], color: '#e0a3ff' },
-  { tag: [t.tagName, t.heading], color: 'var(--danger)' },
-  { tag: [t.attributeName, t.propertyName], color: '#79c0ff' },
+  { tag: [t.keyword, t.modifier, t.controlKeyword, t.operatorKeyword], color: 'var(--syn-kw, var(--accent))', fontWeight: '600' },
+  { tag: [t.string, t.special(t.string), t.regexp], color: 'var(--syn-str, var(--accent2))' },
+  { tag: [t.number, t.bool, t.null, t.atom], color: 'var(--syn-num, var(--warn))' },
+  { tag: [t.comment, t.lineComment, t.blockComment], color: 'var(--syn-com, var(--muted))', fontStyle: 'italic' },
+  { tag: [t.function(t.variableName), t.function(t.propertyName), t.definition(t.variableName)], color: 'var(--syn-fn, #58a6ff)' },
+  { tag: [t.typeName, t.className, t.namespace], color: 'var(--syn-type, #e0a3ff)' },
+  { tag: [t.tagName, t.heading], color: 'var(--syn-tag, var(--danger))' },
+  { tag: [t.attributeName, t.propertyName], color: 'var(--syn-attr, #79c0ff)' },
   { tag: [t.meta, t.punctuation, t.bracket], color: 'var(--muted)' },
   { tag: t.link, color: 'var(--accent)', textDecoration: 'underline' }
 ])
 
 const theme = EditorView.theme({
   '&': { height: '100%', backgroundColor: 'transparent', color: 'var(--text)', fontSize: '12.5px' },
-  '.cm-scroller': { fontFamily: 'Consolas, "Cascadia Code", monospace', lineHeight: '1.55' },
+  '.cm-scroller': { fontFamily: 'var(--font-code, Consolas, "Cascadia Code", monospace)', lineHeight: '1.55' },
   '.cm-gutters': { backgroundColor: 'transparent', color: 'var(--muted)', border: 'none', opacity: '.7' },
   '.cm-content': { caretColor: 'transparent' },
   '&.cm-focused': { outline: 'none' },

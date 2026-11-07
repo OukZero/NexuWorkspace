@@ -1,5 +1,5 @@
 // Plantillas de prompts para no escribir lo mismo cada vez.
-import type { ContextKind, PromptTemplate } from './types'
+import type { AgentProfile, ContextKind, LayoutPreset, PromptTemplate, TaskTemplate } from './types'
 
 /** Variables que se sustituyen al enviar (las resuelve el proceso principal con los datos de la tarea). */
 export const TEMPLATE_VARS: Array<[string, string]> = [
@@ -116,3 +116,102 @@ export const templatesOf = (s: { promptTemplates?: PromptTemplate[] }): PromptTe
 export function fillTemplate(text: string, vars: Record<string, string>): string {
   return text.replace(/{{\s*(\w+)\s*}}/g, (m, k: string) => (k in vars ? vars[k] : m))
 }
+
+// ---------- perfiles de agente ----------
+export const DEFAULT_PROFILES: AgentProfile[] = [
+  {
+    id: 'p-revisor',
+    name: 'Revisor',
+    icon: '🔍',
+    mode: 'ask',
+    model: '',
+    readOnly: true,
+    instructions: 'Eres un revisor de código. No modifiques ni crees archivos. Lee, explica, señala riesgos y errores con archivo y línea, y propón cambios como texto.'
+  },
+  {
+    id: 'p-refactor',
+    name: 'Refactor',
+    icon: '🧹',
+    mode: 'agent',
+    model: '',
+    readOnly: false,
+    instructions: 'Refactoriza sin cambiar el comportamiento: cambios pequeños y verificables, sin tocar la API pública salvo que se pida. Ejecuta las pruebas o la compilación antes de terminar.'
+  },
+  {
+    id: 'p-tests',
+    name: 'Tests',
+    icon: '🧪',
+    mode: 'agent',
+    model: '',
+    readOnly: false,
+    instructions: 'Escribe y corrige pruebas. Cubre casos normales, límites y errores. No cambies el código de producción salvo para hacerlo comprobable, y dilo.'
+  },
+  {
+    id: 'p-explorador',
+    name: 'Explorador',
+    icon: '🧭',
+    mode: 'ask',
+    model: 'haiku',
+    readOnly: true,
+    instructions: 'Explora el proyecto y responde con precisión y brevedad, citando archivos. No edites nada.'
+  }
+]
+export const profilesOf = (s: { profiles?: AgentProfile[] }): AgentProfile[] => s.profiles ?? DEFAULT_PROFILES
+
+// ---------- tareas tipo ----------
+export const DEFAULT_TASK_TEMPLATES: TaskTemplate[] = [
+  {
+    id: 'tt-bug',
+    name: 'Bug',
+    icon: '🐞',
+    titlePrefix: 'Bug: ',
+    description: 'Pasos para reproducir:\n1. \n\nResultado esperado:\n\nResultado actual:',
+    priority: 'high',
+    estimateMin: 120,
+    tags: ['bug'],
+    subtasks: ['Reproducir el problema', 'Encontrar la causa', 'Corregir', 'Agregar una prueba que lo cubra', 'Probar y abrir el PR']
+  },
+  {
+    id: 'tt-feature',
+    name: 'Funcionalidad',
+    icon: '✨',
+    titlePrefix: '',
+    description: 'Qué debe poder hacer el usuario:\n\nCriterios de aceptación:\n- ',
+    priority: 'med',
+    estimateMin: 240,
+    tags: ['feature'],
+    subtasks: ['Definir el alcance y los criterios', 'Implementar', 'Pruebas', 'Documentar', 'Abrir el PR']
+  },
+  {
+    id: 'tt-hotfix',
+    name: 'Hotfix',
+    icon: '🚑',
+    titlePrefix: 'Hotfix: ',
+    description: 'Impacto:\n\nCausa probable:',
+    priority: 'high',
+    estimateMin: 60,
+    tags: ['hotfix'],
+    subtasks: ['Aislar la causa', 'Corregir lo mínimo', 'Probar', 'PR urgente y avisar a quien revisa']
+  },
+  {
+    id: 'tt-refactor',
+    name: 'Refactor',
+    icon: '🧹',
+    titlePrefix: 'Refactor: ',
+    description: 'Qué se mejora y por qué:\n\nSin cambios de comportamiento.',
+    priority: 'low',
+    estimateMin: 180,
+    tags: ['refactor'],
+    subtasks: ['Asegurar que hay pruebas que cubren la zona', 'Refactorizar en pasos pequeños', 'Comprobar que las pruebas siguen pasando', 'Abrir el PR']
+  }
+]
+export const taskTemplatesOf = (s: { taskTemplates?: TaskTemplate[] }): TaskTemplate[] => s.taskTemplates ?? DEFAULT_TASK_TEMPLATES
+
+// ---------- disposiciones de la ventana ----------
+export const DEFAULT_LAYOUTS: LayoutPreset[] = [
+  { id: 'l-planificacion', name: 'Planificación', sideOpen: true, sideTab: 'session', sideW: 300, sidebarW: 220, dockOpen: false, dockH: 280, focus: false },
+  { id: 'l-codigo', name: 'Código', sideOpen: true, sideTab: 'files', sideW: 360, sidebarW: 220, dockOpen: true, dockH: 300, focus: false },
+  { id: 'l-revision', name: 'Revisión', sideOpen: true, sideTab: 'files', sideW: 420, sidebarW: 220, dockOpen: false, dockH: 280, focus: false },
+  { id: 'l-foco', name: 'Foco', sideOpen: false, sideTab: 'session', sideW: 300, sidebarW: 220, dockOpen: false, dockH: 280, focus: true }
+]
+export const layoutsOf = (s: { layouts?: LayoutPreset[] }): LayoutPreset[] => s.layouts ?? DEFAULT_LAYOUTS

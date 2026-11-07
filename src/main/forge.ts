@@ -130,6 +130,7 @@ interface GhIssue {
   labels: Array<string | { name?: string }>
   pull_request?: unknown
   body?: string | null
+  node_id?: string
 }
 
 const toRef = (i: GhIssue): IssueRef => ({
@@ -160,9 +161,34 @@ export async function createIssue(dir: string, title: string, body: string, labe
   return toRef(row)
 }
 
-async function getIssue(dir: string, n: number): Promise<IssueRef> {
+async function getIssue(dir: string, n: number): Promise<{ ref: IssueRef; nodeId: string; info: RemoteInfo }> {
   const info = await need(dir)
-  return toRef(await ghApi<GhIssue>(info, `/repos/${info.owner}/${info.repo}/issues/${n}`))
+  const row = await ghApi<GhIssue>(info, `/repos/${info.owner}/${info.repo}/issues/${n}`)
+  if (row.pull_request) throw new Error(`#${n} es un Pull Request, no una issue.`)
+  return { ref: toRef(row), nodeId: row.node_id ?? '', info }
+}
+
+/**
+ * Crea la rama EN GITHUB y la vincula a la issue (aparece en su panel «Development»), partiendo del último commit de la base.
+ * Solo así la rama se ve en GitHub; una rama creada solo en el equipo no existe allí hasta que se publica.
+ */
+async function createLinkedBranch(info: RemoteInfo, issueNodeId: string, base: string, name: string): Promise<void> {
+  if (!issueNodeId) throw new Error('GitHub no entregó el identificador de la issue.')
+  const ref = await ghApi<{ object: { sha: string } }>(info, `/repos/${info.owner}/${info.repo}/git/ref/heads/${base.split('/').map(encodeURIComponent).join('/')}`)
+  const repo = await ghApi<{ node_id: string }>(info, `/repos/${info.owner}/${info.repo}`)
+  const token = await tokenFor(info)
+  const api = info.host === 'github.com' ? 'https://api.github.com/graphql' : `https://${info.host}/api/graphql`
+  const res = await fetch(api, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'User-Agent': 'Shutoki-AI-Workspace' },
+    body: JSON.stringify({
+      query: 'mutation($issue:ID!,$oid:GitObjectID!,$name:String!,$repo:ID!){createLinkedBranch(input:{issueId:$issue,oid:$oid,name:$name,repositoryId:$repo}){linkedBranch{ref{name}}}}',
+      variables: { issue: issueNodeId, oid: ref.object.sha, name, repo: repo.node_id }
+    }),
+    signal: AbortSignal.timeout(20000)
+  })
+  const json = (await res.json().catch(() => ({}))) as { errors?: Array<{ message: string }> }
+  if (!res.ok || json.errors?.length) throw new Error(json.errors?.map((e) => e.message).join('; ') || `GitHub respondió ${res.status}`)
 }
 
 /** Nombre de rama a partir de una issue: «fix/123-titulo-corto» o «feat/123-…» según sus etiquetas. */
@@ -193,13 +219,29 @@ const taskOf = (id: string): Task => {
 /** Crea la rama de una issue desde la base actualizada, la deja activa y la vincula a la tarea. */
 export async function branchFromIssue(taskId: string, dir: string, number: number): Promise<{ branch: string; issue: IssueRef }> {
   const task = taskOf(taskId)
-  const issue = await getIssue(dir, number)
+  const { ref: issue, nodeId, info } = await getIssue(dir, number)
   const branch = branchNameFor(issue)
-  await g.createBranch(dir, branch, await g.baseBranch(dir))
+  const base = await g.baseBranch(dir)
+  let linkErr = ''
+  try {
+    await createLinkedBranch(info, nodeId, base, branch)
+    await g.checkoutRemoteBranch(dir, branch) // se trae a local siguiendo a la remota
+  } catch (e) {
+    // sin permiso para crearla vinculada (o ya existe): se crea local y se publica, para que igualmente exista en GitHub
+    linkErr = (e as Error).message
+    await g.createBranch(dir, branch, base)
+  }
   task.issue = issue
   task.branch = branch
   task.branchDir = dir
   commit()
+  if (linkErr) {
+    try {
+      await g.sync(dir, 'push')
+    } catch (e) {
+      throw new Error(`La rama «${branch}» se creó en tu equipo pero no se pudo publicar en GitHub: ${(e as Error).message}`)
+    }
+  }
   return { branch, issue }
 }
 

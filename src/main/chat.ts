@@ -1,17 +1,20 @@
 // Conversaciones con Claude: cada una ejecuta `claude -p` (stream-json) en la carpeta de su tarea y reanuda su propia sesión.
 import fs from 'fs'
+import os from 'os'
 import path from 'path'
 import { BrowserWindow } from 'electron'
 import { ChildProcess, spawn } from 'child_process'
 import { attachRoot, trusted as trustedAttachments } from './attachments'
 import { designInstructions, mockupsDir, stageAssets } from './mockups'
-import type { Activity, Attachment, Chat, ChatMessage, ChatUsage, Hunk, LimitWindow, PermissionChoice, Provider, Task } from '../shared/types'
+import type { Activity, Attachment, Chat, ChatMessage, ChatMode, ChatUsage, Hunk, LimitWindow, PermissionChoice, Provider, Task } from '../shared/types'
 import { clip } from '../shared/util'
+import { profilesOf } from '../shared/templates'
 import { buildInvocation, readUsage, type CopilotEvent, type CopilotUsage } from './copilot'
 import { broadcast, commit, getDb, push } from './db'
-import { copilotDirs, effectiveTask, groupAccess, groupNote, groupNoteFile } from './groups'
+import { copilotDirs, effectiveTask, groupAccess, groupNote } from './groups'
 import { allowForever, claudeAllow, claudeDeny, copilotAllow, copilotDeny, isAllowed, ruleFor } from './permissions'
 import { notify } from './notify'
+import { takeCheckpoint } from './isolation'
 import { sendPermission } from './telegram'
 import { ensureTimer } from './timer'
 import { emit, getMain, showWin } from './windows'
@@ -102,6 +105,45 @@ export function permit(convId: string, id: string, choice: PermissionChoice): vo
     reply(child, id, { behavior: 'allow', updatedInput: input })
   }
   commit()
+}
+
+// ---------- límites de la cuenta ----------
+const alerted = new Map<string, number>() // ventana + reinicio -> nivel ya avisado (80 o 95)
+
+/** Avisa al cruzar el 80 % y el 95 % de la sesión de 5 h o de la semana (una vez por ventana). */
+function limitAlerts(): void {
+  const db = getDb()
+  if (db.settings.limitAlerts === false || !db.limits) return
+  const cheap = db.settings.cheapAt ?? 0
+  const wins: Array<[string, string, LimitWindow | undefined]> = [
+    ['5h', 'la sesión de 5 horas', db.limits.fiveHour],
+    ['7d', 'la semana', db.limits.sevenDay]
+  ]
+  for (const [key, label, w] of wins) {
+    if (!w) continue
+    const pct = Math.round(w.utilization * 100)
+    const level = pct >= 95 ? 95 : pct >= 80 ? 80 : 0
+    const k = `${key}:${w.resetsAt}`
+    if (level <= (alerted.get(k) ?? 0)) continue
+    alerted.set(k, level)
+    const when = new Date(w.resetsAt * 1000).toLocaleString('es', { weekday: 'short', hour: '2-digit', minute: '2-digit' })
+    const tip = cheap > 0 ? `Desde el ${cheap} % las respuestas usan el modelo más barato.` : 'Puedes pasar al modelo más barato desde el chat, o activarlo solo en Ajustes.'
+    notify({ kind: 'attention', title: `Vas en ${pct} % de ${label}`, body: `Se reinicia ${when}. ${tip}`, os: true })
+  }
+}
+
+/** Mayor % de uso de la cuenta entre las ventanas que aún no se reinician. */
+export function accountUsagePct(): number {
+  const l = getDb().limits
+  const now = Date.now() / 1000
+  return Math.round(Math.max(0, ...[l?.fiveHour, l?.sevenDay].filter((w): w is LimitWindow => !!w && w.resetsAt > now).map((w) => w.utilization)) * 100)
+}
+
+/** Modelo más barato disponible para el proveedor ('' si no se puede determinar). */
+export function cheapestModel(provider: Provider): string {
+  if (provider === 'claude') return 'haiku'
+  const list = getDb().settings.copilotModels.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+  return list.find((m) => /mini|haiku|flash|nano/i.test(m)) ?? ''
 }
 
 const newChat = (taskId: string, title?: string): Chat => ({ taskId, createdAt: Date.now(), title, sessionId: null, messages: [], activity: [], running: false })
@@ -314,6 +356,7 @@ function handle(convId: string, folder: string, ev: StreamEvent): void {
     if (five || seven) {
       const db = getDb()
       db.limits = { fiveHour: five ?? db.limits?.fiveHour, sevenDay: seven ?? db.limits?.sevenDay, updatedAt: Date.now() }
+      limitAlerts()
       push()
     }
     return
@@ -462,7 +505,7 @@ function trackCopilot(taskId: string, chat: Chat, u: CopilotUsage): void {
 }
 
 /** Proveedor y modelo de una conversación. El proveedor no cambia una vez iniciada la sesión (cada uno tiene la suya). */
-export function configure(convId: string, cfg: { provider?: Provider; model?: string }): void {
+export function configure(convId: string, cfg: { provider?: Provider; model?: string; mode?: ChatMode; profileId?: string }): void {
   const chat = chatOf(convId)
   if (chat.running) throw new Error('Espera a que termine la respuesta para cambiar el modelo.')
   if (cfg.provider && cfg.provider !== (chat.provider ?? 'claude')) {
@@ -472,6 +515,15 @@ export function configure(convId: string, cfg: { provider?: Provider; model?: st
     chat.model = ''
   }
   if (cfg.model !== undefined) chat.model = clip(cfg.model.trim(), 60)
+  if (cfg.mode === 'agent' || cfg.mode === 'ask') chat.mode = cfg.mode
+  if (cfg.profileId !== undefined) {
+    const p = profilesOf(getDb().settings).find((x) => x.id === cfg.profileId)
+    if (p) {
+      chat.profileId = p.id
+      chat.mode = p.mode
+      if (!p.model || (chat.provider ?? 'claude') === 'claude') chat.model = p.model
+    } else delete chat.profileId
+  }
   commit()
 }
 
@@ -512,7 +564,13 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[], e
   const found = db.tasks.find((t) => t.id === chat.taskId)
   if (!found) throw new Error('Tarea no encontrada')
   // carpeta propia de la tarea o, si no tiene, la primera de escritura de sus grupos
-  const task = effectiveTask(found)
+  const eff = effectiveTask(found)
+  // conversación aislada: trabaja en su copia del repositorio
+  if (chat.worktree && !fs.existsSync(chat.worktree.dir)) {
+    chat.messages.push({ role: 'system', text: 'La copia aislada de esta conversación ya no existe; se trabaja en la carpeta original.', ts: Date.now() })
+    delete chat.worktree
+  }
+  const task = chat.worktree ? { ...eff, folder: chat.worktree.dir } : eff
   if (!task.folder || !fs.existsSync(task.folder)) throw new Error('Asigna una carpeta de proyecto a la tarea, o un grupo de carpetas con permiso de escritura, para chatear.')
   const text = String(rawText || '').trim()
   const files = trustedAttachments(rawFiles)
@@ -530,7 +588,23 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[], e
   ensureTimer(task.id)
   commit()
 
+  const msgTs = chat.messages[chat.messages.length - 1].ts
+  const startRun = (): void => {
   const provider: Provider = chat.provider ?? 'claude'
+  const prof = profilesOf(db.settings).find((p) => p.id === chat.profileId)
+  const readOnly = chat.kind === 'review' || !!prof?.readOnly
+  // cuenta cerca del límite: pasa al modelo más barato (si se activó en Ajustes)
+  let useModel = chat.model
+  const cheapAt = db.settings.cheapAt ?? 0
+  const pct = accountUsagePct()
+  if (cheapAt > 0 && pct >= cheapAt && cheapestModel(provider) && chat.model !== cheapestModel(provider) && chat.kind !== 'review') {
+    useModel = cheapestModel(provider)
+    const key = `${Math.floor(Date.now() / 3600000)}`
+    if (chat.limitHint !== key) {
+      chat.limitHint = key
+      chat.messages.push({ role: 'system', text: `La cuenta va en ${pct} % de su límite: esta respuesta usa «${useModel}», el modelo más barato. Se cambia en Ajustes → Sistema.`, ts: Date.now() })
+    }
+  }
   const runStart = Date.now()
   const isCommand = provider === 'claude' && text.startsWith('/')
   let child: ChildProcess
@@ -546,15 +620,15 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[], e
     }
     let prompt = files.length ? `${modelText || 'Revisa los archivos adjuntos.'}\n\nArchivos adjuntos (puedes leerlos con tus herramientas):\n${files.map((f) => `- ${f.path}`).join('\n')}` : modelText
     // Copilot no tiene system prompt adicional: la lista de carpetas del grupo va al inicio del primer mensaje (la sesión la conserva)
-    const note = chat.sessionId ? '' : groupNote(task)
+    const note = chat.sessionId ? '' : [groupNote(task), prof?.instructions].filter(Boolean).join('\n\n')
     if (note) prompt = `[Contexto de carpetas]\n${note}\n\n[Pedido]\n${prompt}`
     const inv = buildInvocation({
       cmd: db.settings.copilotCmd.trim() || 'copilot',
       prompt,
       sessionId: chat.sessionId,
-      model: chat.model,
-      allow: copilotAllow(),
-      deny: chat.kind === 'review' ? [...copilotDeny(), 'write'] : copilotDeny(),
+      model: useModel,
+      allow: copilotAllow(chat.mode === 'agent'),
+      deny: readOnly ? [...copilotDeny(), 'write'] : copilotDeny(),
       addDirs: [...dirs.dirs, ...(files.length ? [attachRoot()] : [])],
       images: files.filter((f) => f.image).map((f) => f.path)
     })
@@ -566,21 +640,24 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[], e
     onLine = (line) => handleCopilot(convId, task.folder, JSON.parse(line) as CopilotEvent)
   } else {
     // la entrada por stream-json (en vez de texto plano) es lo que permite ejecutar comandos / como /compact
-    const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--permission-mode', 'acceptEdits']
+    const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages']
+    // modo del chat: «agent» actúa sin preguntar; «ask» pregunta antes de editar o ejecutar; sin elegir, manda la política de Ajustes
+    const mode: ChatMode | undefined = chat.mode
+    args.push('--permission-mode', mode === 'ask' ? 'default' : 'acceptEdits')
     // aprobación interactiva: lo que no esté permitido ni bloqueado llega como control_request y lo contesta la interfaz
-    interactive = db.settings.commandPolicy === 'ask'
+    interactive = mode ? mode === 'ask' : db.settings.commandPolicy === 'ask'
     if (interactive) args.push('--permission-prompt-tool', 'stdio')
     if (chat.sessionId) args.push('--resume', chat.sessionId)
-    if (chat.model) args.push('--model', chat.model)
+    if (useModel) args.push('--model', useModel)
     if (db.settings.autocompactTokens >= 100_000) args.push('--autocompact', String(db.settings.autocompactTokens))
     // comandos de shell permitidos (Ajustes); el bloqueo fijo va junto con la denegación de edición de las carpetas de solo lectura
-    const allow = claudeAllow()
+    const allow = claudeAllow(mode === 'agent')
     // Diseño: consultar la web para referencias (marca, colores, estructura). Un solo --allowedTools con todo.
     if (chat.kind === 'design') allow.push('WebFetch', 'WebSearch')
     if (allow.length) args.push('--allowedTools', ...allow.map((r) => `"${r}"`))
     // grupos de carpetas: acceso de lectura/escritura (--add-dir) y solo lectura (regla de denegación de edición)
     // la revisión es de solo lectura: no puede editar ni crear archivos
-    const access = groupAccess(task, chat.kind === 'review' ? [...claudeDeny(), 'Edit', 'Write', 'MultiEdit', 'NotebookEdit'] : claudeDeny())
+    const access = groupAccess(task, readOnly ? [...claudeDeny(), 'Edit', 'Write', 'MultiEdit', 'NotebookEdit'] : claudeDeny())
     args.push(...access.args)
     if (files.length) args.push('--add-dir', `"${attachRoot()}"`) // para que Claude pueda leer los adjuntos no gráficos
     // pestaña Diseño: acceso a la carpeta de mockups de la tarea e instrucciones de diseño como parte del system prompt
@@ -588,8 +665,14 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[], e
       args.push('--add-dir', `"${mockupsDir(task.id)}"`, '--append-system-prompt-file', `"${designInstructions(task.id, task.title)}"`)
     } else {
       // todas las carpetas de los grupos de la tarea: Claude sabe que existen y que debe trabajar en el conjunto
-      const noteFile = groupNoteFile(task)
-      if (noteFile) args.push('--append-system-prompt-file', `"${noteFile}"`)
+      const parts = [groupNote(task), prof?.instructions, chat.worktree ? `Trabajas en una copia aislada del repositorio (rama «${chat.worktree.branch}», carpeta ${chat.worktree.dir}). Haz todos los cambios ahí; no toques la carpeta original.` : ''].filter(Boolean)
+      if (parts.length) {
+        const dir = path.join(os.tmpdir(), 'mis-tareas')
+        fs.mkdirSync(dir, { recursive: true })
+        const file = path.join(dir, `sistema-${convId}.txt`)
+        fs.writeFileSync(file, parts.join('\n\n'), 'utf8')
+        args.push('--append-system-prompt-file', `"${file}"`)
+      }
     }
     if (access.skipped.length) {
       chat.messages.push({ role: 'system', text: `Carpetas omitidas (no existen o no se pudo garantizar solo lectura): ${access.skipped.join(', ')}`, ts: Date.now() })
@@ -664,6 +747,17 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[], e
   }
   child.on('error', (e) => finish(1, e))
   child.on('close', (code) => finish(code))
+  }
+
+  // punto de restauración antes de que la IA toque nada (no en comandos / ni en revisiones de solo lectura)
+  const snap = text.startsWith('/') || chat.kind === 'review' || profilesOf(db.settings).find((p) => p.id === chat.profileId)?.readOnly ? Promise.resolve() : takeCheckpoint(convId, chat, task.folder, msgTs)
+  void snap
+    .then(() => startRun())
+    .catch((e: Error) => {
+      chat.running = false
+      chat.messages.push(sysMsg(e.message))
+      commit()
+    })
 }
 
 const kill = (c: ChildProcess): void => {
@@ -680,7 +774,7 @@ export function cancel(convId: string): void {
 export function reset(convId: string): void {
   if (procs.has(convId)) throw new Error('Espera a que termine o cancela la respuesta.')
   const old = chatOf(convId)
-  getDb().chats[convId] = { ...newChat(old.taskId, old.title), createdAt: old.createdAt, ...(old.provider ? { provider: old.provider } : {}), ...(old.model ? { model: old.model } : {}) }
+  getDb().chats[convId] = { ...newChat(old.taskId, old.title), createdAt: old.createdAt, ...(old.provider ? { provider: old.provider } : {}), ...(old.model ? { model: old.model } : {}), ...(old.mode ? { mode: old.mode } : {}), ...(old.profileId ? { profileId: old.profileId } : {}), ...(old.worktree ? { worktree: old.worktree } : {}) }
   commit()
 }
 

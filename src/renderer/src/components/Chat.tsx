@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ClipboardEvent, DragEvent, KeyboardEvent, ReactNode } from 'react'
-import type { Attachment, ContextKind, Provider, PromptTemplate } from '../../../shared/types'
+import type { Attachment, ChatMode, ContextKind, Provider, PromptTemplate } from '../../../shared/types'
 import { DEFAULT_CONTEXT, templatesOf } from '../../../shared/templates'
 import { workFolder } from '../../../shared/util'
 import { convLabel } from '../conversations'
@@ -9,6 +9,7 @@ import { readTerminal } from '../terminals'
 import { baseName, hhmm } from '../utils'
 import { useUi } from '../ui'
 import { ContextBar, TemplateMenu } from './ChatExtras'
+import { ChecksButton, LimitBanner, ProfileSelect, WorktreeBar } from './ChatSafety'
 import { IconSend, IconStop } from './icons'
 import { Markdown } from './Markdown'
 import { Menu } from './Menu'
@@ -254,6 +255,7 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
 
   // abre la terminal elegida en Ajustes, en la carpeta de la tarea, ya retomando esta conversación
   const provider: Provider = chat?.provider ?? 'claude'
+  const ai = provider === 'copilot' ? 'Copilot' : 'Claude'
   const copilotModels = db.settings.copilotModels
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -268,6 +270,24 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
           { value: 'haiku', label: 'haiku' }
         ]
   if (chat?.model && !modelOptions.some((o) => o.value === chat.model)) modelOptions.push({ value: chat.model, label: chat.model })
+
+  const isolate = async (): Promise<void> => {
+    const msg = await ui.run('chat:worktree', convId, 'create')
+    if (msg) ui.toast(msg)
+  }
+
+  const rewind = async (msgTs: number): Promise<void> => {
+    const cp = chat?.checkpoints?.find((c) => c.msgTs === msgTs)
+    if (!cp) return
+    const ok = await ui.confirm('Los archivos del proyecto volverán a como estaban antes de este mensaje: se deshacen los cambios de la IA y también los tuyos hechos desde entonces. Antes se guarda el estado actual, así que se puede deshacer.', {
+      title: 'Volver a antes de este mensaje',
+      confirmLabel: 'Volver atrás',
+      danger: true
+    })
+    if (!ok) return
+    const msg = await ui.run('chat:restore', convId, cp.id)
+    if (msg) ui.toast(msg)
+  }
 
   const continueInTerminal = async (): Promise<void> => {
     if (provider === 'copilot') return ui.toast('Continuar en terminal solo está disponible para conversaciones con Claude', true)
@@ -321,11 +341,13 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
         <button className="btn sm" onClick={() => ui.openTerminal(taskId)} title="Terminal en la carpeta del proyecto (Ctrl+`)">
           &gt;_ Terminal
         </button>
+        {chat?.kind !== 'review' && <ChecksButton taskId={taskId} convId={convId} />}
         <Menu
           trigger="⋯"
           title="Más acciones"
           items={[
             { label: 'Editar tarea', icon: '✎', onSelect: () => task && ui.editTask(task) },
+            { label: 'Aislar en una copia propia', icon: '⎇', hint: chat?.worktree ? 'Ya trabaja en una copia aislada' : chat?.sessionId || messages.length ? 'Solo en conversaciones nuevas, sin mensajes' : 'Rama y carpeta propias: varias conversaciones a la vez sin pisarse', disabled: !!chat?.worktree || !!chat?.sessionId || messages.length > 0 || running, onSelect: () => void isolate() },
             { label: 'Revisar código de la rama', icon: '🔍', hint: 'Revisión con IA y simulación, solo lectura', disabled: reviewing, onSelect: () => void review() },
             { label: 'Guardar nota de sesión', icon: '🗒', hint: 'Lo hecho, decidido y pendiente, para retomar después', disabled: noting || running, onSelect: () => void saveNote() },
             { label: 'Abrir en Claude Desktop', icon: '🖥', hint: 'Sesión nueva con el prompt de la tarea', onSelect: () => void desktop() },
@@ -335,6 +357,8 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
           ]}
         />
       </div>
+      <WorktreeBar convId={convId} />
+      <LimitBanner convId={convId} />
       <div className="chat-wrap">
         <div className="chat-main">
           <div
@@ -346,7 +370,7 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
             }}
           >
             {messages.length === 0 && !running && (
-              <div className="empty">Conversación nueva para esta tarea. Claude trabajará en la carpeta del proyecto y puede editar archivos.</div>
+              <div className="empty">Conversación nueva para esta tarea. {ai} trabajará en la carpeta del proyecto y puede editar archivos.</div>
             )}
             {messages.map((m, i) => (
               <div key={i} className={`msg ${m.role}`}>
@@ -367,13 +391,18 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
                     </button>
                   </div>
                 )}
+                {m.role === 'user' && chat?.checkpoints?.some((c) => c.msgTs === m.ts) && !running && (
+                  <button className="rewind" title="Devuelve los archivos a como estaban justo antes de este mensaje" onClick={() => void rewind(m.ts)}>
+                    ↩ Volver a antes de esto
+                  </button>
+                )}
                 {m.role !== 'system' && m.ts > 0 && <span className="time">{hhmm(m.ts)}</span>}
               </div>
             ))}
             {chat?.pending?.map((p) => (
               <div key={p.id} className="perm">
                 <div className="perm-title">
-                  Claude pide permiso · <b>{p.tool === 'Bash' ? 'ejecutar un comando' : p.tool}</b>
+                  {ai} pide permiso · <b>{p.tool === 'Bash' ? 'ejecutar un comando' : p.tool}</b>
                 </div>
                 <pre className="perm-cmd">{p.target}</pre>
                 {p.description && <div className="meta">{p.description}</div>}
@@ -401,7 +430,7 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
                     <i />
                     <i />
                     <i />
-                    &nbsp;Claude está trabajando…
+                    &nbsp;{ai} está trabajando…
                   </span>
                 )}
               </div>
@@ -470,7 +499,7 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
               ref={area}
               rows={1}
               value={input}
-              placeholder="Escribe a Claude… (# plantillas, / comandos; pega o arrastra fotos y archivos)"
+              placeholder={`Escribe a ${ai}… (# plantillas, / comandos; pega o arrastra fotos y archivos)`}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKey}
               onPaste={onPaste}
@@ -500,6 +529,22 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
                   ]}
                 />
               )}
+              <ProfileSelect convId={convId} />
+              {chat?.kind !== 'review' && (
+                <Select
+                  className="mini-sel mode-sel"
+                  ariaLabel="Modo"
+                  title={provider === 'copilot' ? 'Agent: usa todos los comandos sin preguntar. Ask: solo los permitidos en Ajustes (Copilot no puede preguntar)' : 'Agent: edita y ejecuta sin pedir permiso. Ask: pregunta antes de editar o ejecutar'}
+                  disabled={running}
+                  value={chat?.mode ?? 'default'}
+                  onChange={(v) => void ui.run('chat:config', convId, { mode: v as ChatMode })}
+                  options={[
+                    ...(chat?.mode ? [] : [{ value: 'default', label: 'Según Ajustes' }]),
+                    { value: 'agent', label: '⚡ Agent' },
+                    { value: 'ask', label: '🔐 Ask' }
+                  ]}
+                />
+              )}
               <Select
                 className="mini-sel"
                 ariaLabel="Modelo"
@@ -513,7 +558,7 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
               />
               <span>Enter envía · Shift+Enter nueva línea</span>
             </span>
-            <span>{running ? `${provider === 'copilot' ? 'Copilot' : 'Claude'} está respondiendo…` : ''}</span>
+            <span>{running ? `${ai} está respondiendo…` : ''}</span>
           </div>
         </div>
         <SidePanel convId={convId} />

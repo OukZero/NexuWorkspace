@@ -28,7 +28,7 @@ interface Result {
 }
 
 /** Ejecuta git sin shell (no hay inyección de comandos). Un código de salida fuera de `ok` es un error con el mensaje de git. */
-export function git(cwd: string, args: string[], opts: { timeout?: number; ok?: number[] } = {}): Promise<Result> {
+export function git(cwd: string, args: string[], opts: { timeout?: number; ok?: number[]; env?: Record<string, string> } = {}): Promise<Result> {
   const ok = opts.ok ?? [0]
   return new Promise((resolve, reject) => {
     execFile(
@@ -40,7 +40,7 @@ export function git(cwd: string, args: string[], opts: { timeout?: number; ok?: 
         maxBuffer: 32 * 1024 * 1024,
         windowsHide: true,
         // sin pedir nada por la terminal (colgaría); el gestor de credenciales de Git sí puede abrir su propia ventana
-        env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_PAGER: 'cat', GIT_MERGE_AUTOEDIT: 'no', LC_ALL: 'C.UTF-8' }
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_PAGER: 'cat', GIT_MERGE_AUTOEDIT: 'no', LC_ALL: 'C.UTF-8', ...opts.env }
       },
       (err, stdout, stderr) => {
         const code = err ? (typeof (err as { code?: unknown }).code === 'number' ? ((err as { code: number }).code as number) : -1) : 0
@@ -429,4 +429,12 @@ export async function remoteUrl(dir: string, raw = false): Promise<string> {
   const top = await root(dir)
   const args = raw ? ['config', '--get', 'remote.origin.url'] : ['remote', 'get-url', 'origin']
   return (await git(top, args, { ok: [0, 1, 2, 128] }).catch(() => ({ stdout: '' }))).stdout.trim()
+}
+
+/** Trae una rama que acaba de crearse en el remoto y se cambia a una local que la sigue (si la local ya existe, solo se cambia). */
+export async function checkoutRemoteBranch(dir: string, name: string): Promise<void> {
+  const top = await root(dir)
+  await git(top, ['fetch', 'origin', `+refs/heads/${name}:refs/remotes/origin/${name}`], { timeout: 60000 })
+  if (await refExists(top, `refs/heads/${name}`)) return void (await git(top, ['switch', name]))
+  await git(top, ['switch', '-c', name, '--track', `origin/${name}`])
 }

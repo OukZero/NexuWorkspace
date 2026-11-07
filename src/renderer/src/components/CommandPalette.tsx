@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { convLabel, openConvs } from '../conversations'
 import { findTask, useDB } from '../store'
-import { getMode, setMode } from '../theme'
+import { PRESETS, getFocus, getMode, setFocusMode, setMode, setPreset } from '../theme'
+import { applyPreset, savedLayouts } from '../layout'
+import { showSettingsTab } from './SettingsView'
 import { isWorkTask } from '../utils'
 import { useUi, type View } from '../ui'
 
@@ -43,6 +45,11 @@ export function CommandPalette({ onClose }: { onClose: () => void }): ReactNode 
       { id: 'a-new', group: 'Acciones', label: 'Nueva tarea', hint: 'Crear una tarea detallada', run: go(() => ui.editTask({})) },
       { id: 'a-help', group: 'Acciones', label: 'Ver atajos de teclado', hint: 'Ctrl+/', run: go(ui.openHelp) },
       { id: 'a-theme', group: 'Acciones', label: 'Alternar tema día / noche', run: go(() => setMode(getMode() === 'light' ? 'dark' : 'light')) },
+      { id: 'a-focus', group: 'Acciones', label: 'Modo foco: ocultar menú y pestañas', hint: 'Ctrl+Mayús+F', run: go(() => setFocusMode(!getFocus())) },
+      { id: 'a-look', group: 'Acciones', label: 'Personalizar apariencia…', hint: 'Temas, colores, tipografía, menú', run: go(() => { showSettingsTab('apariencia'); ui.go('settings') }) },
+      ...savedLayouts().map((p) => ({ id: 'l-' + p.id, group: 'Acciones', label: `Disposición: ${p.name}`, hint: 'Paneles, terminal y modo foco', run: go(() => applyPreset(p)) })),
+      { id: 'a-skills', group: 'Acciones', label: 'Abrir catálogo de skills', run: go(() => void window.api.call('window:skills')) },
+      { id: 'a-random', group: 'Acciones', label: 'Probar un tema al azar', run: go(() => { const k = Object.keys(PRESETS); setPreset(k[Math.floor(Math.random() * k.length)]) }) },
       { id: 'a-export', group: 'Acciones', label: 'Exportar datos (.json)', run: go(() => void ui.run('data:export')) }
     ]
     if (current) {

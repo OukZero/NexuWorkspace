@@ -27,3 +27,5 @@
 .top select:focus { border-color: var(--accent); }
 #msg.err { border-color: var(--danger); }
 #msg.err::placeholder { color: var(--danger); }
+.grow { flex: 1; }
+.top select[hidden] { display: none; }
