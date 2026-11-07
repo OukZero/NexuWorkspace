@@ -15,7 +15,7 @@ export function designConv(db: DB, taskId: string): Conv | undefined {
 /** Conversaciones abiertas (no cerradas) de una tarea, de la más antigua a la más reciente. */
 export function openConvs(db: DB, taskId: string): Conv[] {
   return Object.entries(db.chats)
-    .filter(([, c]) => c.taskId === taskId && !c.closed && !c.kind)
+    .filter(([, c]) => c.taskId === taskId && !c.closed && (!c.kind || c.kind === 'review'))
     .map(([id, chat]) => ({ id, chat }))
     .sort((a, b) => a.chat.createdAt - b.chat.createdAt)
 }
@@ -23,7 +23,7 @@ export function openConvs(db: DB, taskId: string): Conv[] {
 /** Conversaciones cerradas de una tarea, la más reciente primero. */
 export function closedConvs(db: DB, taskId: string): Conv[] {
   return Object.entries(db.chats)
-    .filter(([, c]) => c.taskId === taskId && c.closed && !c.kind)
+    .filter(([, c]) => c.taskId === taskId && c.closed && (!c.kind || c.kind === 'review'))
     .map(([id, chat]) => ({ id, chat }))
     .sort((a, b) => b.chat.createdAt - a.chat.createdAt)
 }

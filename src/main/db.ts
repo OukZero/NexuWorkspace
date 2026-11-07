@@ -42,6 +42,9 @@ export const DEFAULT_SETTINGS: Settings = {
   closeToTray: false,
   launchAtLogin: false,
   dailyTime: '09:00',
+  defaultContext: ['task', 'branch', 'notes'],
+  autoSessionNotes: true,
+  reviewInstructions: '',
   redmineUrl: '',
   redmineActivity: 'Work (Office)',
   promptTemplate:

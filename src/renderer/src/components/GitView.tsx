@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { GitBranches, GitCommit, GitFile, GitRepo, GitStatus } from '../../../shared/types'
+import type { GitBranches, GitCommit, GitFile, GitRepo, GitStatus, IssueRef, RemoteInfo } from '../../../shared/types'
 import { baseName } from '../utils'
 import { findTask, useDB } from '../store'
 import { useUi } from '../ui'
@@ -73,8 +73,24 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
   const [busy, setBusy] = useState('')
   const [newBranch, setNewBranch] = useState<string | null>(null)
   const [showLog, setShowLog] = useState(true)
+  const [remote, setRemote] = useState<RemoteInfo | null>(null)
+  const [panel, setPanel] = useState<null | 'pick' | 'create'>(null)
+  const [issues, setIssues] = useState<IssueRef[] | null>(null)
+  const [issueNum, setIssueNum] = useState('')
+  const [draftIssue, setDraftIssue] = useState({ title: '', body: '' })
+  const [prDraft, setPrDraft] = useState<{ title: string; body: string } | null>(null)
   const busyRef = useRef('')
   busyRef.current = busy
+
+  // tipo de remoto (GitHub, GitLab…): decide qué acciones de issue y PR se ofrecen
+  useEffect(() => {
+    let alive = true
+    setRemote(null)
+    if (dir) void window.api.call('git:remote', dir).then((r) => alive && setRemote(r)).catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [dir, st?.upstream])
 
   // repositorios candidatos: la carpeta de la tarea y las de sus grupos
   useEffect(() => {
@@ -185,6 +201,65 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
     })
   }
 
+  const copy = (text: string, what: string): void => {
+    void navigator.clipboard.writeText(text).then(() => ui.toast(`${what} copiado`))
+  }
+
+  // publica la rama y entrega el enlace del PR (el de creación o el del PR que ya existe); el PR siempre lo revisa otra persona
+  const pushBranch = async (): Promise<void> => {
+    setBusy('push')
+    const r = await ui.run('git:push', dir, taskId)
+    setBusy('')
+    if (!r) return
+    if (r.pr) {
+      const url = r.pr.url
+      ui.toast(r.pr.exists ? `Enviado · PR #${r.pr.number} ya abierto` : 'Rama publicada · enlace del PR listo', false, { label: r.pr.exists ? 'Abrir PR' : 'Crear PR', run: () => void ui.run('url:open', url) })
+    } else {
+      ui.toast(r.note ? `${r.message.split('\n')[0]} · ${r.note}` : r.message.split('\n')[0])
+    }
+    await refresh()
+  }
+
+  const reviewerMessage = (): string => {
+    const pr = task.pr
+    if (!pr) return ''
+    return [`Hola, ¿puedes revisar este PR?`, '', pr.title || task.title, pr.url, task.issue ? `Issue: ${task.issue.url}` : '', `${pr.branch} → ${pr.base}`].filter((l, i) => l || i === 1).join('\n')
+  }
+
+  const startReview = async (): Promise<void> => {
+    setBusy('revisión')
+    const id = await ui.run('review:start', taskId, dir)
+    setBusy('')
+    if (id) ui.openChat(taskId, id)
+  }
+
+  const openPick = async (): Promise<void> => {
+    setPanel('pick')
+    setIssues(null)
+    setIssues((await ui.run('issue:list', dir)) ?? [])
+  }
+
+  const fromIssue = async (n: number): Promise<void> => {
+    if (!Number.isInteger(n) || n <= 0) return ui.toast('Escribe el número de la issue', true)
+    const ok = await act('issue', () => window.api.call('issue:branch', taskId, dir, n), `Rama de la issue #${n} lista`)
+    if (ok) {
+      setPanel(null)
+      setIssueNum('')
+    }
+  }
+
+  const createIssue = async (): Promise<void> => {
+    const ok = await act(
+      'issue',
+      async () => {
+        const i = await window.api.call('issue:create', dir, draftIssue.title, draftIssue.body)
+        await window.api.call('issue:branch', taskId, dir, i.number)
+      },
+      'Issue creada y rama lista'
+    )
+    if (ok) setPanel(null)
+  }
+
   const discard = async (f: GitFile): Promise<void> => {
     if (!(await ui.confirm(`Se descartarán los cambios de «${f.path}». No se puede deshacer.`, { title: "Descartar cambios", confirmLabel: "Descartar", danger: true }))) return
     void act('discard', () => window.api.call('git:discard', dir, f.untracked ? [] : [f.path], f.untracked ? [f.path] : []))
@@ -257,14 +332,162 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
           className={`btn sm ${st?.ahead || (st && !st.upstream) ? 'primary' : ''}`}
           disabled={!!busy}
           title={st?.upstream ? 'Enviar tus commits al remoto' : 'Publicar la rama en el remoto'}
-          onClick={() => void act('push', () => window.api.call('git:sync', dir, 'push'))}
+          onClick={() => void pushBranch()}
         >
           ↑ {st?.upstream ? 'Push' : 'Publicar'}
           {st?.ahead ? ` ${st.ahead}` : ''}
         </button>
+        <button className="btn sm accent" disabled={!!busy} title="Revisión de código con IA: hallazgos, simulación de escenarios y veredicto (solo lectura)" onClick={() => void startReview()}>
+          ✦ Revisar código
+        </button>
         {busy && <span className="meta">{busy}…</span>}
       </div>
       {error && <div className="gerr">{error}</div>}
+
+      <div className="gwork">
+        <div className="gwork-row">
+          {task.issue ? (
+            <>
+              <button className="chip issue" title={`${task.issue.title}\nClic para abrir la issue`} onClick={() => void ui.run('url:open', task.issue!.url)}>
+                #{task.issue.number} · {task.issue.title}
+              </button>
+              <button className="icon" title="Desvincular la issue de la tarea" aria-label="Desvincular la issue" onClick={() => void ui.run('issue:link', taskId, null)}>
+                ✕
+              </button>
+            </>
+          ) : (
+            <span className="meta">Sin issue vinculada{task.branch ? ` · rama de la tarea: ${task.branch}` : ''}</span>
+          )}
+          <span className="grow" />
+          {remote?.kind === 'github' && (
+            <>
+              <button className="btn sm" disabled={!!busy} onClick={() => (panel === 'pick' ? setPanel(null) : void openPick())} title="Elige una issue abierta: se crea su rama desde la base actualizada y queda vinculada a la tarea">
+                ⎇ Rama desde una issue…
+              </button>
+              <button
+                className="btn sm"
+                disabled={!!busy}
+                title="Crea la issue en GitHub con el título y la descripción de la tarea, y su rama"
+                onClick={() => {
+                  setDraftIssue({ title: task.title, body: task.description })
+                  setPanel(panel === 'create' ? null : 'create')
+                }}
+              >
+                ＋ Issue desde la tarea
+              </button>
+            </>
+          )}
+          {remote && remote.kind !== 'github' && <span className="meta">{remote.kind === 'gitlab' ? 'GitLab' : remote.kind === 'azure' ? 'Azure DevOps' : remote.host}: enlace del PR sí, issues no</span>}
+        </div>
+
+        {panel === 'pick' && (
+          <div className="gpanel">
+            <div className="gpanel-h">
+              <b>Issues abiertas</b>
+              <span className="grow" />
+              <input className="gnum" inputMode="numeric" placeholder="N.º" aria-label="Número de issue" value={issueNum} onChange={(e) => setIssueNum(e.target.value.replace(/\D/g, ''))} onKeyDown={(e) => e.key === 'Enter' && void fromIssue(Number(issueNum))} />
+              <button className="btn sm" disabled={!issueNum || !!busy} onClick={() => void fromIssue(Number(issueNum))}>
+                Usar este número
+              </button>
+            </div>
+            {issues === null && <div className="meta">Cargando issues…</div>}
+            {issues?.length === 0 && <div className="meta">No hay issues abiertas (o no se pudieron leer).</div>}
+            <div className="gissues">
+              {issues?.map((i) => (
+                <button key={i.number} className="gissue" disabled={!!busy} onClick={() => void fromIssue(i.number)} title="Crear la rama de esta issue y vincularla a la tarea">
+                  <b>#{i.number}</b>
+                  <span>{i.title}</span>
+                  {i.labels?.map((l) => (
+                    <i key={l} className="chip">
+                      {l}
+                    </i>
+                  ))}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {panel === 'create' && (
+          <div className="gpanel">
+            <div className="gpanel-h">
+              <b>Nueva issue en {remote?.owner}/{remote?.repo}</b>
+            </div>
+            <input value={draftIssue.title} placeholder="Título" aria-label="Título de la issue" onChange={(e) => setDraftIssue((d) => ({ ...d, title: e.target.value }))} />
+            <textarea rows={4} value={draftIssue.body} placeholder="Descripción (Markdown)" aria-label="Descripción de la issue" onChange={(e) => setDraftIssue((d) => ({ ...d, body: e.target.value }))} />
+            <div className="foot" style={{ marginTop: 6 }}>
+              <button className="btn sm" onClick={() => setPanel(null)}>
+                Cancelar
+              </button>
+              <button className="btn sm primary" disabled={!draftIssue.title.trim() || !!busy} onClick={() => void createIssue()}>
+                Crear issue y su rama
+              </button>
+            </div>
+          </div>
+        )}
+
+        {st && task.pr && task.pr.branch === st.branch ? (
+          <div className="gpr">
+            <div className="gpr-h">
+              <b>{task.pr.exists ? `PR #${task.pr.number} abierto` : 'Rama publicada: falta abrir el PR'}</b>
+              <span className="meta">
+                {task.pr.branch} → {task.pr.base} · lo revisa otra persona
+              </span>
+            </div>
+            <input readOnly className="gpr-url" value={task.pr.url} aria-label="Enlace del PR" onFocus={(e) => e.currentTarget.select()} />
+            <div className="gpr-b">
+              <button className="btn sm primary" onClick={() => void ui.run('url:open', task.pr!.url)}>
+                {task.pr.exists ? 'Abrir PR' : 'Crear PR en el navegador'}
+              </button>
+              <button className="btn sm" onClick={() => copy(task.pr!.url, 'Enlace')}>
+                Copiar enlace
+              </button>
+              <button className="btn sm" title="Mensaje listo para pegar en el chat de quien va a revisar" onClick={() => copy(reviewerMessage(), 'Mensaje para el revisor')}>
+                Copiar mensaje para quien revisa
+              </button>
+              <button
+                className="btn sm"
+                disabled={!!busy}
+                title="Redacta título y descripción del PR a partir de los commits y el diff"
+                onClick={() => void act('descripción', () => window.api.call('git:prText', dir, taskId).then(setPrDraft), 'Descripción lista: cópiala al PR')}
+              >
+                {busy === 'descripción' ? '✦ Redactando…' : '✦ Descripción del PR'}
+              </button>
+              <button className="btn sm" disabled={!!busy} title="Vuelve a comprobar si el PR ya existe" onClick={() => void pushBranch()}>
+                ⟳ Actualizar
+              </button>
+            </div>
+            {prDraft && (
+              <div className="gpr-draft">
+                <input readOnly value={prDraft.title} aria-label="Título propuesto" />
+                <textarea readOnly rows={8} value={prDraft.body} aria-label="Descripción propuesta" />
+                <div className="gpr-b">
+                  <button className="btn sm" onClick={() => copy(prDraft.title, 'Título')}>
+                    Copiar título
+                  </button>
+                  <button className="btn sm" onClick={() => copy(prDraft.body, 'Descripción')}>
+                    Copiar descripción
+                  </button>
+                  <button className="btn sm" onClick={() => setPrDraft(null)}>
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          st?.upstream &&
+          remote &&
+          st.branch !== remote.base && (
+            <div className="gwork-row">
+              <span className="meta">La rama ya está en el remoto.</span>
+              <button className="btn sm" disabled={!!busy} onClick={() => void pushBranch()}>
+                Obtener el enlace del PR
+              </button>
+            </div>
+          )
+        )}
+      </div>
 
       <div className="gcols">
         <div className="gleft">

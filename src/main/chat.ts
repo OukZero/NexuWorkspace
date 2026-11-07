@@ -113,12 +113,12 @@ function chatOf(convId: string): Chat {
 }
 
 /** Crea una conversación nueva (vacía) para la tarea y devuelve su id. */
-export function createConversation(taskId: string, kind?: 'design'): string {
+export function createConversation(taskId: string, kind?: 'design' | 'review'): string {
   const db = getDb()
   if (!db.tasks.some((t) => t.id === taskId)) throw new Error('Tarea no encontrada')
-  const n = Object.values(db.chats).filter((c) => c.taskId === taskId && !c.kind).length + 1
+  const n = Object.values(db.chats).filter((c) => c.taskId === taskId && (!c.kind || c.kind === 'review')).length + 1
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
-  db.chats[id] = { ...newChat(taskId, kind === 'design' ? 'Diseño' : `Conversación ${n}`), ...(kind ? { kind } : {}) }
+  db.chats[id] = { ...newChat(taskId, kind === 'design' ? 'Diseño' : kind === 'review' ? 'Revisión' : `Conversación ${n}`), ...(kind ? { kind } : {}) }
   commit()
   return id
 }
@@ -500,7 +500,13 @@ function buildContent(text: string, files: Attachment[]): string | Array<Record<
   return blocks
 }
 
-export function send(convId: string, rawText: string, rawFiles?: Attachment[]): void {
+/** `model`: texto completo que ve el modelo (contexto + mensaje); el chat solo muestra `rawText` con las etiquetas del contexto. */
+export interface SendExtra {
+  model: string
+  labels: string[]
+}
+
+export function send(convId: string, rawText: string, rawFiles?: Attachment[], extra?: SendExtra): void {
   const db = getDb()
   const chat = chatOf(convId)
   const found = db.tasks.find((t) => t.id === chat.taskId)
@@ -517,7 +523,8 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[]): 
   if (!chat.messages.some((m) => m.role === 'user') && !text.startsWith('/')) {
     chat.title = clip((text || files[0].name).replace(/\s+/g, ' '), 28)
   }
-  chat.messages.push({ role: 'user', text, ts: Date.now(), ...(files.length ? { attachments: files } : {}) })
+  chat.messages.push({ role: 'user', text, ts: Date.now(), ...(files.length ? { attachments: files } : {}), ...(extra?.labels.length ? { context: extra.labels } : {}) })
+  const modelText = extra?.model ?? text
   chat.running = true
   chat.gotResult = false
   ensureTimer(task.id)
@@ -537,7 +544,7 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[]): 
     if (dirs.skipped.length) {
       chat.messages.push({ role: 'system', text: `Carpetas omitidas con Copilot (solo lectura no soportada, o no existen): ${dirs.skipped.join(', ')}`, ts: Date.now() })
     }
-    let prompt = files.length ? `${text || 'Revisa los archivos adjuntos.'}\n\nArchivos adjuntos (puedes leerlos con tus herramientas):\n${files.map((f) => `- ${f.path}`).join('\n')}` : text
+    let prompt = files.length ? `${modelText || 'Revisa los archivos adjuntos.'}\n\nArchivos adjuntos (puedes leerlos con tus herramientas):\n${files.map((f) => `- ${f.path}`).join('\n')}` : modelText
     // Copilot no tiene system prompt adicional: la lista de carpetas del grupo va al inicio del primer mensaje (la sesión la conserva)
     const note = chat.sessionId ? '' : groupNote(task)
     if (note) prompt = `[Contexto de carpetas]\n${note}\n\n[Pedido]\n${prompt}`
@@ -547,7 +554,7 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[]): 
       sessionId: chat.sessionId,
       model: chat.model,
       allow: copilotAllow(),
-      deny: copilotDeny(),
+      deny: chat.kind === 'review' ? [...copilotDeny(), 'write'] : copilotDeny(),
       addDirs: [...dirs.dirs, ...(files.length ? [attachRoot()] : [])],
       images: files.filter((f) => f.image).map((f) => f.path)
     })
@@ -572,7 +579,8 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[]): 
     if (chat.kind === 'design') allow.push('WebFetch', 'WebSearch')
     if (allow.length) args.push('--allowedTools', ...allow.map((r) => `"${r}"`))
     // grupos de carpetas: acceso de lectura/escritura (--add-dir) y solo lectura (regla de denegación de edición)
-    const access = groupAccess(task, claudeDeny())
+    // la revisión es de solo lectura: no puede editar ni crear archivos
+    const access = groupAccess(task, chat.kind === 'review' ? [...claudeDeny(), 'Edit', 'Write', 'MultiEdit', 'NotebookEdit'] : claudeDeny())
     args.push(...access.args)
     if (files.length) args.push('--add-dir', `"${attachRoot()}"`) // para que Claude pueda leer los adjuntos no gráficos
     // pestaña Diseño: acceso a la carpeta de mockups de la tarea e instrucciones de diseño como parte del system prompt
@@ -589,10 +597,10 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[]): 
     child = spawn(`${db.settings.claudeCmd} ${args.join(' ')}`, { shell: true, cwd: task.folder, windowsHide: true })
     child.stdin?.on('error', () => {})
     // Diseño: las imágenes adjuntas se copian junto a los mockups y se le indica a Claude cómo referenciarlas
-    let promptText = text
+    let promptText = modelText
     if (chat.kind === 'design' && files.length) {
       const assets = stageAssets(task.id, files)
-      if (assets.length) promptText = `${text || 'Revisa los archivos adjuntos.'}\n\nImágenes disponibles para el mockup (úsalas en el HTML con <img src="…"> tal cual):\n${assets.map((a) => `- ${a}`).join('\n')}`
+      if (assets.length) promptText = `${modelText || 'Revisa los archivos adjuntos.'}\n\nImágenes disponibles para el mockup (úsalas en el HTML con <img src="…"> tal cual):\n${assets.map((a) => `- ${a}`).join('\n')}`
     }
     const first = JSON.stringify({ type: 'user', message: { role: 'user', content: buildContent(promptText, files) } }) + '\n'
     // con aprobación interactiva stdin queda abierto para las respuestas; se cierra al llegar el resultado

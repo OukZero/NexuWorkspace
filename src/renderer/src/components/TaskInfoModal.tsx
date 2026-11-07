@@ -59,6 +59,25 @@ export function TaskInfoModal({ taskId }: { taskId: string }): ReactNode {
         </div>
       </div>
 
+      {(t.issue || t.branch || t.pr) && (
+        <section>
+          <h4>Código</h4>
+          <div className="ti-chips">
+            {t.issue && (
+              <button className="chip issue" title={t.issue.title} onClick={() => void ui.run('url:open', t.issue!.url)}>
+                Issue #{t.issue.number} · {t.issue.title}
+              </button>
+            )}
+            {t.branch && <span className="chip">⎇ {t.branch}</span>}
+            {t.pr && (
+              <button className="chip issue" title={t.pr.url} onClick={() => void ui.run('url:open', t.pr!.url)}>
+                {t.pr.exists ? `PR #${t.pr.number}` : 'Crear PR'} → {t.pr.base}
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+
       {t.description.trim() && (
         <section>
           <h4>Descripción</h4>
@@ -97,6 +116,58 @@ export function TaskInfoModal({ taskId }: { taskId: string }): ReactNode {
           <div className="ti-text">
             <Markdown text={t.workDone} />
           </div>
+        </section>
+      )}
+
+      {(t.sessions ?? []).length > 0 && (
+        <section>
+          <h4>
+            Sesiones <span className="chip">{t.sessions!.length}</span>
+          </h4>
+          {[...t.sessions!].reverse().slice(0, 6).map((n) => (
+            <div key={n.id} className="ti-session">
+              <div className="ti-session-h">
+                <b>{n.title}</b>
+                <span className="meta">
+                  {new Date(n.ts).toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  {n.branch ? ` · ${n.branch}` : ''}
+                </span>
+                <button className="icon" title="Borrar esta nota" aria-label="Borrar esta nota" onClick={() => void ui.run('session:delete', t.id, n.id)}>
+                  ✕
+                </button>
+              </div>
+              {n.done.length > 0 && (
+                <ul>
+                  {n.done.map((x, i) => (
+                    <li key={i}>{x}</li>
+                  ))}
+                </ul>
+              )}
+              {n.decisions.length > 0 && (
+                <div className="ti-sess-block">
+                  <small>Decisiones</small>
+                  <ul>
+                    {n.decisions.map((x, i) => (
+                      <li key={i}>{x}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {n.pending.length > 0 && (
+                <div className="ti-sess-block">
+                  <small>Pendiente</small>
+                  {n.pending.map((x, i) => (
+                    <div key={i} className="ti-pend">
+                      <span>{x}</span>
+                      <button className="btn sm" title="Agregarlo como subtarea de esta tarea" onClick={() => void ui.run('session:toSubtask', t.id, x)}>
+                        → subtarea
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
         </section>
       )}
 

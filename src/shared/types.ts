@@ -45,6 +45,97 @@ export interface Task {
   rmIssue?: string
   /** Actividad de Redmine; vacío = la de Ajustes. */
   rmActivity?: string
+  /** Issue del repositorio (GitHub) vinculada a la tarea. */
+  issue?: IssueRef
+  /** Rama de trabajo de la tarea y carpeta del repositorio donde vive. */
+  branch?: string
+  branchDir?: string
+  /** Último PR publicado desde la rama de la tarea (lo revisa otra persona). */
+  pr?: PrLink
+  /** Notas de sesión: lo hecho, lo decidido y lo pendiente al cerrar cada conversación. */
+  sessions?: SessionNote[]
+}
+
+/** Issue de un repositorio remoto. */
+export interface IssueRef {
+  number: number
+  title: string
+  url: string
+  state?: 'open' | 'closed'
+  labels?: string[]
+}
+
+/** Enlace para abrir (o ver) el PR de una rama. */
+export interface PrLink {
+  url: string
+  branch: string
+  base: string
+  /** true = el PR ya existe; false = es el enlace para crearlo. */
+  exists: boolean
+  number?: number
+  title?: string
+  ts: number
+}
+
+/** Dónde está el remoto de un repositorio y de qué tipo es. */
+export interface RemoteInfo {
+  url: string
+  kind: 'github' | 'gitlab' | 'azure' | 'other'
+  host: string
+  owner: string
+  repo: string
+  /** Dirección web del repositorio (sin .git). */
+  web: string
+  base: string
+}
+
+/** Nota de sesión: resumen estructurado de una conversación, para retomar la tarea días después. */
+export interface SessionNote {
+  id: string
+  ts: number
+  convId: string
+  title: string
+  done: string[]
+  decisions: string[]
+  pending: string[]
+  files: string[]
+  branch?: string
+}
+
+/** Piezas de contexto que se pueden anexar automáticamente a un mensaje. */
+export type ContextKind = 'task' | 'branch' | 'status' | 'diff' | 'base' | 'terminal' | 'notes'
+
+/** Plantilla de prompt reutilizable. Admite variables {{tarea}}, {{descripcion}}, {{rama}}, {{issue}} y {{archivos}}; lo que va entre [corchetes] se rellena a mano. */
+export interface PromptTemplate {
+  id: string
+  name: string
+  text: string
+  /** Se muestra como botón rápido sobre el cuadro de texto. */
+  pinned?: boolean
+  /** Contexto que se adjunta solo al usar la plantilla. */
+  ctx?: ContextKind[]
+  /** Se envía de inmediato en lugar de dejarla en el cuadro para editarla. */
+  autoSend?: boolean
+}
+
+/** Contexto elegido para un mensaje; `terminal` lo aporta la interfaz (la salida vive en el renderer). */
+export interface ChatContext {
+  kinds: ContextKind[]
+  terminal?: string
+}
+
+export interface ContextPreview {
+  text: string
+  labels: string[]
+  chars: number
+}
+
+/** Resultado de publicar una rama. */
+export interface PushResult {
+  message: string
+  pr?: PrLink
+  /** Sin enlace al PR: no hay remoto o no es compatible. */
+  note?: string
 }
 
 export interface Entry {
@@ -149,6 +240,8 @@ export interface ChatMessage {
   ts: number
   action?: 'login'
   attachments?: Attachment[]
+  /** Contexto automático que se anexó a este mensaje (solo etiquetas, para mostrarlas). */
+  context?: string[]
 }
 
 /** Consumo de la sesión de Claude de un chat (acumulado desde que se creó o se reinició). */
@@ -196,7 +289,7 @@ export interface Chat {
   /** Modelo elegido ('' o ausente = el predeterminado del proveedor). */
   model?: string
   /** 'design' = conversación de la pestaña Diseño (no aparece entre las conversaciones normales). */
-  kind?: 'design'
+  kind?: 'design' | 'review'
   taskId: string
   createdAt: number
   title?: string
@@ -210,6 +303,8 @@ export interface Chat {
   gotResult?: boolean
   cancelled?: boolean
   summarizedCount?: number
+  /** Mensajes que ya quedaron cubiertos por una nota de sesión. */
+  noteAt?: number
   usage?: ChatUsage
   compactions?: number
 }
@@ -374,6 +469,18 @@ export interface Settings {
   telegramDetails?: boolean
   /** Conversación a la que van los mensajes escritos en Telegram. */
   telegramConv?: string
+  /** Token de GitHub (opcional): si está vacío se usa el del Administrador de credenciales de Git. */
+  githubToken?: string
+  /** Plantillas de prompts; ausente = las predeterminadas. */
+  promptTemplates?: PromptTemplate[]
+  /** Contexto que se anexa por defecto a cada mensaje. */
+  defaultContext?: ContextKind[]
+  /** Indicaciones propias para la revisión de código (convenciones del equipo, qué vigilar). */
+  reviewInstructions?: string
+  /** Guardar una nota de sesión sola al cerrar una conversación con actividad. */
+  autoSessionNotes?: boolean
+  /** Rama base de los PR cuando no se puede detectar. */
+  baseBranch?: string
 }
 
 export interface TelegramStatus {
@@ -421,7 +528,21 @@ export interface IpcChannels {
   'claude:login': { args: []; ret: void }
   'claude:open': { args: [string]; ret: void }
   'vscode:open': { args: [string]; ret: void }
-  'chat:send': { args: [string, string, Attachment[]?]; ret: true }
+  'chat:send': { args: [string, string, Attachment[]?, ChatContext?]; ret: true }
+  'chat:context': { args: [string, ContextKind[]]; ret: ContextPreview } // tarea, piezas -> vista previa de lo que se anexaría
+  'review:start': { args: [string, string?]; ret: string } // tarea, repo (opcional) -> id de la conversación de revisión
+  'session:note': { args: [string]; ret: SessionNote | null } // conversación -> nota guardada en la tarea
+  'session:delete': { args: [string, string]; ret: void }
+  'session:toSubtask': { args: [string, string]; ret: void } // tarea, texto pendiente
+  'url:open': { args: [string]; ret: void } // abre un enlace http(s) en el navegador
+  'git:remote': { args: [string]; ret: RemoteInfo | null }
+  'git:push': { args: [string, string?]; ret: PushResult } // repo, tarea -> resultado con enlace al PR
+  'git:prText': { args: [string, string?]; ret: { title: string; body: string } }
+  'issue:list': { args: [string]; ret: IssueRef[] }
+  'issue:create': { args: [string, string, string, string[]?]; ret: IssueRef }
+  'issue:branch': { args: [string, string, number]; ret: { branch: string; issue: IssueRef } } // tarea, repo, nº de issue
+  'issue:link': { args: [string, IssueRef | null]; ret: void }
+  'task:branch': { args: [string, string, string]; ret: string } // tarea, repo, nombre -> rama creada
   'attach:pick': { args: [string]; ret: Attachment[] } // convId -> archivos elegidos y copiados
   'attach:save': { args: [string, string, Uint8Array]; ret: Attachment } // convId, nombre, bytes (pegar / arrastrar)
   'attach:preview': { args: [string]; ret: string | null } // ruta -> data URL (miniatura)
