@@ -14,6 +14,9 @@ export async function initStore(): Promise<void> {
   })
 }
 
+/** Estado actual sin suscribirse (para código fuera de React). */
+export const peek = (): DB | null => state
+
 export function useDB(): DB {
   return useSyncExternalStore(
     (cb) => {

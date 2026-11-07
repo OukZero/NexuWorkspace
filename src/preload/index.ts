@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Api, DB, IpcChannels, Unsubscribe } from '../shared/types'
+import type { Api, DB, IpcChannels, UpdateState, Unsubscribe } from '../shared/types'
 
 type Reply<T> = { ok: true; data: T } | { ok: false; error: string }
 
@@ -20,7 +20,8 @@ const api: Api = {
   onPtyData: (cb) => on('pty:data', cb),
   onPtyExit: (cb) => on('pty:exit', cb),
   onQuickAdd: (cb) => on<void>('quickadd', () => cb()),
-  onGoto: (cb) => on<string>('goto', cb)
+  onGoto: (cb) => on<string>('goto', cb),
+  onUpdate: (cb) => on<UpdateState>('update', cb)
 }
 
 contextBridge.exposeInMainWorld('api', api)

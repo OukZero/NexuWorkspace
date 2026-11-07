@@ -6,9 +6,13 @@ import * as attachments from './attachments'
 import * as chat from './chat'
 import * as git from './git'
 import * as forge from './forge'
-import { buildContext, expandVars, taskById, withContext } from './context'
+import { buildContext, expandVars, repoDirOf, taskById, withContext } from './context'
 import { startReview } from './review'
 import * as sessions from './sessions'
+import * as updater from './updater'
+import * as iso from './isolation'
+import * as checks from './checks'
+import { applyMini, dockPopout, hideMini, openPopout } from './windows'
 import { backupsDir, commit, getDb, replaceDb, uid } from './db'
 import { exportExcel } from './excel'
 import { gitCommits, openClaude, openLogin, openTerminalHere, openVSCode, renderPrompt } from './launch'
@@ -20,9 +24,10 @@ import { clearAll, markRead } from './notify'
 import * as redmine from './redmine'
 import { generateRecurring } from './scheduler'
 import * as telegram from './telegram'
+import * as skills from './skills'
 import { askClaude, summarizeConversation } from './summary'
 import { activeEntry, startTimer, stopActive } from './timer'
-import { getMain, showWin } from './windows'
+import { getMain, openSkills, showWin } from './windows'
 
 type Handler<K extends keyof IpcChannels> = (...args: IpcChannels[K]['args']) => IpcChannels[K]['ret'] | Promise<IpcChannels[K]['ret']>
 
@@ -129,6 +134,7 @@ export function registerIpc(): void {
 
   // ---------- lanzadores ----------
   api('win:restore', () => showWin())
+  api('mini:hide', () => hideMini())
   api('claude:login', () => openLogin())
   api('claude:open', (taskId) => {
     openClaude(findTask(taskId))
@@ -179,6 +185,48 @@ export function registerIpc(): void {
   api('chat:permit', (convId, id, choice) => chat.permit(convId, id, choice))
   api('chat:config', (convId, cfg) => chat.configure(convId, cfg))
   api('chat:reset', (convId) => chat.reset(convId))
+  api('chat:worktree', async (convId, op) => {
+    const c = getDb().chats[convId]
+    if (!c) throw new Error('Conversación no encontrada')
+    if (c.running) throw new Error('Espera a que termine la respuesta.')
+    if (op === 'create') {
+      if (c.worktree) throw new Error('Esta conversación ya trabaja en una copia aislada.')
+      // las sesiones de Claude van ligadas a la carpeta donde empezaron: cambiarla a medias las pierde
+      if (c.sessionId) throw new Error('Solo se puede aislar una conversación nueva (aún sin mensajes). Crea otra conversación con «＋».')
+      const task = findTask(c.taskId)
+      const dir = await repoDirOf(task)
+      if (!dir) throw new Error('La tarea no tiene un repositorio de Git.')
+      c.worktree = await iso.createWorktree(dir, convId, task.branch || task.title)
+      commit()
+      return `Copia aislada creada en la rama «${c.worktree.branch}».`
+    }
+    if (!c.worktree) throw new Error('Esta conversación no usa una copia aislada.')
+    if (op === 'merge') return iso.mergeWorktree(c.worktree)
+    await iso.removeWorktree(c.worktree)
+    const branch = c.worktree.branch
+    delete c.worktree
+    commit()
+    return `Copia eliminada. La rama «${branch}» se conserva en el repositorio.`
+  })
+  api('chat:worktreeInfo', async (convId) => {
+    const wt = getDb().chats[convId]?.worktree
+    return wt ? { ...wt, ...(await iso.worktreeInfo(wt)) } : null
+  })
+  api('chat:restore', async (convId, cpId) => {
+    const c = getDb().chats[convId]
+    if (!c) throw new Error('Conversación no encontrada')
+    if (c.running) throw new Error('Espera a que termine la respuesta (o cancélala) antes de volver atrás.')
+    const cp = c.checkpoints?.find((x) => x.id === cpId)
+    if (!cp) throw new Error('Ese punto de restauración ya no existe.')
+    const task = findTask(c.taskId)
+    const dir = c.worktree?.dir ?? (await checks.checkDir(task))
+    const msg = await iso.restoreCheckpoint(convId, c, dir, cp)
+    c.messages.push({ role: 'system', text: msg, ts: Date.now() })
+    commit()
+    return msg
+  })
+  api('check:list', (taskId) => checks.listChecks(findTask(taskId)))
+  api('check:run', (taskId, name, convId) => checks.runCheck(findTask(taskId), name, convId ? getDb().chats[convId]?.worktree?.dir : undefined))
   api('chat:close', (convId) => {
     const c = getDb().chats[convId]
     if (!c) return
@@ -289,6 +337,7 @@ export function registerIpc(): void {
     db.settings = { ...db.settings, ...s }
     commit()
     applyLoginItem()
+    applyMini()
   })
 
   // ---------- terminal ----------
@@ -311,6 +360,19 @@ export function registerIpc(): void {
   api('git:branches', (dir) => git.branches(dir))
   api('git:checkout', (dir, name, create) => git.checkout(dir, name, create))
   api('git:sync', (dir, op) => git.sync(dir, op))
+  api('update:state', () => updater.getState())
+  api('update:check', () => updater.check())
+  api('update:download', () => updater.download())
+  api('update:install', () => updater.install())
+  api('window:popout', (taskId, convId, atCursor) => {
+    if (!getDb().tasks.some((t) => t.id === taskId)) throw new Error('Tarea no encontrada')
+    openPopout(taskId, convId, !!atCursor)
+  })
+  api('skills:list', () => skills.listSkills())
+  api('skills:install', (n) => skills.installSkill(n))
+  api('skills:remove', (n) => skills.removeSkill(n))
+  api('window:skills', () => openSkills())
+  api('window:dock', (taskId, convId) => dockPopout(taskId, convId))
   api('url:open', async (url) => {
     if (!/^https?:\/\//i.test(url)) throw new Error('Solo se pueden abrir enlaces http(s).')
     await shell.openExternal(url)

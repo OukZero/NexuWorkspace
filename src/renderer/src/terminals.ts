@@ -83,6 +83,9 @@ export function useTerminals(): TermEntry[] {
   )
 }
 
+/** Fuente de código elegida en Apariencia (con respaldo). */
+const codeFont = (): string => getComputedStyle(document.documentElement).getPropertyValue('--font-code').trim() || "'Cascadia Mono', Consolas, 'Courier New', monospace"
+
 /** Colores de la terminal tomados del tema actual de la app. */
 function themeFromCss(): Record<string, string> {
   const css = getComputedStyle(document.documentElement)
@@ -103,7 +106,7 @@ export async function createTerminal(taskId: string, sessionId?: string): Promis
     creating.set(taskId, (creating.get(taskId) ?? 1) - 1)
   }
   const term = new Terminal({
-    fontFamily: "'Cascadia Mono', Consolas, 'Courier New', monospace",
+    fontFamily: codeFont(),
     fontSize: 13,
     cursorBlink: true,
     scrollback: 5000,
@@ -138,6 +141,7 @@ export function attachTerminal(e: TermEntry, host: HTMLElement): void {
     e.opened = true
   }
   e.term.options.theme = themeFromCss()
+  e.term.options.fontFamily = codeFont() // si se cambió la fuente de código
   requestAnimationFrame(() => {
     refit(e)
     e.term.refresh(0, e.term.rows - 1) // repinta el historial tras volver a montar el panel

@@ -12,6 +12,7 @@ import { showSplash } from './splash'
 import { checkDaily, checkIdle, checkReminder, generateRecurring } from './scheduler'
 import { restart as startTelegram, stop as stopTelegram } from './telegram'
 import { activeEntry } from './timer'
+import { initUpdater } from './updater'
 import { applyLoginItem, initTray } from './tray'
 import { createWindows, emit, showWin } from './windows'
 
@@ -67,6 +68,7 @@ if (!app.requestSingleInstanceLock()) {
     initTray()
     applyLoginItem()
     generateRecurring()
+    initUpdater()
     globalShortcut.register('Control+Alt+N', () => {
       showWin()
       emit('quickadd')

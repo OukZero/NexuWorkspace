@@ -23,3 +23,6 @@ Ideas y pendientes de Shutoki AI Workspace, sin orden estricto. Marca con `[x]` 
 - [ ] Revisión de código, notas de sesión y descripción del PR con IA: el prompt y el flujo están, falta ver la calidad de la salida con `claude` real y ajustar `shared/review.ts`.
 - [ ] Interfaz nueva (contexto, plantillas, panel de issue/PR en Git, notas en la ficha): compila y empaqueta, falta recorrerla a mano.
 - [ ] Enlace de PR para GitLab y Azure DevOps (sin issues): armado según su formato de URL, sin probar.
+- [ ] Puntos de restauración, copias aisladas (worktree), pruebas desde la tarea, perfiles, tareas tipo y disposiciones: la lógica de Git se probó con un repositorio de prueba (restaurar, deshacer el deshacer, worktree, fusionar); falta recorrer la interfaz a mano.
+- [ ] Aviso de límites y modelo más barato: depende de los datos que informa Claude Code; sin probar con una cuenta cerca del límite.
+- [ ] Ventana flotante (formato, ocultar) y ventanas sueltas de tareas: sin probar con la app abierta.

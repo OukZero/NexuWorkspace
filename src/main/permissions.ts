@@ -12,12 +12,12 @@ const CLAUDE_BLOCKED = ['git push --force', 'git push -f', 'git push --force-wit
 const COPILOT_BLOCKED = ['git push', 'git reset --hard', 'git clean', 'rm', 'rmdir', 'del', 'Remove-Item', 'format']
 
 /** Reglas de Claude Code: Bash(comando:*). Con la política «all» se permite todo Bash; el bloqueo fijo sigue ganando. */
-export const claudeAllow = (): string[] => [...(getDb().settings.commandPolicy === 'all' ? ['Bash'] : []), ...allowedCommands().map((c) => `Bash(${c}:*)`)]
+export const claudeAllow = (everything = false): string[] => [...(everything || getDb().settings.commandPolicy === 'all' ? ['Bash'] : []), ...allowedCommands().map((c) => `Bash(${c}:*)`)]
 export const claudeDeny = (): string[] => CLAUDE_BLOCKED.map((c) => `Bash(${c}:*)`)
 
 /** Reglas del CLI de Copilot: shell(...) (los comandos de varias palabras se comparan exactos; el resto por prefijo). */
 const shell = (c: string): string => (c.includes(' ') ? `shell(${c})` : `shell(${c}:*)`)
-export const copilotAllow = (): string[] => ['write', ...(getDb().settings.commandPolicy === 'all' ? ['shell'] : []), ...allowedCommands().map(shell)]
+export const copilotAllow = (everything = false): string[] => ['write', ...(everything || getDb().settings.commandPolicy === 'all' ? ['shell'] : []), ...allowedCommands().map(shell)]
 export const copilotDeny = (): string[] => COPILOT_BLOCKED.map(shell)
 
 // ---------- aprobación interactiva (Claude) ----------

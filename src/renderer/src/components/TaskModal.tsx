@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Priority, RecurrenceType, Status, Subtask, Task, UndoPayload } from '../../../shared/types'
+import { taskTemplatesOf } from '../../../shared/templates'
 import { useDB } from '../store'
 import { DOW, PRIO, STATUS, baseName } from '../utils'
 import { useUi } from '../ui'
@@ -46,6 +47,24 @@ export function TaskModal({ task: t }: { task: Partial<Task> }): ReactNode {
     ui.toast('Leyendo proyectos y tareas de Redmine… puede tardar un poco')
     const r = await ui.run('redmine:catalog')
     if (r) ui.toast(`Cargados ${r.projects} proyectos y ${r.issues} tareas`)
+  }
+
+  // tarea tipo: rellena lo que aún está vacío y suma sus subtareas
+  const applyTemplate = (id: string): void => {
+    const tt = taskTemplatesOf(db.settings).find((x) => x.id === id)
+    if (!tt) return
+    setTitle((v) => (v.trim() ? v : tt.titlePrefix))
+    setDescription((v) => (v.trim() ? v : tt.description))
+    setPriority(tt.priority)
+    if (tt.estimateMin) setEst(String(tt.estimateMin / 60))
+    setTags((v) => [...new Set([...v.split(/[,\s]+/).filter(Boolean), ...tt.tags])].join(', '))
+    setSubtasks((cur) => [
+      ...cur,
+      ...tt.subtasks
+        .map((x) => x.trim())
+        .filter((x) => x && !cur.some((c) => c.text === x))
+        .map((text) => ({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text, done: false }))
+    ])
   }
 
   const addSub = (): void => {
@@ -104,6 +123,16 @@ export function TaskModal({ task: t }: { task: Partial<Task> }): ReactNode {
   return (
     <div className="dialog">
       <h2>{isNew ? 'Nueva tarea' : 'Editar tarea'}</h2>
+      {isNew && taskTemplatesOf(db.settings).length > 0 && (
+        <div className="tt-pick" role="group" aria-label="Tarea tipo">
+          <span className="meta">Tipo:</span>
+          {taskTemplatesOf(db.settings).map((tt) => (
+            <button key={tt.id} type="button" className="btn sm" title={`Rellena título, prioridad, estimación y ${tt.subtasks.length} subtareas`} onClick={() => applyTemplate(tt.id)}>
+              {tt.icon} {tt.name}
+            </button>
+          ))}
+        </div>
+      )}
       <label>Título</label>
       <input value={title} autoFocus onChange={(e) => setTitle(e.target.value)} />
       <label>Descripción / contexto para Claude</label>

@@ -23,6 +23,8 @@ import {
   setFontScale,
   setMode,
   setName,
+  navOrder,
+  useAppearance,
   type Density,
   type ThemeMode
 } from '../theme'
@@ -30,26 +32,11 @@ import { msToday, useDB, useNow } from '../store'
 import { fmtH } from '../utils'
 import { useUi, type View } from '../ui'
 import { NotificationBell } from './NotificationBell'
-
-const NAV_GROUPS: Array<{ title: string; items: Array<[View, string, string]> }> = [
-  {
-    title: 'Trabajo',
-    items: [
-      ['today', '☀', 'Hoy'],
-      ['board', '▦', 'Tablero'],
-      ['groups', '🗂', 'Carpetas'],
-      ['history', '☰', 'Historial']
-    ]
-  },
-  {
-    title: 'Registro',
-    items: [
-      ['hours', '⏱', 'Horas'],
-      ['redmine', '✓', 'Redmine'],
-      ['usage', '◔', 'Consumo']
-    ]
-  }
-]
+import { UpdateChip } from './UpdateCard'
+import { showSettingsTab } from './SettingsView'
+import { NAV_GROUPS } from '../navDefs'
+import { setLayout, useLayout } from '../layout'
+import { Resizer } from './Resizer'
 
 const COLLAPSE_KEY = 'shutoki.sidebar'
 
@@ -304,6 +291,16 @@ function Profile(): ReactNode {
             >
               ⚙ Ajustes
             </button>
+            <button
+              className="btn sm"
+              onClick={() => {
+                setOpen(false)
+                showSettingsTab('apariencia')
+                ui.go('settings')
+              }}
+            >
+              🎨 Personalizar…
+            </button>
           </div>
         </Popover.Content>
       </Popover.Portal>
@@ -323,6 +320,8 @@ function Brand(): ReactNode {
 
 export function Sidebar(): ReactNode {
   const ui = useUi()
+  useAppearance() // repinta al reordenar u ocultar secciones
+  const lay = useLayout()
   // el menú se pliega a una barra de iconos y recuerda su estado
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -341,12 +340,13 @@ export function Sidebar(): ReactNode {
   }
   return (
     <aside className={`side ${collapsed ? 'collapsed' : ''}`}>
+      {!collapsed && <Resizer value={lay.sidebarW} onChange={(w) => setLayout({ sidebarW: w })} onReset={() => setLayout({ sidebarW: 200 })} label="Ancho del menú" />}
       <Brand />
       <nav id="nav">
         {NAV_GROUPS.map((g) => (
           <div key={g.title} className="nav-group">
             <div className="nav-title">{g.title}</div>
-            {g.items.map(([v, icon, label]) => (
+            {navOrder(g.items.map(([id, icon, label]) => ({ id, icon, label }))).map(({ id: v, icon, label }) => (
               <button key={v} className={ui.view === v ? 'active' : ''} title={label} onClick={() => ui.go(v)}>
                 <span className="ni">{icon}</span>
                 <span className="nl">{label}</span>
@@ -357,6 +357,7 @@ export function Sidebar(): ReactNode {
       </nav>
       <div className="side-foot">
         <DayBar />
+        <UpdateChip />
         <NotificationBell />
         <button className="side-search" title="Búsqueda global (Ctrl+K)" onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}>
           <span className="ni">⌕</span>

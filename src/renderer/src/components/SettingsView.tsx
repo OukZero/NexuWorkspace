@@ -1,17 +1,21 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import type { CommandPolicy, OpenMode, Settings, SummaryMode, TerminalKind, TerminalMode } from '../../../shared/types'
+import type { CommandPolicy, MiniFormat, OpenMode, Settings, SummaryMode, TerminalKind, TerminalMode } from '../../../shared/types'
 import { useDB } from '../store'
 import { useUi } from '../ui'
 import { Select } from './Select'
 import { TelegramSettings } from './TelegramSettings'
 import { TemplatesEditor } from './TemplatesEditor'
-import { ALL_CONTEXT, CONTEXT_HINT, CONTEXT_LABEL, DEFAULT_CONTEXT, templatesOf } from '../../../shared/templates'
+import { ProfilesEditor, TaskTemplatesEditor } from './ListEditors'
+import { UpdateCard } from './UpdateCard'
+import { AppearanceSettings } from './AppearanceSettings'
+import { ALL_CONTEXT, CONTEXT_HINT, CONTEXT_LABEL, DEFAULT_CONTEXT, profilesOf, taskTemplatesOf, templatesOf } from '../../../shared/templates'
 
-type Tab = 'general' | 'ia' | 'integraciones' | 'sistema' | 'datos'
+type Tab = 'general' | 'apariencia' | 'ia' | 'integraciones' | 'sistema' | 'datos'
 
 const TABS: { id: Tab; label: string; hint: string }[] = [
   { id: 'general', label: 'General', hint: 'Jornada, avisos y qué pasa al abrir una tarea' },
+  { id: 'apariencia', label: 'Apariencia', hint: 'Temas, colores, tipografía, menú y colores por proyecto' },
   { id: 'ia', label: 'Chat e IA', hint: 'Claude, Copilot, permisos de comandos y contexto' },
   { id: 'integraciones', label: 'Integraciones', hint: 'Redmine, git y Telegram' },
   { id: 'sistema', label: 'Sistema', hint: 'Terminal, bandeja e inicio con Windows' },
@@ -21,6 +25,11 @@ const TABS: { id: Tab; label: string; hint: string }[] = [
 // Fuera del componente: al cambiar de pantalla lo escrito sin guardar se conserva hasta guardar o descartar.
 let draft: Settings | null = null
 let lastTab: Tab = 'general'
+
+/** Deja elegida la pestaña que se mostrará al abrir Ajustes. */
+export function showSettingsTab(t: Tab): void {
+  lastTab = t
+}
 
 const wide = { gridColumn: 'span 2' } as const
 const checkRow = { display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text)' } as const
@@ -41,7 +50,9 @@ export function SettingsView(): ReactNode {
       return n
     })
 
-  const dirty = draft !== null && JSON.stringify(draft) !== JSON.stringify(db.settings)
+  // la apariencia se guarda sola y cambia en los datos aparte: no cuenta como cambio pendiente
+  const plain = (x: Settings): string => JSON.stringify({ ...x, appearance: undefined })
+  const dirty = draft !== null && plain(draft) !== plain(db.settings)
 
   const save = async (): Promise<void> => {
     await ui.run('settings:save', {
@@ -64,6 +75,7 @@ export function SettingsView(): ReactNode {
       autoSessionNotes: s.autoSessionNotes !== false,
       githubToken: (s.githubToken || '').trim(),
       baseBranch: (s.baseBranch || '').trim(),
+      autoUpdate: s.autoUpdate !== false,
       autocompactTokens: Number(s.autocompactTokens) >= 100_000 ? Math.min(1_000_000, Math.round(Number(s.autocompactTokens))) : 0,
       contextWarnTokens: Math.max(10_000, Number(s.contextWarnTokens) || 100_000),
       contextCriticalTokens: Math.max(20_000, Number(s.contextCriticalTokens) || 160_000),
@@ -71,6 +83,13 @@ export function SettingsView(): ReactNode {
       terminal: s.terminal,
       terminalMode: s.terminalMode,
       closeToTray: s.closeToTray,
+      miniEnabled: s.miniEnabled !== false,
+      limitAlerts: s.limitAlerts !== false,
+      cheapAt: s.cheapAt ?? 0,
+      profiles: s.profiles,
+      taskTemplates: s.taskTemplates,
+      miniFormat: s.miniFormat ?? 'full',
+      miniOnTop: s.miniOnTop !== false,
       launchAtLogin: s.launchAtLogin,
       dailyTime: s.dailyTime || '',
       redmineUrl: s.redmineUrl.trim(),
@@ -104,6 +123,8 @@ export function SettingsView(): ReactNode {
           <div className="meta" style={{ marginBottom: 14 }}>
             {cur.hint}
           </div>
+
+          {tab === 'apariencia' && <AppearanceSettings />}
 
           {tab === 'general' && (
             <div className="grid2">
@@ -206,6 +227,51 @@ export function SettingsView(): ReactNode {
                   Prompts que no tienes que volver a escribir. Los marcados con ★ salen como botones sobre el cuadro de texto; todos se buscan escribiendo # en el chat.
                 </div>
                 <TemplatesEditor value={templatesOf(s)} onChange={(t) => set('promptTemplates', t)} />
+              </div>
+
+              <h3 style={{ ...wide, margin: '12px 0 0' }}>Perfiles de agente</h3>
+              <div style={wide}>
+                <div className="meta" style={{ marginBottom: 8 }}>
+                  Modo, modelo, instrucciones y solo lectura guardados con nombre (por ejemplo «Revisor» o «Tests»). Se eligen en el chat.
+                </div>
+                <ProfilesEditor value={profilesOf(s)} onChange={(p) => set('profiles', p)} />
+              </div>
+
+              <h3 style={{ ...wide, margin: '12px 0 0' }}>Skills</h3>
+              <div style={wide}>
+                <div className="meta" style={{ marginBottom: 8 }}>
+                  Capacidades extra de Claude publicadas por Anthropic (documentos, diseño, pruebas…). Se administran en una ventana aparte.
+                </div>
+                <button className="btn" onClick={() => void window.api.call('window:skills')}>
+                  Abrir catálogo de skills
+                </button>
+              </div>
+
+              <h3 style={{ ...wide, margin: '12px 0 0' }}>Tareas tipo</h3>
+              <div style={wide}>
+                <div className="meta" style={{ marginBottom: 8 }}>
+                  Plantillas de tarea (bug, funcionalidad, hotfix…) que rellenan título, descripción, prioridad y subtareas al crear una tarea nueva.
+                </div>
+                <TaskTemplatesEditor value={taskTemplatesOf(s)} onChange={(t) => set('taskTemplates', t)} />
+              </div>
+
+              <h3 style={{ ...wide, margin: '12px 0 0' }}>Límites de la cuenta</h3>
+              <div style={wide}>
+                <label style={checkRow}>
+                  <input type="checkbox" style={{ width: 'auto' }} checked={s.limitAlerts !== false} onChange={(e) => set('limitAlerts', e.target.checked)} />
+                  Avisar al llegar al 80 % y al 95 % de la sesión de 5 horas o de la semana
+                </label>
+                <label style={{ ...checkRow, alignItems: 'center' }}>
+                  Usar el modelo más barato desde
+                  <select style={{ width: 'auto' }} value={s.cheapAt ?? 0} onChange={(e) => set('cheapAt', Number(e.target.value))}>
+                    <option value={0}>nunca (solo ofrecerlo en el chat)</option>
+                    <option value={70}>70 % de uso</option>
+                    <option value={80}>80 % de uso</option>
+                    <option value={90}>90 % de uso</option>
+                    <option value={95}>95 % de uso</option>
+                  </select>
+                </label>
+                <div className="meta">Con Claude el más barato es haiku; con Copilot, el modelo «mini» o «flash» de tu lista. Lo informa Claude Code, así que solo hay datos tras la primera respuesta.</div>
               </div>
 
               <h3 style={{ ...wide, margin: '12px 0 0' }}>Contexto automático</h3>
@@ -340,11 +406,36 @@ export function SettingsView(): ReactNode {
                   ]}
                 />
               </div>
+              <h3 style={{ ...wide, margin: '12px 0 0' }}>Actualizaciones</h3>
+              <div style={wide}>
+                <UpdateCard />
+                <label style={checkRow}>
+                  <input type="checkbox" style={{ width: 'auto' }} checked={s.autoUpdate !== false} onChange={(e) => set('autoUpdate', e.target.checked)} />
+                  Buscar y descargar versiones nuevas automáticamente (al abrir y cada 4 horas)
+                </label>
+              </div>
               <div style={wide}>
                 <label style={checkRow}>
                   <input type="checkbox" style={{ width: 'auto' }} checked={s.closeToTray} onChange={(e) => set('closeToTray', e.target.checked)} />
                   Al cerrar la ventana, seguir en la bandeja del sistema (el timer y los avisos siguen activos)
                 </label>
+                <label style={checkRow}>
+                  <input type="checkbox" style={{ width: 'auto' }} checked={s.miniEnabled !== false} onChange={(e) => set('miniEnabled', e.target.checked)} />
+                  Mostrar la ventana flotante al minimizar la principal
+                </label>
+                {s.miniEnabled !== false && (
+                  <div style={{ display: 'flex', gap: 14, alignItems: 'center', margin: '4px 0 8px 26px', flexWrap: 'wrap' }}>
+                    <select style={{ width: 'auto' }} value={s.miniFormat ?? 'full'} onChange={(e) => set('miniFormat', e.target.value as MiniFormat)}>
+                      <option value="full">Completa: conversación, timer y chat</option>
+                      <option value="compact">Compacta: conversación y timer</option>
+                      <option value="timer">Mínima: solo timer</option>
+                    </select>
+                    <label style={{ ...checkRow, margin: 0 }}>
+                      <input type="checkbox" style={{ width: 'auto' }} checked={s.miniOnTop !== false} onChange={(e) => set('miniOnTop', e.target.checked)} />
+                      Siempre por encima de otras ventanas
+                    </label>
+                  </div>
+                )}
                 <label style={checkRow}>
                   <input type="checkbox" style={{ width: 'auto' }} checked={s.launchAtLogin} onChange={(e) => set('launchAtLogin', e.target.checked)} />
                   Iniciar con Windows (arranca en la bandeja)
@@ -382,7 +473,7 @@ export function SettingsView(): ReactNode {
             </>
           )}
 
-          {tab !== 'datos' && (
+          {tab !== 'datos' && tab !== 'apariencia' && (
             <div className="settings-bar">
               <button className="btn primary" onClick={save} disabled={!dirty}>
                 Guardar

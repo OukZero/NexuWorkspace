@@ -3,6 +3,7 @@ import { contextAdvice, fmtTokens } from '../../../shared/advice'
 import type { ChatUsage, Settings } from '../../../shared/types'
 import { findTask, useDB } from '../store'
 import { useUi } from '../ui'
+import { Limit } from './Usage'
 
 const fmtUsd = (n: number): string => (n < 0.01 ? '< $0.01' : `$${n.toFixed(2)}`)
 
@@ -76,9 +77,15 @@ export function SessionPanel({ convId }: { convId: string }): ReactNode {
           Carpetas extra: {groups.map((g) => `${g.name} (${g.folders.length})`).join(', ')}
         </div>
       )}
+      <h4 style={{ margin: '14px 0 6px' }}>Uso de la cuenta</h4>
+      <Limit label="Sesión (ventana de 5 h)" w={db.limits?.fiveHour} />
+      <Limit label="Semana (7 días)" w={db.limits?.sevenDay} />
+      <div className="meta" style={{ marginTop: 4 }}>
+        {db.limits ? `Informado por Claude Code a las ${new Date(db.limits.updatedAt).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}; incluye todo el uso de tu cuenta.` : 'Aparece tras la primera respuesta de Claude. Copilot no informa estos límites.'}
+      </div>
       <div className="foot" style={{ marginTop: 10 }}>
         <button className={`btn sm ${advice.level === 'critical' || advice.level === 'warn' ? 'primary' : ''}`} disabled={!canCompact} onClick={compact}>
-          {chat?.running ? 'Claude está trabajando…' : 'Compactar conversación (/compact)'}
+          {chat?.running ? `${chat.provider === 'copilot' ? 'Copilot' : 'Claude'} está trabajando…` : 'Compactar conversación (/compact)'}
         </button>
       </div>
     </div>

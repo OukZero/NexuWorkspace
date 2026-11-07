@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
+import { taskColor, useAppearance } from '../theme'
 import type { Recurrence, Status, Task } from '../../../shared/types'
 import { applyFilters, useFilters } from '../filters'
 import { taskMs, useDB, useNow } from '../store'
@@ -13,6 +14,7 @@ const recText = (r: Recurrence): string =>
 
 export function Board(): ReactNode {
   const db = useDB()
+  useAppearance()
   const ui = useUi()
   const now = useNow(30000)
   const drag = useRef<string | null>(null)
@@ -39,6 +41,8 @@ export function Board(): ReactNode {
     <div
       key={t.id}
       className={`card p-${t.priority} ${dragging === t.id ? 'dragging' : ''}`}
+      data-pc={taskColor(t) ? '1' : undefined}
+      style={taskColor(t) ? ({ '--pc': taskColor(t) } as CSSProperties) : undefined}
       draggable
       onDragStart={() => {
         drag.current = t.id
