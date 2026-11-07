@@ -28,7 +28,7 @@ interface Result {
 }
 
 /** Ejecuta git sin shell (no hay inyección de comandos). Un código de salida fuera de `ok` es un error con el mensaje de git. */
-function git(cwd: string, args: string[], opts: { timeout?: number; ok?: number[] } = {}): Promise<Result> {
+export function git(cwd: string, args: string[], opts: { timeout?: number; ok?: number[] } = {}): Promise<Result> {
   const ok = opts.ok ?? [0]
   return new Promise((resolve, reject) => {
     execFile(
@@ -68,7 +68,7 @@ function allowed(dir: string): string {
 
 const toplevelCache = new Map<string, string>()
 /** Raíz del repositorio que contiene la carpeta (puede estar por encima de la carpeta de la tarea). */
-async function root(dir: string): Promise<string> {
+export async function root(dir: string): Promise<string> {
   const d = allowed(dir)
   const hit = toplevelCache.get(d)
   if (hit && fs.existsSync(hit)) return hit
@@ -321,4 +321,112 @@ export async function show(dir: string, hash: string): Promise<string> {
   const top = await root(dir)
   if (!/^[0-9a-f]{4,40}$/i.test(hash)) throw new Error('Commit no válido.')
   return clip((await git(top, ['show', '--no-color', '--stat', '--patch', '--format=%h %s%n%an · %ad%n', '--date=short', hash])).stdout, 400_000)
+}
+
+// ---------- ramas de trabajo, base y comparación (para PR, revisión y contexto) ----------
+
+const refExists = (top: string, ref: string): Promise<boolean> =>
+  git(top, ['show-ref', '--verify', '--quiet', ref]).then(
+    () => true,
+    () => false
+  )
+
+/** Rama actual, o '' si HEAD está suelto. */
+export async function currentBranch(dir: string): Promise<string> {
+  const top = await root(dir)
+  return (await git(top, ['symbolic-ref', '--short', 'HEAD'], { ok: [0, 128] }).catch(() => ({ stdout: '' }))).stdout.trim()
+}
+
+/** Rama base del repositorio (a la que irá el PR): la que declara el remoto, si no main/master/develop, si no la de Ajustes. */
+export async function baseBranch(dir: string): Promise<string> {
+  const top = await root(dir)
+  const head = (await git(top, ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], { ok: [0, 128] }).catch(() => ({ stdout: '' }))).stdout.trim()
+  if (head.startsWith('origin/')) return head.slice(7)
+  for (const b of ['main', 'master', 'develop', 'dev']) {
+    if ((await refExists(top, `refs/remotes/origin/${b}`)) || (await refExists(top, `refs/heads/${b}`))) return b
+  }
+  return getDb().settings.baseBranch?.trim() || 'main'
+}
+
+/** Referencia contra la que comparar la base: la remota si existe (más reciente), si no la local. */
+async function baseRef(top: string, base: string): Promise<string | null> {
+  if (await refExists(top, `refs/remotes/origin/${base}`)) return `origin/${base}`
+  if (await refExists(top, `refs/heads/${base}`)) return base
+  return null
+}
+
+/** Crea una rama (opcionalmente desde otro punto, p. ej. la base actualizada) y se cambia a ella; si ya existe, solo se cambia. */
+export async function createBranch(dir: string, name: string, from?: string): Promise<void> {
+  const top = await root(dir)
+  if (!name.trim() || name.startsWith('-')) throw new Error('Nombre de rama no válido.')
+  await git(top, ['check-ref-format', '--branch', name]).catch(() => {
+    throw new Error('Nombre de rama no válido: sin espacios, sin «..» ni caracteres especiales.')
+  })
+  if (await refExists(top, `refs/heads/${name}`)) return void (await git(top, ['switch', name]))
+  if (from) {
+    await git(top, ['fetch', 'origin', from], { timeout: 60000 }).catch(() => undefined) // sin red: se parte de lo que haya
+    const ref = await baseRef(top, from)
+    if (ref) return void (await git(top, ['switch', '-c', name, '--no-track', ref]))
+  }
+  await git(top, ['switch', '-c', name])
+}
+
+/** Commits que la rama aporta frente a la base (más recientes primero). */
+export async function branchCommits(dir: string, limit = 30): Promise<GitCommit[]> {
+  const top = await root(dir)
+  const base = await baseRef(top, await baseBranch(dir))
+  const range = base ? [`${base}..HEAD`] : ['-n', '10']
+  const r = await git(top, ['log', ...range, '-n', String(limit), '--no-color', '--pretty=format:%H%x1f%h%x1f%s%x1f%an%x1f%ct'], { ok: [0, 128] }).catch(() => ({ stdout: '' }))
+  return r.stdout
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => {
+      const [hash, short, subject, author, ct] = l.split('\x1f')
+      return { hash, short, subject, author, date: Number(ct) * 1000 }
+    })
+}
+
+/** Diff y lista de archivos de lo que la rama aporta frente a la base (lo que verá quien revise el PR). */
+export async function diffAgainstBase(dir: string, maxChars = 60000): Promise<{ base: string; stat: string; patch: string; empty: boolean }> {
+  const top = await root(dir)
+  const base = await baseBranch(dir)
+  const ref = await baseRef(top, base)
+  if (!ref) return { base, stat: '', patch: '', empty: true }
+  // tres puntos: desde el ancestro común, para no mezclar lo que la base avanzó sin que la rama lo tenga
+  const range = `${ref}...HEAD`
+  const stat = (await git(top, ['diff', '--stat', '--no-color', range], { ok: [0, 1] }).catch(() => ({ stdout: '' }))).stdout.trim()
+  const patch = (await git(top, ['diff', '--no-color', '--no-ext-diff', '-U4', range], { ok: [0, 1] }).catch(() => ({ stdout: '' }))).stdout
+  return { base, stat, patch: clip(patch, maxChars), empty: !patch.trim() }
+}
+
+/** Cambios sin confirmar (preparados y no preparados) como un solo diff, más los archivos nuevos. */
+export async function diffPending(dir: string, maxChars = 40000): Promise<{ stat: string; patch: string; empty: boolean }> {
+  const top = await root(dir)
+  const hasHead = await git(top, ['rev-parse', '--verify', '-q', 'HEAD'], { ok: [0, 1] }).then((r) => !!r.stdout.trim(), () => false)
+  let stat = ''
+  let patch = ''
+  if (hasHead) {
+    stat = (await git(top, ['diff', 'HEAD', '--stat', '--no-color'], { ok: [0, 1] }).catch(() => ({ stdout: '' }))).stdout.trim()
+    patch = (await git(top, ['diff', 'HEAD', '--no-color', '--no-ext-diff', '-U4'], { ok: [0, 1] }).catch(() => ({ stdout: '' }))).stdout
+  }
+  const st = await status(dir)
+  for (const f of st.files.filter((x) => x.untracked).slice(0, 12)) {
+    stat += `${stat ? '\n' : ''} ${f.path} (archivo nuevo)`
+    const full = path.resolve(top, f.path)
+    if (!full.startsWith(top) || !fs.existsSync(full) || fs.statSync(full).isDirectory() || fs.statSync(full).size > 200_000) continue
+    const buf = fs.readFileSync(full)
+    if (buf.subarray(0, 4000).includes(0)) continue
+    patch += `\n\n--- archivo nuevo: ${f.path}\n` + buf.toString('utf8').split('\n').slice(0, 120).join('\n')
+  }
+  return { stat, patch: clip(patch, maxChars), empty: !patch.trim() && !stat }
+}
+
+/**
+ * URL del remoto «origin» ('' si no hay). `get-url` aplica las reglas insteadOf (p. ej. https→ssh); con `raw` se devuelve
+ * la URL tal como está en la configuración, que suele ser la dirección web del repositorio.
+ */
+export async function remoteUrl(dir: string, raw = false): Promise<string> {
+  const top = await root(dir)
+  const args = raw ? ['config', '--get', 'remote.origin.url'] : ['remote', 'get-url', 'origin']
+  return (await git(top, args, { ok: [0, 1, 2, 128] }).catch(() => ({ stdout: '' }))).stdout.trim()
 }

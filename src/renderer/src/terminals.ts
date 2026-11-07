@@ -48,6 +48,17 @@ function wire(): void {
   })
 }
 
+/** Últimas líneas de la terminal de la tarea (la visible o, si no, la primera), para anexarlas como contexto. */
+export function readTerminal(taskId: string, maxLines = 60): string {
+  const id = activeByTask.get(taskId)
+  const e = (id ? entries.get(id) : undefined) ?? [...entries.values()].find((x) => x.taskId === taskId)
+  if (!e) return ''
+  const buf = e.term.buffer.active
+  const lines: string[] = []
+  for (let i = Math.max(0, buf.length - 400); i < buf.length; i++) lines.push(buf.getLine(i)?.translateToString(true) ?? '')
+  return lines.join('\n').trimEnd().split('\n').slice(-maxLines).join('\n')
+}
+
 export const getActive = (taskId: string): string | undefined => activeByTask.get(taskId)
 
 export function setActive(taskId: string, id: string): void {

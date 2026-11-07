@@ -5,6 +5,10 @@ import type { DB, IpcChannels, Task } from '../shared/types'
 import * as attachments from './attachments'
 import * as chat from './chat'
 import * as git from './git'
+import * as forge from './forge'
+import { buildContext, expandVars, taskById, withContext } from './context'
+import { startReview } from './review'
+import * as sessions from './sessions'
 import { backupsDir, commit, getDb, replaceDb, uid } from './db'
 import { exportExcel } from './excel'
 import { gitCommits, openClaude, openLogin, openTerminalHere, openVSCode, renderPrompt } from './launch'
@@ -151,10 +155,26 @@ export function registerIpc(): void {
   api('attach:pick', (convId) => attachments.pick(convId))
   api('attach:save', (convId, name, data) => attachments.saveBytes(convId, name, data))
   api('attach:preview', (p) => attachments.preview(p))
-  api('chat:send', (convId, text, files) => {
-    chat.send(convId, text, files)
+  api('chat:send', async (convId, rawText, files, ctx): Promise<true> => {
+    const c = getDb().chats[convId]
+    // los comandos / (p. ej. /compact) viajan sin contexto; las variables de plantilla se rellenan con los datos de la tarea
+    if (c && !rawText.trimStart().startsWith('/')) {
+      const task = findTask(c.taskId)
+      const text = await expandVars(task, rawText)
+      const preview = ctx?.kinds.length ? await buildContext(task, ctx) : null
+      if (preview?.text || text !== rawText) {
+        chat.send(convId, text, files, { model: preview ? withContext(preview, text) : text, labels: preview?.labels ?? [] })
+        return true
+      }
+    }
+    chat.send(convId, rawText, files)
     return true // aceptado (el renderer restaura el input si la llamada falla)
   })
+  api('chat:context', async (taskId, kinds) => buildContext(taskById(taskId), { kinds }))
+  api('review:start', (taskId, dir) => startReview(taskId, dir))
+  api('session:note', (convId) => sessions.createNote(convId))
+  api('session:delete', (taskId, noteId) => sessions.deleteNote(taskId, noteId))
+  api('session:toSubtask', (taskId, text) => sessions.pendingToSubtask(taskId, text))
   api('chat:cancel', (convId) => chat.cancel(convId))
   api('chat:permit', (convId, id, choice) => chat.permit(convId, id, choice))
   api('chat:config', (convId, cfg) => chat.configure(convId, cfg))
@@ -164,6 +184,8 @@ export function registerIpc(): void {
     if (!c) return
     c.closed = true
     commit()
+    // nota de sesión automática (en segundo plano: cerrar la pestaña no espera a la IA)
+    if (getDb().settings.autoSessionNotes !== false && !c.running && c.kind !== 'design' && sessions.hasNewWork(c)) void sessions.createNote(convId).catch(() => undefined)
   })
   api('chat:reopen', (convId) => {
     const c = getDb().chats[convId]
@@ -289,6 +311,18 @@ export function registerIpc(): void {
   api('git:branches', (dir) => git.branches(dir))
   api('git:checkout', (dir, name, create) => git.checkout(dir, name, create))
   api('git:sync', (dir, op) => git.sync(dir, op))
+  api('url:open', async (url) => {
+    if (!/^https?:\/\//i.test(url)) throw new Error('Solo se pueden abrir enlaces http(s).')
+    await shell.openExternal(url)
+  })
+  api('git:remote', (dir) => forge.remoteInfo(dir))
+  api('git:push', (dir, taskId) => forge.pushWithPr(dir, taskId))
+  api('git:prText', (dir, taskId) => forge.prText(dir, taskId))
+  api('issue:list', (dir) => forge.listIssues(dir))
+  api('issue:create', (dir, title, body, labels) => forge.createIssue(dir, title, body, labels))
+  api('issue:branch', (taskId, dir, n) => forge.branchFromIssue(taskId, dir, n))
+  api('issue:link', (taskId, issue) => forge.linkIssue(taskId, issue))
+  api('task:branch', (taskId, dir, name) => forge.branchForTask(taskId, dir, name))
   api('git:log', (dir, n) => git.log(dir, n))
   api('git:show', (dir, hash) => git.show(dir, hash))
 

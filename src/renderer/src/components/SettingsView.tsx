@@ -5,6 +5,8 @@ import { useDB } from '../store'
 import { useUi } from '../ui'
 import { Select } from './Select'
 import { TelegramSettings } from './TelegramSettings'
+import { TemplatesEditor } from './TemplatesEditor'
+import { ALL_CONTEXT, CONTEXT_HINT, CONTEXT_LABEL, DEFAULT_CONTEXT, templatesOf } from '../../../shared/templates'
 
 type Tab = 'general' | 'ia' | 'integraciones' | 'sistema' | 'datos'
 
@@ -56,6 +58,12 @@ export function SettingsView(): ReactNode {
       commandPolicy: s.commandPolicy,
       gitAuthor: (s.gitAuthor || '').trim(),
       promptTemplate: s.promptTemplate,
+      promptTemplates: s.promptTemplates,
+      defaultContext: s.defaultContext ?? DEFAULT_CONTEXT,
+      reviewInstructions: (s.reviewInstructions || '').trim(),
+      autoSessionNotes: s.autoSessionNotes !== false,
+      githubToken: (s.githubToken || '').trim(),
+      baseBranch: (s.baseBranch || '').trim(),
       autocompactTokens: Number(s.autocompactTokens) >= 100_000 ? Math.min(1_000_000, Math.round(Number(s.autocompactTokens))) : 0,
       contextWarnTokens: Math.max(10_000, Number(s.contextWarnTokens) || 100_000),
       contextCriticalTokens: Math.max(20_000, Number(s.contextCriticalTokens) || 160_000),
@@ -192,6 +200,48 @@ export function SettingsView(): ReactNode {
                 <div className="meta">Se permite el comando y sus argumentos. Siempre se bloquean push forzado, reset --hard, borrados y similares.</div>
               </div>
 
+              <h3 style={{ ...wide, margin: '12px 0 0' }}>Plantillas de prompts</h3>
+              <div style={wide}>
+                <div className="meta" style={{ marginBottom: 8 }}>
+                  Prompts que no tienes que volver a escribir. Los marcados con ★ salen como botones sobre el cuadro de texto; todos se buscan escribiendo # en el chat.
+                </div>
+                <TemplatesEditor value={templatesOf(s)} onChange={(t) => set('promptTemplates', t)} />
+              </div>
+
+              <h3 style={{ ...wide, margin: '12px 0 0' }}>Contexto automático</h3>
+              <div style={wide}>
+                <label>Se anexa al primer mensaje de cada conversación nueva (después se elige mensaje a mensaje)</label>
+                <div className="ctxbar" style={{ padding: 0 }}>
+                  {ALL_CONTEXT.map((k) => {
+                    const on = (s.defaultContext ?? DEFAULT_CONTEXT).includes(k)
+                    return (
+                      <button key={k} type="button" className={`ctx-chip ${on ? 'on' : ''}`} title={CONTEXT_HINT[k]} aria-pressed={on} onClick={() => set('defaultContext', on ? (s.defaultContext ?? DEFAULT_CONTEXT).filter((x) => x !== k) : [...(s.defaultContext ?? DEFAULT_CONTEXT), k])}>
+                        {CONTEXT_LABEL[k]}
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="meta">Los diffs pesan mucho (se ven los caracteres en «Ver lo que se envía»): conviene dejarlos para cuando los necesites.</div>
+              </div>
+              <div style={wide}>
+                <label style={checkRow}>
+                  <input type="checkbox" style={{ width: 'auto' }} checked={s.autoSessionNotes !== false} onChange={(e) => set('autoSessionNotes', e.target.checked)} />
+                  Guardar una nota de sesión sola al cerrar una conversación (usa tu Claude Code; queda en la tarea y se anexa al retomarla)
+                </label>
+              </div>
+
+              <h3 style={{ ...wide, margin: '12px 0 0' }}>Revisión de código</h3>
+              <div style={wide}>
+                <label>Indicaciones propias de tu equipo (se agregan a la revisión estándar)</label>
+                <textarea
+                  style={{ minHeight: 90 }}
+                  value={s.reviewInstructions || ''}
+                  placeholder={'Ej.: Usamos Clean Architecture; los servicios no acceden a la base de datos directamente.\nTodo endpoint nuevo necesita test de integración.\nNo se aceptan console.log ni TODO sin issue.'}
+                  onChange={(e) => set('reviewInstructions', e.target.value)}
+                />
+                <div className="meta">La revisión es de solo lectura: lee el diff contra la rama base, simula escenarios y entrega hallazgos con gravedad y un veredicto.</div>
+              </div>
+
               <h3 style={{ ...wide, margin: '12px 0 0' }}>Contexto de los chats</h3>
               <div style={wide}>
                 <label>Compactación automática (miles de tokens; 0 = la decide Claude Code; mínimo 100)</label>
@@ -239,10 +289,23 @@ export function SettingsView(): ReactNode {
                   />
                 </div>
               </div>
-              <h3>Git</h3>
-              <div>
-                <label>Autor git para commits del día (vacío = todos)</label>
-                <input value={s.gitAuthor || ''} placeholder="tu@correo.com" onChange={(e) => set('gitAuthor', e.target.value)} />
+              <h3>Git y GitHub</h3>
+              <div className="grid2">
+                <div>
+                  <label>Autor git para commits del día (vacío = todos)</label>
+                  <input value={s.gitAuthor || ''} placeholder="tu@correo.com" onChange={(e) => set('gitAuthor', e.target.value)} />
+                </div>
+                <div>
+                  <label>Rama base de los PR si no se detecta (vacío = main)</label>
+                  <input value={s.baseBranch || ''} placeholder="main" onChange={(e) => set('baseBranch', e.target.value)} />
+                </div>
+                <div style={wide}>
+                  <label>Token de GitHub para issues y PR (opcional)</label>
+                  <input type="password" autoComplete="off" value={s.githubToken || ''} placeholder="Vacío = usar la sesión de Git (Administrador de credenciales)" onChange={(e) => set('githubToken', e.target.value)} />
+                  <div className="meta">
+                    Crear y listar issues y comprobar si un PR ya existe usan la API de GitHub. Si ya haces push desde esta máquina no necesitas token. Si lo pones, que tenga permiso sobre Issues y Pull requests (o «repo»). Se guarda solo en este equipo.
+                  </div>
+                </div>
               </div>
               <div className="meta" style={{ marginTop: 14 }}>
                 Redmine y git se guardan con el botón «Guardar» de abajo; Telegram tiene el suyo.

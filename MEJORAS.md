@@ -19,3 +19,7 @@ Ideas y pendientes de Shutoki AI Workspace, sin orden estricto. Marca con `[x]` 
 
 - [ ] Imputación en Redmine contra la instancia real (catálogo, envío, tope diario).
 - [ ] Copilot: eventos de herramientas y sintaxis de permisos `shell(...)`.
+- [ ] Issues de GitHub (listar, crear, rama desde la issue) y detección de PR ya abierto: solo probado hasta la llamada a la API, falta contra un repositorio real con token.
+- [ ] Revisión de código, notas de sesión y descripción del PR con IA: el prompt y el flujo están, falta ver la calidad de la salida con `claude` real y ajustar `shared/review.ts`.
+- [ ] Interfaz nueva (contexto, plantillas, panel de issue/PR en Git, notas en la ficha): compila y empaqueta, falta recorrerla a mano.
+- [ ] Enlace de PR para GitLab y Azure DevOps (sin issues): armado según su formato de URL, sin probar.

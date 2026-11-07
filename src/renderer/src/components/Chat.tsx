@@ -1,11 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ClipboardEvent, DragEvent, KeyboardEvent, ReactNode } from 'react'
-import type { Attachment, Provider } from '../../../shared/types'
+import type { Attachment, ContextKind, Provider, PromptTemplate } from '../../../shared/types'
+import { DEFAULT_CONTEXT, templatesOf } from '../../../shared/templates'
 import { workFolder } from '../../../shared/util'
 import { convLabel } from '../conversations'
 import { findTask, useDB } from '../store'
+import { readTerminal } from '../terminals'
 import { baseName, hhmm } from '../utils'
 import { useUi } from '../ui'
+import { ContextBar, TemplateMenu } from './ChatExtras'
 import { IconSend, IconStop } from './icons'
 import { Markdown } from './Markdown'
 import { Menu } from './Menu'
@@ -13,15 +16,10 @@ import { Select, type SelectOption } from './Select'
 import { ContextMeter } from './SessionPanel'
 import { SidePanel } from './SidePanel'
 
-const SUGGESTIONS: Array<[string, string]> = [
-  ['Resume lo hecho', 'Resume en pocas líneas qué has hecho hasta ahora y qué falta.'],
-  ['Revisa los cambios', 'Revisa los cambios que hiciste y busca posibles errores.'],
-  ['Escribe tests', 'Escribe tests para los cambios realizados.'],
-  ['Explica el código', 'Explícame cómo funciona el código relevante para esta tarea.'],
-  ['Siguiente paso', '¿Cuál es el siguiente paso recomendado?'],
-  ['/compact', '/compact'],
-  ['/context', '/context']
-]
+// atajos fijos que no son plantillas: comandos / de Claude Code
+const COMMAND_CHIPS = ['/compact', '/context']
+
+const norm = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
 // comandos / de Claude Code; la lista real llega en cada respuesta (db.commands)
 const DEFAULT_COMMANDS = ['compact', 'context', 'autocompact', 'clear', 'init', 'model', 'code-review', 'security-review']
@@ -83,6 +81,10 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
   const [live, setLive] = useState('')
   const [summarizing, setSummarizing] = useState(false)
   const [files, setFiles] = useState<Attachment[]>([])
+  const [ctxKinds, setCtxKinds] = useState<ContextKind[]>([])
+  const [terminalText, setTerminalText] = useState('')
+  const [noting, setNoting] = useState(false)
+  const [reviewing, setReviewing] = useState(false)
   const [dragging, setDragging] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   const area = useRef<HTMLTextAreaElement>(null)
@@ -93,6 +95,10 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
     let alive = true
     area.current?.focus()
     const taskHasChat = Object.values(db.chats).some((c) => c.taskId === taskId && c.messages.length > 0)
+    // conversación nueva: se anexa el contexto por defecto (si ya se precarga el prompt de la tarea, no se repite la tarea)
+    const fresh = !db.chats[convId]?.messages.length
+    const base = fresh ? (db.settings.defaultContext ?? DEFAULT_CONTEXT) : []
+    setCtxKinds(taskHasChat || !taskId ? base : base.filter((k) => k !== 'task'))
     if (!taskHasChat && taskId) {
       void ui.run('task:prompt', taskId).then((p) => {
         if (alive && p) setInput((cur) => cur || p)
@@ -103,6 +109,14 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [convId])
+
+  // salida reciente de la terminal de la tarea (para el contexto); se refresca de vez en cuando
+  useEffect(() => {
+    const read = (): void => setTerminalText(readTerminal(taskId))
+    read()
+    const id = setInterval(read, 4000)
+    return () => clearInterval(id)
+  }, [taskId])
 
   // texto en vivo mientras Claude escribe; al llegar el mensaje completo se descarta
   useEffect(() => window.api.onDelta((d) => d.convId === convId && setLive((l) => l + d.text)), [convId])
@@ -120,20 +134,44 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
     el.style.height = Math.min(el.scrollHeight + 2, 160) + 'px'
   }, [input])
 
-  const send = async (): Promise<void> => {
-    const text = input.trim()
+  const send = async (override?: { text: string; kinds: ContextKind[] }): Promise<void> => {
+    const text = (override?.text ?? input).trim()
     if (!text && !files.length) return
     const sent = files
+    const kinds = text.startsWith('/') ? [] : (override?.kinds ?? ctxKinds)
     setInput('')
     setFiles([])
+    setCtxKinds([]) // el contexto vale para un mensaje; la sesión de Claude ya lo recuerda
     setLive('')
     stick.current = true
-    const r = await ui.run('chat:send', convId, text, sent)
+    const ctx = kinds.length ? { kinds, ...(kinds.includes('terminal') ? { terminal: readTerminal(taskId) } : {}) } : undefined
+    const r = await ui.run('chat:send', convId, text, sent, ctx)
     if (r === undefined) {
-      // falló: no perder lo escrito ni los adjuntos
+      // falló: no perder lo escrito, los adjuntos ni el contexto elegido
       setInput(text)
       setFiles(sent)
+      setCtxKinds(kinds)
     }
+  }
+
+  // ---------- plantillas de prompts ----------
+  const templates = templatesOf(db.settings)
+  const hashQuery = /^#\S*$/.test(input) ? norm(input.slice(1)) : null
+  const tplMatches = hashQuery === null ? [] : templates.filter((t) => norm(t.name).includes(hashQuery)).slice(0, 8)
+  const pickTemplate = (t: PromptTemplate): void => {
+    const kinds = [...new Set([...ctxKinds, ...(t.ctx ?? [])])]
+    const base = hashQuery !== null ? '' : input.trim()
+    const text = base ? base + '\n\n' + t.text : t.text
+    if (t.autoSend && !running) return void send({ text, kinds })
+    setCtxKinds(kinds)
+    setInput(text)
+    area.current?.focus()
+    // si la plantilla tiene un [campo], se deja seleccionado para escribir encima
+    requestAnimationFrame(() => {
+      const el = area.current
+      const m = /\[[^\]]+\]/.exec(text)
+      if (el && m) el.setSelectionRange(m.index, m.index + m[0].length)
+    })
   }
 
   const addBlobs = async (blobs: File[]): Promise<void> => {
@@ -181,10 +219,30 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
       pickCommand(matches[0])
       return
     }
+    if (e.key === 'Tab' && tplMatches.length && !e.shiftKey) {
+      e.preventDefault()
+      pickTemplate(tplMatches[0])
+      return
+    }
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault()
       if (!running) void send()
     }
+  }
+
+  const saveNote = async (): Promise<void> => {
+    setNoting(true)
+    const n = await ui.run('session:note', convId)
+    setNoting(false)
+    if (n === undefined) return
+    ui.toast(n ? 'Nota de sesión guardada en la tarea' : 'No hay nada nuevo que registrar desde la última nota')
+  }
+
+  const review = async (): Promise<void> => {
+    setReviewing(true)
+    const id = await ui.run('review:start', taskId)
+    setReviewing(false)
+    if (id) ui.openChat(taskId, id)
   }
 
   const summarize = async (): Promise<void> => {
@@ -268,6 +326,8 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
           title="Más acciones"
           items={[
             { label: 'Editar tarea', icon: '✎', onSelect: () => task && ui.editTask(task) },
+            { label: 'Revisar código de la rama', icon: '🔍', hint: 'Revisión con IA y simulación, solo lectura', disabled: reviewing, onSelect: () => void review() },
+            { label: 'Guardar nota de sesión', icon: '🗒', hint: 'Lo hecho, decidido y pendiente, para retomar después', disabled: noting || running, onSelect: () => void saveNote() },
             { label: 'Abrir en Claude Desktop', icon: '🖥', hint: 'Sesión nueva con el prompt de la tarea', onSelect: () => void desktop() },
             { label: 'Continuar en terminal', icon: '⏎', hint: 'Retoma esta conversación con claude --resume', onSelect: () => void continueInTerminal() },
             { kind: 'sep' },
@@ -292,6 +352,11 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
               <div key={i} className={`msg ${m.role}`}>
                 {m.attachments?.length ? <AttachmentList items={m.attachments} /> : null}
                 {m.role === 'user' ? <span style={{ whiteSpace: 'pre-wrap' }}>{m.text}</span> : <Markdown text={m.text} />}
+                {m.context?.length ? (
+                  <div className="msg-ctx" title="Datos que se anexaron automáticamente a este mensaje">
+                    📎 {m.context.join(' · ')}
+                  </div>
+                ) : null}
                 {m.action === 'login' && (
                   <div className="foot" style={{ marginTop: 8 }}>
                     <button className="btn sm primary" onClick={login}>
@@ -343,18 +408,37 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
             )}
           </div>
           <div className={`suggest ${running ? 'hidden' : ''}`}>
-            {SUGGESTIONS.map(([label, text]) => (
+            {templates
+              .filter((t) => t.pinned)
+              .map((t) => (
+                <button key={t.id} title={t.text} onClick={() => pickTemplate(t)}>
+                  {t.name}
+                </button>
+              ))}
+            {COMMAND_CHIPS.map((c) => (
               <button
-                key={label}
+                key={c}
                 onClick={() => {
-                  setInput((cur) => (cur.trim() ? cur.trim() + '\n' : '') + text)
+                  setInput(c)
                   area.current?.focus()
                 }}
               >
-                {label}
+                {c}
               </button>
             ))}
+            <TemplateMenu templates={templates} onPick={pickTemplate} />
           </div>
+          {tplMatches.length > 0 && (
+            <div className="suggest slash tpl">
+              {tplMatches.map((t) => (
+                <button key={t.id} onClick={() => pickTemplate(t)} title={t.text}>
+                  #{t.name}
+                </button>
+              ))}
+              <span className="meta">Tab elige la primera</span>
+            </div>
+          )}
+          {chat?.kind !== 'design' && <ContextBar taskId={taskId} kinds={ctxKinds} onChange={setCtxKinds} terminalText={terminalText} />}
           {matches.length > 0 && (
             <div className="suggest slash">
               {matches.map((c) => (
@@ -386,7 +470,7 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
               ref={area}
               rows={1}
               value={input}
-              placeholder="Escribe a Claude… (pega o arrastra fotos y archivos)"
+              placeholder="Escribe a Claude… (# plantillas, / comandos; pega o arrastra fotos y archivos)"
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKey}
               onPaste={onPaste}
