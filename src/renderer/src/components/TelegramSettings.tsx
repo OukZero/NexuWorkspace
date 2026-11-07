@@ -4,16 +4,26 @@ import type { TelegramStatus } from '../../../shared/types'
 import { useDB } from '../store'
 import { useUi } from '../ui'
 
+// Borrador fuera del componente: sobrevive a cambiar de pantalla hasta que se guarda.
+let draft: { token: string; on: boolean; details: boolean; code: string } | null = null
+
 /** Ajustes del bot de Telegram: token, vinculación del chat y avisos con o sin detalle. */
 export function TelegramSettings(): ReactNode {
   const db = useDB()
   const ui = useUi()
   const s = db.settings
-  const [token, setToken] = useState(s.telegramToken ?? '')
-  const [on, setOn] = useState(!!s.telegramOn)
-  const [details, setDetails] = useState(s.telegramDetails !== false)
+  const [token, setTokenS] = useState(draft?.token ?? s.telegramToken ?? '')
+  const [on, setOnS] = useState(draft?.on ?? !!s.telegramOn)
+  const [details, setDetailsS] = useState(draft?.details ?? s.telegramDetails !== false)
   const [st, setSt] = useState<TelegramStatus | null>(null)
-  const [code, setCode] = useState('')
+  const [code, setCodeS] = useState(draft?.code ?? '')
+  const keep = (p: Partial<NonNullable<typeof draft>>): void => {
+    draft = { token, on, details, code, ...(draft ?? {}), ...p }
+  }
+  const setToken = (v: string): void => (keep({ token: v }), setTokenS(v))
+  const setOn = (v: boolean): void => (keep({ on: v }), setOnS(v))
+  const setDetails = (v: boolean): void => (keep({ details: v }), setDetailsS(v))
+  const setCode = (v: string): void => (keep({ code: v }), setCodeS(v))
 
   useEffect(() => {
     let live = true
@@ -33,6 +43,7 @@ export function TelegramSettings(): ReactNode {
   const save = async (): Promise<void> => {
     const r = await ui.run('telegram:save', { token, on, details })
     if (r) {
+      draft = null
       setSt(r)
       ui.toast('Telegram guardado')
     }

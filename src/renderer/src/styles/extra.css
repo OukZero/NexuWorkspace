@@ -658,3 +658,14 @@ tbody tr:first-child td { border-top: 0; }
 /* marca: nombre y subtítulo */
 .brand-text { display: flex; flex-direction: column; line-height: 1.1; }
 .brand-text small { font-size: 9px; font-weight: 600; letter-spacing: 1.6px; text-transform: uppercase; color: var(--muted); }
+
+/* Ajustes con subpantallas */
+.settings { display: flex; gap: 22px; align-items: flex-start; max-width: 980px; }
+.settings-nav { display: flex; flex-direction: column; gap: 2px; width: 160px; flex-shrink: 0; position: sticky; top: 0; }
+.settings-nav button { background: none; border: 0; text-align: left; padding: 8px 12px; border-radius: 8px; color: var(--muted); font-size: 13px; }
+.settings-nav button:hover { color: var(--text); background: var(--panel2); }
+.settings-nav button.on { color: var(--text); background: var(--panel2); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent, #8b5cf6); }
+.settings-body { flex: 1; min-width: 0; max-width: 700px; }
+.settings-title { font-size: 16px; margin: 0 0 2px; }
+.settings-bar { display: flex; gap: 8px; align-items: center; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--border, rgba(255,255,255,.08)); }
+.settings-bar .btn:disabled { opacity: .5; cursor: default; }
