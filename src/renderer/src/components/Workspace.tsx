@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import type { PointerEvent as RPointerEvent, ReactNode } from 'react'
 import { closedConvs, convLabel, openConvs } from '../conversations'
 import { toggleFullscreen, useFullscreen } from '../fullscreen'
+import { useSpotify } from '../spotify'
 import { activeEntry, findTask, useDB } from '../store'
 import { getFocus, setFocusMode, useFocusMode } from '../theme'
 import { workFolder } from '../../../shared/util'
@@ -15,6 +16,7 @@ import { FilesView } from './FilesView'
 import { GitView } from './GitView'
 import { G, type GlyphName } from './glyphs'
 import { Hours } from './Hours'
+import { Menu, type MenuItem } from './Menu'
 import { MusicView } from './MusicView'
 import { NotesView } from './NotesView'
 import { WebPane } from './WebPane'
@@ -43,6 +45,8 @@ const KIND_HINT: Record<PaneKind, string> = {
   web: 'Cualquier sitio: Outlook, Teams, GitHub, Jira…'
 }
 
+const LAYOUT_SHORT: Record<string, string> = { solo: '1', cols2: '2', rows2: '2 filas', cols3: '3', main2: '1 + 2', grid4: '4' }
+
 /** Dibujito de cada distribución (botón del selector). */
 function LayoutGlyph({ id }: { id: string }): ReactNode {
   const r = (x: number, y: number, w: number, h: number): ReactNode => <rect key={`${x}${y}${w}${h}`} x={x} y={y} width={w} height={h} rx="1.6" />
@@ -68,7 +72,9 @@ function useAutoTask(): string {
   return t ?? ''
 }
 
-function Gutter({ dir, onStart, onDrag }: { dir: 'row' | 'col'; onStart: () => void; onDrag: (deltaPx: number) => void }): ReactNode {
+const GUT = 12 // grosor (px) del borde que se arrastra; también es la separación entre paneles
+
+function Gutter({ dir, onStart, onDrag, onReset }: { dir: 'row' | 'col'; onStart: () => void; onDrag: (deltaPx: number) => void; onReset: () => void }): ReactNode {
   const start = useRef(0)
   const down = (e: RPointerEvent<HTMLDivElement>): void => {
     e.preventDefault()
@@ -79,7 +85,7 @@ function Gutter({ dir, onStart, onDrag }: { dir: 'row' | 'col'; onStart: () => v
   const move = (e: RPointerEvent<HTMLDivElement>): void => {
     if ((e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) onDrag((dir === 'row' ? e.clientX : e.clientY) - start.current)
   }
-  return <div className={`wsx-gut ${dir === 'row' ? 'h' : 'v'}`} role="separator" aria-orientation={dir === 'row' ? 'vertical' : 'horizontal'} aria-label="Arrastra para cambiar el tamaño" onPointerDown={down} onPointerMove={move} />
+  return <div className={`wsx-gut ${dir === 'row' ? 'h' : 'v'}`} role="separator" aria-orientation={dir === 'row' ? 'vertical' : 'horizontal'} aria-label="Arrastra para cambiar el tamaño" title="Arrastra para cambiar el tamaño · doble clic para igualar" onPointerDown={down} onPointerMove={move} onDoubleClick={onReset} />
 }
 
 function SplitView({ node }: { node: Extract<WNode, { t: 'split' }> }): ReactNode {
@@ -88,7 +94,7 @@ function SplitView({ node }: { node: Extract<WNode, { t: 'split' }> }): ReactNod
   const resize = (i: number, deltaPx: number): void => {
     const el = box.current
     if (!el || !base.current.length) return
-    const total = node.dir === 'row' ? el.clientWidth : el.clientHeight
+    const total = (node.dir === 'row' ? el.clientWidth : el.clientHeight) - (node.kids.length - 1) * GUT
     const d = (deltaPx / Math.max(1, total)) * 100
     const min = 12
     const s = [...base.current]
@@ -100,10 +106,12 @@ function SplitView({ node }: { node: Extract<WNode, { t: 'split' }> }): ReactNod
   return (
     <div ref={box} className={`wsx-split ${node.dir === 'row' ? 'h' : 'v'}`}>
       {node.kids.map((k, i) => (
-        <div key={k.id} className="wsx-cell" style={{ flex: `${node.sizes[i]} 1 0` }}>
-          <NodeView node={k} />
-          {i < node.kids.length - 1 && <Gutter dir={node.dir} onStart={() => (base.current = [...node.sizes])} onDrag={(d) => resize(i, d)} />}
-        </div>
+        <Fragment key={k.id}>
+          <div className="wsx-cell" style={{ flex: `${node.sizes[i]} 1 0` }}>
+            <NodeView node={k} />
+          </div>
+          {i < node.kids.length - 1 && <Gutter dir={node.dir} onStart={() => (base.current = [...node.sizes])} onDrag={(d) => resize(i, d)} onReset={() => setSizes(node.id, node.kids.map(() => 100 / node.kids.length))} />}
+        </Fragment>
       ))}
     </div>
   )
@@ -141,6 +149,10 @@ function PaneView({ node }: { node: Extract<WNode, { t: 'pane' }> }): ReactNode 
   const task = findTask(db, taskId)
   const count = panesOf(ws.root).length
   const wspOwner = panesOf(ws.root).find((p) => p.c.kind === 'whatsapp')?.id
+  const sp = useSpotify()
+  const [slot, setSlot] = useState<HTMLElement | null>(null)
+  // cambiar lo que muestra el panel (antes era el selector de la cabecera)
+  const changeItems: MenuItem[] = PICKABLE.filter((k) => k !== c.kind).map((k) => ({ label: `Mostrar ${KIND_LABEL[k]} aquí`, disabled: k === 'whatsapp' && !!wspOwner && wspOwner !== id, onSelect: () => setPane(id, { kind: k }) }))
   const convs = c.kind === 'chat' && taskId ? openConvs(db, taskId) : []
   const conv = convs.find((x) => x.id === c.convId)?.id ?? convs[convs.length - 1]?.id ?? ''
   const hiddenConvs = c.kind === 'chat' && taskId ? closedConvs(db, taskId).length : 0
@@ -158,7 +170,7 @@ function PaneView({ node }: { node: Extract<WNode, { t: 'pane' }> }): ReactNode 
   else if (task && (c.kind === 'terminal' || c.kind === 'git' || c.kind === 'files') && !workFolder(task, db.groups)) body = <div className="wsp-note">Esta tarea no tiene carpeta asignada. Asígnale una carpeta para usar este panel.</div>
   else if (c.kind === 'chat') {
     body = conv ? (
-      <ChatView key={conv} convId={conv} embedded />
+      <ChatView key={conv} convId={conv} embedded slot={slot} extraMenu={changeItems} />
     ) : (
       <div className="wsp-note">
         Esta tarea aún no tiene conversaciones.
@@ -174,18 +186,18 @@ function PaneView({ node }: { node: Extract<WNode, { t: 'pane' }> }): ReactNode 
   else if (c.kind === 'tasks') body = <Today />
   else if (c.kind === 'board') body = <Board />
   else if (c.kind === 'notes') body = <NotesView />
-  else if (c.kind === 'music') body = <MusicView />
+  else if (c.kind === 'music') body = <MusicView compact />
   else if (c.kind === 'whatsapp') body = wspOwner === id ? <WhatsAppView /> : <div className="wsp-note">WhatsApp ya está abierto en otro panel: solo puede mostrarse en uno a la vez.</div>
   else if (c.kind === 'web') body = <WebPane key={id} paneId={`p-${id}`} url={c.url} onUrl={(u) => setPane(id, { url: u })} />
   else body = <Hours />
 
   return (
     <section className={`wsp ${ws.focus === id ? 'focus' : ''}`} onPointerDownCapture={() => setFocus(id)} aria-label={`Panel ${KIND_LABEL[c.kind]}`}>
-      <header className="wsp-h">
+      <header className={`wsp-h k-${c.kind}`}>
         <span className="wsp-ic" aria-hidden>
           <G n={KIND_ICON[c.kind]} size={15} />
         </span>
-        <Select className="wsp-sel" ariaLabel="Qué muestra este panel" value={c.kind} onChange={(v) => setPane(id, { kind: v as PaneKind })} options={[...(c.kind === 'empty' ? [{ value: 'empty', label: 'Elegir…' }] : []), ...PICKABLE.map((k) => ({ value: k, label: KIND_LABEL[k], disabled: k === 'whatsapp' && !!wspOwner && wspOwner !== id }))]} />
+        <b className="wsp-t">{c.kind === 'empty' ? 'Nuevo panel' : KIND_LABEL[c.kind]}</b>
         {needs && (
           <Select
             className="wsp-sel task"
@@ -206,18 +218,15 @@ function PaneView({ node }: { node: Extract<WNode, { t: 'pane' }> }): ReactNode 
           </button>
         )}
         <span className="grow" />
-        {needs && task && (
+        {c.kind === 'chat' && <span className="wsp-slot" ref={setSlot} />}
+        {c.kind === 'music' && <span className={`wsp-st${sp.status?.connected ? ' ok' : ''}`}>{sp.status?.connected ? 'Conectado' : 'Sin conectar'}</span>}
+        {needs && task && c.kind !== 'chat' && (
           <button className="mini wsp-detail" title="Ver el detalle de la tarea" aria-label="Ver el detalle de la tarea" onClick={() => ui.viewTask(task.id)}>
             <G n="info" size={15} />
             <span>Ver tarea</span>
           </button>
         )}
-        <button className="mini" title="Dividir a la derecha" aria-label="Dividir a la derecha" disabled={count >= MAX_PANES} onClick={() => splitPane(id, 'row')}>
-          <G n="splitright" size={15} />
-        </button>
-        <button className="mini" title="Dividir hacia abajo" aria-label="Dividir hacia abajo" disabled={count >= MAX_PANES} onClick={() => splitPane(id, 'col')}>
-          <G n="splitdown" size={15} />
-        </button>
+        {c.kind !== 'chat' && <Menu trigger={<G n="more" size={15} />} className="mini" title="Cambiar lo que muestra este panel" items={changeItems} />}
         <button className="mini" title="Cerrar este panel" aria-label="Cerrar este panel" onClick={() => closePane(id)}>
           <G n="x" size={15} />
         </button>
@@ -244,15 +253,16 @@ export function Workspace(): ReactNode {
   return (
     <div className="wsx">
       <div className="wsx-bar">
-        <div className="lay" role="group" aria-label="Distribución de los paneles">
+        <div className="seg lay" role="group" aria-label="Distribución de los paneles">
           {LAYOUTS.map((l) => (
             <button key={l.id} className={cur === l.id ? 'on' : ''} title={l.label} aria-label={l.label} aria-pressed={cur === l.id} onClick={() => applyLayout(l.id)}>
               <LayoutGlyph id={l.id} />
+              {LAYOUT_SHORT[l.id] ?? l.label}
             </button>
           ))}
         </div>
         <span className="meta wsx-hint">
-          {n} {n === 1 ? 'panel' : 'paneles'} · divide cada panel con los botones de su cabecera y arrastra las líneas para ajustar
+          {n} {n === 1 ? 'panel' : 'paneles'} · arrastra los bordes para ajustar el tamaño
         </span>
         <span className="grow" />
         <button className={`btn sm ${focusMode ? 'on' : ''}`} title="Ocultar el menú y las pestañas para ganar espacio (Ctrl+Mayús+F)" aria-pressed={focusMode} onClick={() => setFocusMode(!getFocus())}>
@@ -261,7 +271,7 @@ export function Workspace(): ReactNode {
         <button className="btn sm" title="Volver a la distribución inicial" onClick={resetWorkspace}>
           <G n="reset" size={14} /> Restablecer
         </button>
-        <button className="btn sm p" title="Pantalla completa (F11)" aria-pressed={full} onClick={() => void toggleFullscreen()}>
+        <button className="btn sm" title="Pantalla completa (F11)" aria-pressed={full} onClick={() => void toggleFullscreen()}>
           <G n={full ? 'shrink' : 'expand'} size={14} /> {full ? 'Salir de pantalla completa' : 'Pantalla completa'}
         </button>
       </div>

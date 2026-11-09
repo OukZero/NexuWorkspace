@@ -21,7 +21,7 @@ interface Item {
 }
 
 const VIEWS: Array<[View, string]> = [
-  ['today', 'Panel'],
+  ['today', 'Inicio'],
   ['board', 'Tablero'],
   ['workspace', 'Espacio de trabajo (paneles divididos)'],
   ['hours', 'Horas'],

@@ -13,6 +13,15 @@ import { G } from './glyphs'
 const recText = (r: Recurrence): string =>
   r.type === 'daily' ? 'todos los días' : r.type === 'weekdays' ? 'lunes a viernes' : 'semanal: ' + (r.days || []).map((d) => DOW[d]).join(' ')
 
+/** Color de cada columna (borde superior), según el estado. */
+const COL: Partial<Record<Status, string>> = {
+  next: 'var(--muted)',
+  today: 'var(--warn)',
+  doing: 'var(--accent)',
+  review: 'var(--pink, #ff7ab6)',
+  done: 'var(--ok)'
+}
+
 export function Board(): ReactNode {
   const db = useDB()
   useAppearance()
@@ -42,7 +51,7 @@ export function Board(): ReactNode {
   const card = (t: Task): ReactNode => (
     <div
       key={t.id}
-      className={`card p-${t.priority} ${dragging === t.id ? 'dragging' : ''}`}
+      className={`kb-card p-${t.priority} ${dragging === t.id ? 'dragging' : ''}`}
       data-pc={taskColor(t) ? '1' : undefined}
       style={taskColor(t) ? ({ '--pc': taskColor(t) } as CSSProperties) : undefined}
       draggable
@@ -57,12 +66,14 @@ export function Board(): ReactNode {
       }}
       onClick={() => ui.openTask(t)}
     >
-      <div className="title">{t.title}</div>
-      <div className="meta">
-        {t.project && <span className="chip">{t.project}</span>}
-        {t.priority === 'high' && <span className="chip high">{PRIO.high}</span>}
-        {taskMs(db, t.id, now) > 0 && <span>{fmtH(taskMs(db, t.id, now)).replace('.', ',')} h</span>}
-        <span className="card-hv">
+      <div className="t">{t.title}</div>
+      <div className="m">
+        <span className="kb-meta">
+          {t.project && <span className="chip">{t.project}</span>}
+          {t.priority === 'high' && <span className="chip prio">{PRIO.high}</span>}
+          {taskMs(db, t.id, now) > 0 && <span>{fmtH(taskMs(db, t.id, now)).replace('.', ',')} h</span>}
+        </span>
+        <span className="kb-actions">
           <button
             className="ib"
             title="Chat de la tarea"
@@ -92,22 +103,24 @@ export function Board(): ReactNode {
 
   return (
     <>
-      <h1 className="day-h">
-        Tablero
+      <div className="kb-bar">
         <span className="grow" />
-        <button className={`ib ${showFilters || isFiltering(filters) ? 'on' : ''}`} title="Filtrar y ordenar" aria-label="Filtrar y ordenar" aria-pressed={showFilters} onClick={() => setShowFilters((v) => !v)}>
-          <G n="filter" size={16} />
+        <button className={`btn sm ${showFilters || isFiltering(filters) ? 'on' : ''}`} aria-pressed={showFilters} onClick={() => setShowFilters((v) => !v)}>
+          <G n="filter" size={15} /> Filtrar
         </button>
-      </h1>
-      <div className="sub">Arrastra las tarjetas entre columnas</div>
+        <button className="btn p sm" onClick={() => ui.editTask({})}>
+          <G n="plus" size={15} /> Nueva tarea
+        </button>
+      </div>
       {(showFilters || isFiltering(filters)) && <FilterBar />}
-      <div className="board">
+      <div className="kb">
         {statuses.map((st) => {
           const arr = open.filter((t) => t.status === st && (st !== 'done' || (t.doneAt || 0) > cutoff))
           return (
             <div
               key={st}
-              className={`col ${over === st ? 'over' : ''}`}
+              className={`kb-col ${over === st ? 'over' : ''}`}
+              style={{ '--c': COL[st] ?? 'var(--accent)' } as CSSProperties}
               onDragOver={(e) => {
                 if (!drag.current) return
                 e.preventDefault()
@@ -119,31 +132,38 @@ export function Board(): ReactNode {
                 drop(st)
               }}
             >
-              <h4>
-                <span>{STATUS[st]}</span>
+              <header>
+                <b>{STATUS[st]}</b>
                 <span>{arr.length}</span>
-              </h4>
+              </header>
               {arr.map(card)}
             </div>
           )
         })}
       </div>
-      <div className="lbl">Rutinas recurrentes</div>
-      {routines.length ? (
-        routines.map((t) => (
-          <div key={t.id} className="row" onClick={() => ui.editTask(t)}>
-            <div className="main">
-              <div className="title">{t.title}</div>
-              <div className="meta">
-                <span className="chip">↻ {recText(t.recurrence)}</span>
-                {t.project && <span className="chip">{t.project}</span>}
+      <section className="bc kb-routines">
+        <div className="kb-routines-h">
+          <span className="eyebrow">Rutinas recurrentes</span>
+          <button className="btn sm" onClick={() => ui.editTask({})}>
+            Crear rutina
+          </button>
+        </div>
+        {routines.length ? (
+          routines.map((t) => (
+            <div key={t.id} className="row" onClick={() => ui.editTask(t)}>
+              <div className="main">
+                <div className="title">{t.title}</div>
+                <div className="meta">
+                  <span className="chip">↻ {recText(t.recurrence)}</span>
+                  {t.project && <span className="chip">{t.project}</span>}
+                </div>
               </div>
             </div>
-          </div>
-        ))
-      ) : (
-        <EmptyState kind="routines" title="Sin rutinas todavía" text="Crea una tarea y márcala como recurrente: el daily, el reporte, la imputación de horas…" />
-      )}
+          ))
+        ) : (
+          <EmptyState kind="routines" title="Sin rutinas todavía" text="Marca una tarea como recurrente: el daily, el reporte semanal o la imputación de horas se crean solos cada día." />
+        )}
+      </section>
     </>
   )
 }

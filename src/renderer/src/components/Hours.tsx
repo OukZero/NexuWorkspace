@@ -6,9 +6,9 @@ import { baseName, dayKey, fmtH, hhmm, isWorkTask, toTs } from '../utils'
 import { useUi } from '../ui'
 import { DailyView } from './DailyView'
 import { DatePicker } from './DatePicker'
-import { DayTimeline } from './DayTimeline'
 import { meetingMs, useCalendar } from '../calendar'
 import { EmptyState } from './EmptyState'
+import { G } from './glyphs'
 import { Heatmap } from './Heatmap'
 import { RedminePanel } from './RedminePanel'
 import { WeekView } from './WeekView'
@@ -18,12 +18,45 @@ const dayEntries = (db: DB, day: string): Entry[] => {
   return db.entries.filter((e) => e.start >= f && e.start < f + 86400000).sort((a, b) => a.start - b.start)
 }
 
+/** Horas con coma decimal, como se ven en toda la app. */
+const hc = (ms: number): string => fmtH(ms).replace('.', ',')
+const n2 = (x: number): string => x.toFixed(2).replace('.', ',')
+
+/** Mini calendario del día: una celda por hora, con marca verde donde hubo tiempo registrado y la hora actual resaltada. */
+function HourStrip({ day, entries, now }: { day: string; entries: Entry[]; now: number }): ReactNode {
+  const dayStart = toTs(day, '00:00')
+  const spans = entries.map((e) => [e.start, e.end || now] as const)
+  const hourOf = (ts: number): number => Math.floor((ts - dayStart) / 3600000)
+  const first = spans.length ? hourOf(Math.min(...spans.map((s) => s[0]))) : 8
+  const last = spans.length ? hourOf(Math.max(...spans.map((s) => s[1]))) + 1 : 18
+  const from = Math.max(0, Math.min(8, first))
+  const to = Math.min(23, Math.max(18, last))
+  const isToday = day === dayKey(new Date(now))
+  const curHour = new Date(now).getHours()
+  const cells: ReactNode[] = []
+  for (let h = from; h <= to; h++) {
+    const a = dayStart + h * 3600000
+    const has = spans.some(([s, e]) => s < a + 3600000 && e > a)
+    cells.push(
+      <div key={h} className={`${has ? 'has' : ''}${isToday && h === curHour ? ' cur' : ''}`} title={has ? `${String(h).padStart(2, '0')}:00 · con tiempo registrado` : `${String(h).padStart(2, '0')}:00`}>
+        {String(h).padStart(2, '0')}
+      </div>
+    )
+  }
+  return (
+    <div className="hr-strip" style={{ gridTemplateColumns: `repeat(${cells.length}, 1fr)` }} aria-label="Horas del día con tiempo registrado">
+      {cells}
+    </div>
+  )
+}
+
 function EntryRow({ entry: e }: { entry: Entry }): ReactNode {
   const db = useDB()
   const ui = useUi()
   const now = useNow(30000)
   const t = findTask(db, e.taskId)
   const day = dayKey(new Date(e.start))
+  const sub = [t?.client, t?.project].filter(Boolean).join(' · ')
 
   const commitTime = (field: 'start' | 'end', input: HTMLInputElement): void => {
     const cur = field === 'start' ? e.start : (e.end as number)
@@ -41,28 +74,30 @@ function EntryRow({ entry: e }: { entry: Entry }): ReactNode {
 
   return (
     <tr>
-      <td>
-        {t?.title || '(tarea borrada)'}
-        <div className="meta">
-          {t?.client} {t?.project}
-        </div>
+      <td className="hr-task" title={sub ? `${t?.title ?? ''} · ${sub}` : t?.title}>
+        <b>{t?.title || '(tarea borrada)'}</b>
+        {sub && <span>{sub}</span>}
       </td>
       <td>
-        <input type="time" key={e.start} defaultValue={hhmm(e.start)} onBlur={(ev) => commitTime('start', ev.target)} />
+        <input className="hours-in" type="time" aria-label="Inicio" key={e.start} defaultValue={hhmm(e.start)} onBlur={(ev) => commitTime('start', ev.target)} />
       </td>
       <td>
         {e.end ? (
-          <input type="time" key={e.end} defaultValue={hhmm(e.end)} onBlur={(ev) => commitTime('end', ev.target)} />
+          <input className="hours-in" type="time" aria-label="Fin" key={e.end} defaultValue={hhmm(e.end)} onBlur={(ev) => commitTime('end', ev.target)} />
         ) : (
           <span className="chip">en curso</span>
         )}
       </td>
-      <td>{fmtH((e.end || now) - e.start)}</td>
+      <td className="r">
+        <b>{hc((e.end || now) - e.start)}</b>
+      </td>
       <td>
         <input
+          className="note-in"
           key={e.note}
           defaultValue={e.note}
           placeholder="qué hiciste…"
+          aria-label="Nota para imputar"
           onBlur={(ev) => {
             if (ev.target.value !== e.note) void ui.run('entry:update', { id: e.id, note: ev.target.value })
           }}
@@ -70,14 +105,15 @@ function EntryRow({ entry: e }: { entry: Entry }): ReactNode {
       </td>
       <td>
         <button
-          className="icon"
+          className="hr-x"
           aria-label="Eliminar el registro"
+          title="Eliminar el registro"
           onClick={() => {
             void ui.run('entry:delete', e.id)
             ui.toast('Registro eliminado', false, { label: 'Deshacer', run: () => void ui.run('undo:restore', { entries: [e] }) })
           }}
         >
-          ✕
+          <G n="x" size={13} />
         </button>
       </td>
     </tr>
@@ -118,6 +154,12 @@ export function Hours(): ReactNode {
   const pend = day === today ? db.tasks.filter((t) => isWorkTask(t) && (t.status === 'today' || t.status === 'doing')) : []
   const dayCommits = commits[day]
 
+  const shiftDay = (n: number): void => {
+    const d = new Date(`${day}T12:00:00`)
+    d.setDate(d.getDate() + n)
+    setDay(dayKey(d))
+  }
+
   const copyDraft = async (): Promise<void> => {
     const lines: Record<string, { ms: number; notes: string[] }> = {}
     for (const e of es) {
@@ -154,11 +196,10 @@ export function Hours(): ReactNode {
     if (p) ui.toast('Exportado: ' + p)
   }
 
+  // el título de la pantalla ya está en la barra superior: aquí solo van el modo y, a la derecha, el día
   const header = (
-    <>
-      <h1>Horas</h1>
-      <div className="sub">Revisa el día o la semana, corrige y exporta a Excel para imputar</div>
-      <div className="seg" style={{ width: 'fit-content', marginBottom: 14 }}>
+    <div className="hr-top">
+      <div className="seg grad hr-seg">
         <button className={mode === 'day' ? 'on' : ''} onClick={() => setMode('day')}>
           Día
         </button>
@@ -172,7 +213,18 @@ export function Hours(): ReactNode {
           Daily
         </button>
       </div>
-    </>
+      {mode === 'day' && (
+        <div className="hr-month" role="group" aria-label="Día">
+          <button aria-label="Día anterior" title="Día anterior" onClick={() => shiftDay(-1)}>
+            <G n="chevron" size={15} />
+          </button>
+          <DatePicker value={day} ariaLabel="Día" onChange={setDay} className="hr-dp" />
+          <button aria-label="Día siguiente" title="Día siguiente" onClick={() => shiftDay(1)}>
+            <G n="chevron" size={15} />
+          </button>
+        </div>
+      )}
+    </div>
   )
 
   if (mode === 'daily') {
@@ -215,84 +267,113 @@ export function Hours(): ReactNode {
   return (
     <>
       {header}
-      <div className="row" style={{ cursor: 'default', display: 'block', borderColor: missing > 0 ? 'var(--warn)' : 'var(--accent2)' }}>
-        <b>Borrador del día</b> ·{' '}
-        {missing > 0 ? `te faltan ${missing.toFixed(2)} h para llegar a ${db.settings.targetHours} h` : `objetivo cumplido (${fmtH(total)} h)`}
-        {meet > 0 && <div className="meta">Reuniones del día: {meet.toFixed(2)} h · quedan {Math.max(0, db.settings.targetHours - meet).toFixed(2)} h para tareas</div>}
-        {pend.length > 0 && <div className="meta">Pendientes hoy: {pend.map((t) => t.title).join(' · ')}</div>}
-        <div className="foot" style={{ marginTop: 10 }}>
-          <button className="btn sm" onClick={fillNotes}>
-            Rellenar notas con commits
-          </button>
-          <button className="btn sm" onClick={copyDraft}>
-            Copiar resumen
-          </button>
-        </div>
-      </div>
-      <div className="toolbar">
-        <div>
-          <label>Día</label>
-          <DatePicker value={day} ariaLabel="Día" onChange={setDay} />
-        </div>
-        <button className="btn" onClick={() => ui.addEntry(day)}>
-          + Entrada manual
-        </button>
-        <button className="btn" onClick={loadCommits}>
-          Ver commits del día
-        </button>
-        <div style={{ marginLeft: 'auto', width: 'auto' }}>
-          <b>Total: {fmtH(total)} h</b> / {db.settings.targetHours} h
-        </div>
-      </div>
-      {(es.length > 0 || meet > 0) && <DayTimeline day={day} entries={es} />}
-      <table>
-        <thead>
-          <tr>
-            <th>Tarea</th>
-            <th style={{ width: 90 }}>Inicio</th>
-            <th style={{ width: 90 }}>Fin</th>
-            <th style={{ width: 60 }}>Horas</th>
-            <th>Nota para imputar</th>
-            <th style={{ width: 40 }} />
-          </tr>
-        </thead>
-        <tbody>
-          {es.length ? (
-            es.map((e) => <EntryRow key={e.id} entry={e} />)
-          ) : (
-            <tr>
-              <td colSpan={6}>
-                <EmptyState kind="hours" title="Sin registros este día" text="Inicia el timer en una tarea o añade una entrada manual para registrar tu tiempo." />
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-      {Object.keys(byTask).length > 0 && (
-        <>
-          <h3>Resumen por tarea</h3>
-          {Object.entries(byTask).map(([id, ms]) => {
-            const t = findTask(db, id)
-            return (
-              <div key={id} className="row" style={{ cursor: 'default' }}>
-                <div className="main">
-                  <div className="title">{t?.title}</div>
-                  <div className="meta">
-                    {t?.client} {t?.project}
-                  </div>
-                </div>
-                <b>{fmtH(ms)} h</b>
+      <section className="bc hr-draft">
+        <div className="hr-draft-h">
+          <div>
+            <div className="hr-draft-t">
+              <b className="h2">Borrador del día</b>
+              <span className={`chip ${missing > 0 ? 'prio' : 'ok'}`}>{missing > 0 ? `Faltan ${n2(missing)} h para ${db.settings.targetHours} h` : `Objetivo cumplido (${hc(total)} h)`}</span>
+            </div>
+            {meet > 0 && (
+              <div className="meta">
+                Reuniones del día: {n2(meet)} h · quedan {n2(Math.max(0, db.settings.targetHours - meet))} h para tareas
               </div>
-            )
-          })}
-        </>
-      )}
+            )}
+            {pend.length > 0 && <div className="meta">Pendientes hoy: {pend.map((t) => t.title).join(' · ')}</div>}
+          </div>
+          <div className="hr-draft-btns">
+            <button className="btn sm" onClick={loadCommits} title="Muestra los commits del día para recordar qué hiciste">
+              <G n="git" size={13} /> Ver commits
+            </button>
+            <button className="btn sm" onClick={fillNotes}>
+              <G n="sparkle" size={13} /> Rellenar notas con commits
+            </button>
+            <button className="btn sm" onClick={copyDraft}>
+              <G n="files" size={13} /> Copiar resumen
+            </button>
+            <button className="btn p sm" onClick={() => ui.addEntry(day)}>
+              <G n="plus" size={13} /> Entrada manual
+            </button>
+          </div>
+        </div>
+        <div className="hr-sep" />
+        <HourStrip day={day} entries={es} now={now} />
+      </section>
+
+      <section className="bc hr-table">
+        <div className="hr-scroll">
+          <table className="tbl hr-tbl">
+            <colgroup>
+              <col style={{ width: 300 }} />
+              <col style={{ width: 104 }} />
+              <col style={{ width: 104 }} />
+              <col style={{ width: 70 }} />
+              <col />
+              <col style={{ width: 44 }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Tarea</th>
+                <th>Inicio</th>
+                <th>Fin</th>
+                <th className="r">Horas</th>
+                <th>Nota para imputar</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {es.length ? (
+                es.map((e) => <EntryRow key={e.id} entry={e} />)
+              ) : (
+                <tr>
+                  <td colSpan={6}>
+                    <EmptyState kind="hours" title="Sin registros este día" text="Inicia el timer en una tarea o añade una entrada manual para registrar tu tiempo." />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="hr-total">
+          <span className="muted">Total del día</span>
+          <b className="num">{hc(total)} h</b>
+          <span className="dim">/ {db.settings.targetHours} h</span>
+        </div>
+      </section>
+
+      <div className="hr-split">
+        <section className="bc">
+          <div className="card-h">
+            <span className="eyebrow">Resumen por tarea</span>
+          </div>
+          {Object.keys(byTask).length ? (
+            <div className="hr-sum">
+              {Object.entries(byTask).map(([id, ms]) => {
+                const t = findTask(db, id)
+                const sub = [t?.client, t?.project].filter(Boolean).join(' · ')
+                return (
+                  <div key={id} className="hr-sum-row" title={sub || undefined}>
+                    <b>{t?.title ?? '(tarea borrada)'}</b>
+                    <b className="num">{hc(ms)} h</b>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="empty">Aún no hay tiempo registrado este día.</div>
+          )}
+        </section>
+        <RedminePanel day={day} />
+      </div>
+
       {dayCommits && (
-        <>
-          <h3>Commits del día (ayuda para recordar)</h3>
+        <section className="bc hr-commits">
+          <div className="card-h">
+            <span className="eyebrow">Commits del día (ayuda para recordar)</span>
+          </div>
           {Object.keys(dayCommits).length ? (
             Object.entries(dayCommits).map(([f, c]) => (
-              <div key={f} className="row" style={{ cursor: 'default', display: 'block' }}>
+              <div key={f} className="hr-commit">
                 <b>{baseName(f)}</b>
                 {c.map((m, i) => (
                   <div key={i} className="commit">
@@ -304,23 +385,27 @@ export function Hours(): ReactNode {
           ) : (
             <div className="empty">No hay commits (o git no está disponible).</div>
           )}
-        </>
+        </section>
       )}
-      <RedminePanel day={day} />
-      <h3>Exportar a Excel</h3>
-      <div className="toolbar">
+
+      <section className="bc hr-export">
         <div>
+          <div className="eyebrow">Exportar a Excel</div>
+          <div className="muted hr-note">Rango para el archivo .xlsx</div>
+        </div>
+        <div className="hr-grow" />
+        <div className="hr-field">
           <label>Desde</label>
           <DatePicker value={from} ariaLabel="Desde" onChange={setFrom} />
         </div>
-        <div>
+        <div className="hr-field">
           <label>Hasta</label>
           <DatePicker value={to} ariaLabel="Hasta" onChange={setTo} />
         </div>
-        <button className="btn primary" onClick={exportXlsx}>
-          Exportar .xlsx
+        <button className="btn p" onClick={exportXlsx}>
+          <G n="download" size={15} /> Exportar .xlsx
         </button>
-      </div>
+      </section>
     </>
   )
 }

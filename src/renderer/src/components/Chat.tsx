@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { ClipboardEvent, DragEvent, KeyboardEvent, ReactNode } from 'react'
 import type { Attachment, ChatMode, ContextKind, Provider, PromptTemplate } from '../../../shared/types'
+import { contextAdvice, fmtTokens } from '../../../shared/advice'
 import { DEFAULT_CONTEXT, templatesOf } from '../../../shared/templates'
 import { workFolder } from '../../../shared/util'
 import { convLabel } from '../conversations'
@@ -15,8 +17,10 @@ import { G } from './glyphs'
 import { setLayout, useLayout } from '../layout'
 import { setConvsOpen, useConvsPane } from '../convsPane'
 import { onChatDraft, takeChatDraft } from '../chatDraft'
+import { getFilesDraft, getInputDraft, saveFilesDraft, saveInputDraft } from '../inputDrafts'
+import { useTaskSlot } from '../taskSlot'
 import { Markdown } from './Markdown'
-import { Menu } from './Menu'
+import { Menu, type MenuItem } from './Menu'
 import { Select, type SelectOption } from './Select'
 import { ContextMeter } from './SessionPanel'
 import { SidePanel } from './SidePanel'
@@ -72,10 +76,12 @@ export function AttachmentList({ items, onRemove }: { items: Attachment[]; onRem
 }
 
 /** Una conversación con Claude. Cada una tiene su propio contexto, aunque comparta tarea con otras. */
-export function ChatView({ convId, embedded }: { convId: string; embedded?: boolean }): ReactNode {
+/** `slot`: en un panel del Espacio, el lugar de su cabecera donde van los controles del chat; `extraMenu`: opciones que el panel suma al menú «⋯». */
+export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string; embedded?: boolean; slot?: HTMLElement | null; extraMenu?: MenuItem[] }): ReactNode {
   const db = useDB()
   const ui = useUi()
   const lay = useLayout()
+  const taskSlot = useTaskSlot()
   const convs = useConvsPane()
   const chat = db.chats[convId]
   const taskId = chat?.taskId ?? ''
@@ -84,10 +90,23 @@ export function ChatView({ convId, embedded }: { convId: string; embedded?: bool
   const messages = chat?.messages ?? []
   const running = !!chat?.running
 
-  const [input, setInput] = useState('')
+  const [input, setInputState] = useState(() => getInputDraft(convId))
   const [live, setLive] = useState('')
   const [summarizing, setSummarizing] = useState(false)
-  const [files, setFiles] = useState<Attachment[]>([])
+  const [files, setFilesState] = useState<Attachment[]>(() => getFilesDraft(convId))
+  // cada cambio se guarda por conversación: el chat se vuelve a montar al cambiar de conversación, modo o pantalla
+  const setInput = (v: string | ((c: string) => string)): void =>
+    setInputState((cur) => {
+      const next = typeof v === 'function' ? v(cur) : v
+      saveInputDraft(convId, next)
+      return next
+    })
+  const setFiles = (v: Attachment[] | ((c: Attachment[]) => Attachment[])): void =>
+    setFilesState((cur) => {
+      const next = typeof v === 'function' ? v(cur) : v
+      saveFilesDraft(convId, next)
+      return next
+    })
   const [ctxKinds, setCtxKinds] = useState<ContextKind[]>([])
   const [terminalText, setTerminalText] = useState('')
   const [noting, setNoting] = useState(false)
@@ -336,47 +355,30 @@ export function ChatView({ convId, embedded }: { convId: string; embedded?: bool
     ui.toast('Abriendo Claude Desktop (sesión nueva)')
   }
 
-  const body = (
-    <>
-      <section className="chatpane">
-      <div className="chat-head">
-        {!embedded && !convs.open && (
-          <button className="ib" title="Mostrar la lista de conversaciones" aria-label="Mostrar la lista de conversaciones" onClick={() => setConvsOpen(true)}>
-            <G n="list" />
-          </button>
-        )}
-        <div className="grow">
-          <b>{task?.title}</b>
-          <div className="meta">
-            {task?.client} {task?.project && <span className="chip">{task.project}</span>}{' '}
-            <span title={folder}>📁 {folder ? baseName(folder) : 'sin carpeta'}</span>
-            {chat && <span title="Conversación actual"> · {convLabel(chat)}</span>}
-          </div>
-        </div>
-        {chat?.usage?.contextTokens ? (
-          <button className="pill ctx-pill" title="Sesión y contexto: consumo, compactar y resumir" onClick={() => setLayout({ sideOpen: !(lay.sideOpen && lay.sideTab === 'session'), sideTab: 'session' })}>
-            <ContextMeter usage={chat.usage} settings={db.settings} />
-          </button>
-        ) : null}
-        <button className="ib" disabled={summarizing} onClick={summarize} title={summarizing ? 'Resumiendo…' : 'Resumir: agrega lo hecho a «Lo realizado» de la tarea'} aria-label="Resumir la conversación">
-          <G n="sparkle" />
-        </button>
-        <button className="btn sm taskbtn" onClick={() => ui.viewTask(taskId)} title="Ver el detalle de la tarea: descripción, subtareas, notas y sesiones" aria-label="Ver el detalle de la tarea">
-          <G n="info" size={15} />
-          <span>Ver tarea</span>
-        </button>
-        <button className="ib" onClick={() => ui.openTerminal(taskId)} title="Terminal en la carpeta del proyecto (Ctrl+`)" aria-label="Abrir terminal">
-          <G n="terminal" />
-        </button>
-        <button className={`ib ${lay.sideOpen ? 'on' : ''}`} onClick={() => setLayout({ sideOpen: !lay.sideOpen })} title="Inspector: sesión, archivos y actividad" aria-label="Inspector" aria-pressed={lay.sideOpen}>
-          <G n="panel" />
-        </button>
-        {chat?.kind !== 'review' && <ChecksButton taskId={taskId} convId={convId} />}
-        <Menu
-          trigger={<G n="more" />}
-          className="ib"
-          title="Más acciones"
-          items={[
+  const ctxPill = chat?.usage?.contextTokens ? (
+    <button className="pill ctx-pill" title="Sesión y contexto: consumo, compactar y resumir" onClick={() => setLayout({ sideOpen: !(lay.sideOpen && lay.sideTab === 'session'), sideTab: 'session' })}>
+      <ContextMeter usage={chat.usage} settings={db.settings} />
+    </button>
+  ) : null
+  const summarizeBtn = (
+    <button className="ib" disabled={summarizing} onClick={summarize} title={summarizing ? 'Resumiendo…' : 'Resumir: agrega lo hecho a «Lo realizado» de la tarea'} aria-label="Resumir la conversación">
+      <G n="sparkle" />
+    </button>
+  )
+  const adv = contextAdvice(chat?.usage, db.settings)
+  const tokenPill = chat?.usage?.contextTokens ? (
+    <button className={`ctx-tokens ${adv.level}`} title={`${adv.title}: ${adv.text}`} onClick={() => setLayout({ sideOpen: !(lay.sideOpen && lay.sideTab === 'session'), sideTab: 'session' })}>
+      <span>
+        {fmtTokens(chat.usage.contextTokens)}
+        {chat.usage.contextWindow ? ` / ${fmtTokens(chat.usage.contextWindow)}` : ''} tokens
+      </span>
+      <i>
+        <b style={{ width: `${Math.min(100, adv.pct)}%` }} />
+      </i>
+    </button>
+  ) : null
+  const checksBtn = chat?.kind !== 'review' ? <ChecksButton taskId={taskId} convId={convId} /> : null
+  const baseItems: MenuItem[] = [
             { label: 'Editar tarea', icon: '✎', onSelect: () => task && ui.editTask(task) },
             { label: 'Aislar en una copia propia', icon: '⎇', hint: chat?.worktree ? 'Ya trabaja en una copia aislada' : chat?.sessionId || messages.length ? 'Solo en conversaciones nuevas, sin mensajes' : 'Rama y carpeta propias: varias conversaciones a la vez sin pisarse', disabled: !!chat?.worktree || !!chat?.sessionId || messages.length > 0 || running, onSelect: () => void isolate() },
             { label: 'Revisar código de la rama', icon: '🔍', hint: 'Revisión con IA y simulación, solo lectura', disabled: reviewing, onSelect: () => void review() },
@@ -385,9 +387,54 @@ export function ChatView({ convId, embedded }: { convId: string; embedded?: bool
             { label: 'Continuar en terminal', icon: '⏎', hint: 'Retoma esta conversación con claude --resume', onSelect: () => void continueInTerminal() },
             { kind: 'sep' },
             { label: 'Reiniciar conversación', icon: '↺', danger: true, onSelect: () => void reset() }
-          ]}
-        />
-      </div>
+  ]
+  // en un panel del Espacio los botones sueltos (tarea, terminal, inspector) pasan al menú «⋯»
+  // chat a pantalla completa: Resumir y el inspector pasan al menú «⋯»; Ver tarea, Terminal y Probar van en la fila de la tarea
+  const standaloneItems: MenuItem[] = [
+    { label: summarizing ? 'Resumiendo…' : 'Resumir en la tarea', icon: '✦', hint: 'Agrega lo hecho a «Lo realizado» de la tarea', disabled: summarizing, onSelect: () => void summarize() },
+    { label: lay.sideOpen ? 'Ocultar el inspector' : 'Mostrar el inspector', icon: '▤', hint: 'Sesión, archivos y actividad', onSelect: () => setLayout({ sideOpen: !lay.sideOpen }) },
+    { kind: 'sep' },
+    ...baseItems
+  ]
+  const moreItems: MenuItem[] = embedded
+    ? [
+        { label: 'Ver el detalle de la tarea', icon: 'ℹ', onSelect: () => ui.viewTask(taskId) },
+        { label: 'Terminal en la carpeta', icon: '>_', onSelect: () => ui.openTerminal(taskId) },
+        { label: lay.sideOpen ? 'Ocultar el inspector' : 'Mostrar el inspector', icon: '▤', hint: 'Sesión, archivos y actividad', onSelect: () => setLayout({ sideOpen: !lay.sideOpen }) },
+        { kind: 'sep' },
+        ...(extraMenu?.length ? [...extraMenu, { kind: 'sep' } as MenuItem] : []),
+        ...baseItems
+      ]
+    : standaloneItems
+  const moreMenu = <Menu trigger={<G n="more" />} className="ib" title="Más acciones" items={moreItems} />
+
+  const body = (
+    <>
+      <section className="chatpane">
+      {!embedded && (
+        <div className="chat-head">
+          {!convs.open && (
+            <button className="ib" title="Mostrar la lista de conversaciones" aria-label="Mostrar la lista de conversaciones" onClick={() => setConvsOpen(true)}>
+              <G n="list" />
+            </button>
+          )}
+          <div className="ch-title">
+            <b title={task?.title}>{task?.title}</b>
+            {folder && (
+              <span className="chip" title={folder}>
+                <G n="folders" size={11} /> {baseName(folder)}
+              </span>
+            )}
+            {task?.project && task.project !== (folder ? baseName(folder) : '') && <span className="chip ai">{task.project}</span>}
+          </div>
+          <span className="ch-sp" />
+          {tokenPill}
+          {!taskSlot && checksBtn}
+          {moreMenu}
+        </div>
+      )}
+      {!embedded && taskSlot && checksBtn && createPortal(checksBtn, taskSlot)}
+      {embedded && slot && createPortal(<>{ctxPill}{summarizeBtn}{checksBtn}{moreMenu}</>, slot)}
       <WorktreeBar convId={convId} />
       <LimitBanner convId={convId} />
         <div className="chat-main">
@@ -413,6 +460,12 @@ export function ChatView({ convId, embedded }: { convId: string; embedded?: bool
                     {m.ts > 0 && <span className="time">{hhmm(m.ts)}</span>}
                   </div>
                 )}
+                {m.role === 'user' && (
+                  <div className="mhead">
+                    <b className="mwho">Tú</b>
+                    {m.ts > 0 && <span className="time">{hhmm(m.ts)}</span>}
+                  </div>
+                )}
                 {m.attachments?.length ? <AttachmentList items={m.attachments} /> : null}
                 {m.role === 'user' ? <span style={{ whiteSpace: 'pre-wrap' }}>{m.text}</span> : <Markdown text={m.text} />}
                 {m.context?.length ? (
@@ -435,7 +488,6 @@ export function ChatView({ convId, embedded }: { convId: string; embedded?: bool
                     ↩ Volver a antes de esto
                   </button>
                 )}
-                {m.role === 'user' && m.ts > 0 && <span className="time">{hhmm(m.ts)}</span>}
               </div>
             ))}
             {chat?.pending?.map((p) => (
@@ -513,7 +565,6 @@ export function ChatView({ convId, embedded }: { convId: string; embedded?: bool
               <span className="meta">Tab elige la primera</span>
             </div>
           )}
-          {chat?.kind !== 'design' && <ContextBar taskId={taskId} kinds={ctxKinds} onChange={setCtxKinds} terminalText={terminalText} />}
           {matches.length > 0 && (
             <div className="suggest slash">
               {matches.map((c) => (
@@ -551,6 +602,7 @@ export function ChatView({ convId, embedded }: { convId: string; embedded?: bool
               <button className="ib clip" title="Adjuntar archivos o fotos (también puedes pegar o arrastrar)" aria-label="Adjuntar" onClick={() => void pickFiles()}>
                 <G n="files" size={16} />
               </button>
+              {chat?.kind !== 'design' && <ContextBar taskId={taskId} kinds={ctxKinds} onChange={setCtxKinds} terminalText={terminalText} />}
               {chat?.kind !== 'design' && (
                 <Select
                   className="mini-sel"
@@ -600,7 +652,13 @@ export function ChatView({ convId, embedded }: { convId: string; embedded?: bool
                 title={running ? `${ai} está respondiendo… · Detener` : 'Enviar (Enter)'}
                 onClick={() => (running ? void ui.run('chat:cancel', convId) : void send())}
               >
-                {running ? <IconStop /> : <G n="send" size={16} stroke={2.2} />}
+                {running ? (
+                  <IconStop />
+                ) : (
+                  <>
+                    <G n="send" size={14} stroke={2.2} /> Enviar
+                  </>
+                )}
               </button>
             </div>
           </div>

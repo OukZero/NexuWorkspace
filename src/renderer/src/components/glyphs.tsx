@@ -119,14 +119,7 @@ const P: Record<string, ReactNode> = {
       <path d="M12 3.5v17M12 12h8.5" />
     </>
   ),
-  panelhome: (
-    <>
-      <rect x="3.5" y="3.5" width="7" height="9" rx="2" />
-      <rect x="13.5" y="3.5" width="7" height="5" rx="2" />
-      <rect x="13.5" y="11.5" width="7" height="9" rx="2" />
-      <rect x="3.5" y="15.5" width="7" height="5" rx="2" />
-    </>
-  ),
+  panelhome: <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" />,
   splitright: (
     <>
       <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
@@ -150,6 +143,40 @@ const P: Record<string, ReactNode> = {
   music: <path d="M9 18V6l10-2v12M9 18a3 3 0 1 1-3-3 3 3 0 0 1 3 3zM19 16a3 3 0 1 1-3-3 3 3 0 0 1 3 3z" />,
   volume: <path d="M11 5L6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" />,
   mute: <path d="M11 5L6 9H3v6h3l5 4zM16 9.5l5 5M21 9.5l-5 5" />,
+  eye: (
+    <>
+      <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  lock: (
+    <>
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </>
+  ),
+  chats: (
+    <>
+      <path d="M8 8V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-1" />
+      <path d="M4 10h9a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H9l-3.5 3V19H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2z" />
+    </>
+  ),
+  bullets: <path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01" />,
+  bold: <path d="M6 4h8a4 4 0 0 1 0 8H6zM6 12h9a4 4 0 0 1 0 8H6z" />,
+  italic: <path d="M19 4h-9M14 20H5M15 4L9 20" />,
+  link: <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" />,
+  desk: (
+    <>
+      <rect x="2" y="4" width="20" height="13" rx="2" />
+      <path d="M8 21h8M12 17v4" />
+    </>
+  ),
+  tablet: (
+    <>
+      <rect x="4" y="2" width="16" height="20" rx="2.5" />
+      <path d="M11 18h2" />
+    </>
+  ),
   up: <path d="M6 15l6-6 6 6" />,
   down: <path d="M6 9l6 6 6-6" />
 }

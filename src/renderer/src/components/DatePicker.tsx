@@ -21,7 +21,8 @@ export function DatePicker({ value, onChange, ariaLabel, className }: Props): Re
   const [open, setOpen] = useState(false)
   const date = parse(value)
   const valid = !isNaN(date.getTime())
-  const label = valid ? date.toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : 'Elegir fecha'
+  const raw = valid ? date.toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : 'Elegir fecha'
+  const label = raw.charAt(0).toUpperCase() + raw.slice(1)
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
