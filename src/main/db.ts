@@ -1,8 +1,7 @@
 import { app, BrowserWindow } from 'electron'
-import fs from 'fs'
-import path from 'path'
 import type { DB, Settings } from '../shared/types'
-import { dayKey } from '../shared/util'
+import { readLegacyJson, type Store } from './store'
+import { sqliteStore } from './sqlite-store'
 
 export const DEFAULT_SETTINGS: Settings = {
   openMode: 'chat', // 'chat' = chat de la app, 'desktop' = Claude Desktop (claude://code/new), 'terminal' = PowerShell + claude
@@ -52,7 +51,11 @@ export const DEFAULT_SETTINGS: Settings = {
 }
 
 let db: DB
-let dataFile = ''
+let store: Store | undefined
+const current = (): Store => {
+  if (!store) throw new Error('La base de datos no está inicializada (initDb)')
+  return store
+}
 const targets = new Set<BrowserWindow>() // ventanas que reciben el estado
 
 export const getDb = (): DB => db
@@ -96,37 +99,32 @@ function normalize(raw: Partial<DB>): DB {
 }
 
 export function initDb(): void {
-  dataFile = path.join(app.getPath('userData'), 'data.json')
-  let raw: Partial<DB> = {}
-  try {
-    raw = JSON.parse(fs.readFileSync(dataFile, 'utf8')) as Partial<DB>
-  } catch {
-    /* primera ejecución o archivo ilegible: se parte de cero */
+  const dir = app.getPath('userData')
+  store = sqliteStore(dir)
+  // migración única desde el data.json de versiones anteriores (el fichero original se conserva)
+  if (store.isNew()) {
+    const legacy = readLegacyJson(dir)
+    if (Object.keys(legacy).length > 0) {
+      db = normalize(legacy)
+      save()
+      return
+    }
   }
-  db = normalize(raw)
+  db = normalize(store.read())
 }
 
-export const dataPath = (): string => dataFile
-export const backupsDir = (): string => path.join(path.dirname(dataFile), 'backups')
+export const dataPath = (): string => current().location()
+export const backupsDir = (): string => current().backupsDir()
 
 /** Reemplaza todos los datos (importar): antes se guarda una copia de lo actual. */
 export function replaceDb(raw: Partial<DB>): void {
   if (!Array.isArray(raw.tasks) || !Array.isArray(raw.entries)) throw new Error('El archivo no parece una exportación de Shutoki AI Workspace (faltan tareas u horas).')
-  fs.copyFileSync(dataFile, path.join(path.dirname(dataFile), `data.pre-importacion-${Date.now()}.json`))
+  current().snapshot('pre-importacion')
   db = normalize(raw)
   commit()
 }
 export function save(): void {
-  const tmp = dataFile + '.tmp'
-  fs.writeFileSync(tmp, JSON.stringify(db, null, 2))
-  fs.renameSync(tmp, dataFile)
-  // copia de seguridad diaria
-  const bdir = path.join(path.dirname(dataFile), 'backups')
-  const bfile = path.join(bdir, `data-${dayKey(new Date())}.json`)
-  if (!fs.existsSync(bfile)) {
-    fs.mkdirSync(bdir, { recursive: true })
-    fs.copyFileSync(dataFile, bfile)
-  }
+  current().write(db)
 }
 
 export function push(): void {
