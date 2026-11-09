@@ -43,17 +43,17 @@ export function untilReset(epochSec: number): string {
   return `en ${Math.floor(mins / 1440)} d ${Math.floor((mins % 1440) / 60)} h`
 }
 
-export function Limit({ label, w }: { label: string; w?: LimitWindow }): ReactNode {
+export function Limit({ label, w, plain }: { label: string; w?: LimitWindow; plain?: boolean }): ReactNode {
   if (!w) return <div className="limit meta">{label}: sin datos todavía</div>
   const pct = Math.min(100, Math.round(w.utilization * 100))
   const cls = pct >= 90 ? 'critical' : pct >= 70 ? 'warn' : 'ok'
   const reset = new Date(w.resetsAt * 1000)
   const when = reset.toLocaleString('es', { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   return (
-    <div className={`limit ${cls}`}>
+    <div className={`bc limit ${cls}`}>
       <div className="limit-h">
         <b>{label}</b>
-        <span>{pct} % usado</span>
+        <span>{pct} %{plain ? '' : ' usado'}</span>
       </div>
       <div className="ctx-bar big">
         <i style={{ width: `${pct}%` }} />
@@ -121,135 +121,122 @@ export function Usage(): ReactNode {
   const stale = db.limits && now - db.limits.updatedAt > 3600000
 
   return (
-    <>
-      <h1>Consumo</h1>
-      <div className="sub">Lo que consumen los chats de esta app con Claude. Las sesiones de Claude Desktop o de la terminal no se cuentan aquí.</div>
-
-      <h3 style={{ marginTop: 0 }}>Límites de tu plan</h3>
-      <div className="limits">
-        <Limit label="Ventana de 5 horas" w={db.limits?.fiveHour} />
-        <Limit label="Semana (7 días)" w={db.limits?.sevenDay} />
+    <div className="kz">
+      <div className="eyebrow kz-eb">Límites de tu plan</div>
+      <div className="kz-limits">
+        <Limit label="Ventana de 5 horas" w={db.limits?.fiveHour} plain />
+        <Limit label="Semana (7 días)" w={db.limits?.sevenDay} plain />
       </div>
-      <div className="meta" style={{ marginTop: 6 }}>
+      <div className="kz-note">
         {db.limits
           ? `Informado por Claude Code en la última respuesta (${new Date(db.limits.updatedAt).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })})${stale ? ' — puede estar desactualizado' : ''}. Incluye todo el uso de tu cuenta, no solo esta app.`
           : 'Se mostrará después de la primera respuesta de Claude en un chat.'}
       </div>
 
-      <h3>GitHub Copilot (este mes)</h3>
-      <div className={`limit ${copPct >= 90 ? 'critical' : copPct >= 70 ? 'warn' : 'ok'}`} style={{ maxWidth: 520 }}>
-        <div className="limit-h">
-          <b>Solicitudes premium</b>
-          <span>
-            {Math.round(cop.used * 100) / 100}
-            {quota > 0 ? ` de ${quota} usadas` : ' usadas'}
-          </span>
-        </div>
-        {quota > 0 ? (
-          <>
-            <div className="ctx-bar big">
+      <div className="kz-row">
+        <section className={`bc kz-cop ${copPct >= 90 ? 'critical' : copPct >= 70 ? 'warn' : ''}`}>
+          <div className="eyebrow">GitHub Copilot · este mes</div>
+          <div className="kz-cop-h">
+            <b>Solicitudes premium</b>
+            <span className="kz-cop-n">
+              {Math.round(cop.used * 100) / 100}
+              <small>{quota > 0 ? ` de ${quota} usadas` : ' usadas'}</small>
+            </span>
+          </div>
+          {quota > 0 && (
+            <div className="kz-bar">
               <i style={{ width: `${copPct}%` }} />
             </div>
-            <div className="meta">
-              Te quedan aprox. <b>{Math.round((left ?? 0) * 100) / 100}</b> · se reinicia el {cop.next.toLocaleDateString('es', { day: 'numeric', month: 'long' })}
-            </div>
-          </>
-        ) : (
-          <div className="meta">Define tus solicitudes mensuales en Ajustes para ver cuántas te quedan.</div>
-        )}
-      </div>
-      <div className="meta" style={{ marginTop: 6, maxWidth: 520 }}>
-        Es una estimación: solo cuenta lo consumido desde esta app. El uso de Copilot en VS Code, la web u otras terminales no aparece aquí, así que el saldo real puede ser menor.
-      </div>
-      {cop.models.length > 0 && (
-        <table style={{ maxWidth: 520, marginTop: 10 }}>
-          <thead>
-            <tr>
-              <th>Modelo</th>
-              <th style={{ width: 90 }}>Respuestas</th>
-              <th style={{ width: 90 }}>Premium</th>
-              <th style={{ width: 90 }}>Tokens</th>
-            </tr>
-          </thead>
-          <tbody>
-            {cop.models.map(([m, v]) => (
-              <tr key={m}>
-                <td>{m}</td>
-                <td>{v.turns}</td>
-                <td>{Math.round(v.premium * 100) / 100}</td>
-                <td>{fmtTokens(v.tokens)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      <h3>Tokens por periodo (Claude)</h3>
-      <div className="periods">
-        {periods.map(([label, t]) => (
-          <div key={label} className="period">
-            <div className="meta">{label}</div>
-            <div className="big-n">{fmtTokens(fresh(t))}</div>
-            <div className="meta">
-              {t.turns} {t.turns === 1 ? 'respuesta' : 'respuestas'} · {fmtUsd(t.cost)} a precio de lista
-            </div>
-            <div className="meta">
-              ↑ {fmtTokens(t.input + t.cacheCreate)} entrada · ↓ {fmtTokens(t.output)} salida · caché leída {fmtTokens(t.cacheRead)}
-            </div>
+          )}
+          <div className="kz-sm">
+            {quota > 0
+              ? `Te quedan aprox. ${Math.round((left ?? 0) * 100) / 100} · se reinicia el ${cop.next.toLocaleDateString('es', { day: 'numeric', month: 'long' })}. `
+              : 'Define tus solicitudes mensuales en Ajustes para ver cuántas te quedan. '}
+            Solo cuenta el uso desde esta app.
           </div>
-        ))}
+          {cop.models.length > 0 && (
+            <div className="kz-models">
+              {cop.models.map(([m, v]) => (
+                <div key={m} className="kz-model" title={`${v.turns} respuestas · ${fmtTokens(v.tokens)} tokens`}>
+                  <span>{m}</span>
+                  <b className="num">{Math.round(v.premium * 100) / 100}</b>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+        <section className="bc kz-periods">
+          {periods.map(([label, t]) => (
+            <div key={label} className="kz-per" title={`↑ ${fmtTokens(t.input + t.cacheCreate)} entrada · ↓ ${fmtTokens(t.output)} salida · caché leída ${fmtTokens(t.cacheRead)}`}>
+              <div className="eyebrow">{label}</div>
+              <div className="kz-big">{fmtTokens(fresh(t))}</div>
+              <div className="kz-sm">
+                {t.turns} {t.turns === 1 ? 'respuesta' : 'respuestas'} · {fmtUsd(t.cost)} a precio de lista
+              </div>
+            </div>
+          ))}
+        </section>
       </div>
-      <div className="meta" style={{ marginTop: 6 }}>
-        «Tokens» cuenta entrada nueva + salida (la lectura de caché es mucho más barata y se muestra aparte). El costo es a precio de lista de la API: con una
-        suscripción no se cobra por separado, pero sirve para comparar.
-      </div>
+      <div className="kz-note">«Tokens» suma entrada nueva + salida. La lectura de caché se muestra aparte; el costo es a precio de lista de la API.</div>
 
-      <h3>Últimos 14 días</h3>
-      <div className="bars">
-        {view.days.map((d) => (
-          <div key={d.key} className="bar-col" title={`${d.key}: ${fmtTokens(d.value)} tokens`}>
-            <div className="bar-v">{d.value ? fmtTokens(d.value) : ''}</div>
-            <div className="bar-fill" style={{ height: `${Math.max(2, (d.value / max) * 100)}%`, opacity: d.value ? 1 : 0.25 }} />
-            <div className="bar-l">{d.label}</div>
-          </div>
-        ))}
-      </div>
+      <section className="bc kz-chart">
+        <div className="card-h">
+          <span className="eyebrow">Últimos 14 días</span>
+          <span className="kz-note-r">tokens por día</span>
+        </div>
+        <div className="kz-spark">
+          {view.days.map((d) => (
+            <div key={d.key} className={`c${d.value > max * 0.6 ? ' hi' : ''}`} title={`${d.key}: ${fmtTokens(d.value)} tokens`}>
+              <em>{d.value ? fmtTokens(d.value) : ''}</em>
+              <div className="b" style={{ height: `${Math.max(2, (d.value / max) * 100)}%`, opacity: d.value ? 1 : 0.35 }} />
+              <small>{d.label}</small>
+            </div>
+          ))}
+        </div>
+      </section>
 
-      <h3>Por tarea (30 días)</h3>
-      {view.tasks.length ? (
-        <table>
-          <thead>
-            <tr>
-              <th>Tarea</th>
-              <th style={{ width: 90 }}>Respuestas</th>
-              <th style={{ width: 100 }}>Tokens</th>
-              <th style={{ width: 110 }}>Caché leída</th>
-              <th style={{ width: 90 }}>Costo lista</th>
-            </tr>
-          </thead>
-          <tbody>
-            {view.tasks.map(({ id, t }) => {
-              const task = findTask(db, id)
-              return (
-                <tr key={id}>
-                  <td>
-                    {task?.title ?? '(tarea borrada)'}
-                    <div className="meta">
-                      {task?.client} {task?.project}
-                    </div>
-                  </td>
-                  <td>{t.turns}</td>
-                  <td>{fmtTokens(fresh(t))}</td>
-                  <td>{fmtTokens(t.cacheRead)}</td>
-                  <td>{fmtUsd(t.cost)}</td>
+      <section className="bc kz-tasks">
+        <div className="card-h">
+          <span className="eyebrow">Por tarea · 30 días</span>
+        </div>
+        {view.tasks.length ? (
+          <div className="kz-scroll">
+            <table className="tbl kz-tbl">
+              <thead>
+                <tr>
+                  <th>Tarea</th>
+                  <th className="r">Respuestas</th>
+                  <th className="r">Tokens</th>
+                  <th className="r">Caché leída</th>
+                  <th className="r">Costo lista</th>
                 </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      ) : (
-        <EmptyState kind="chart" title="Aún no hay consumo registrado" text="Aparece cuando chateas con Claude desde una tarea." />
-      )}
-    </>
+              </thead>
+              <tbody>
+                {view.tasks.map(({ id, t }) => {
+                  const task = findTask(db, id)
+                  const sub = [task?.client, task?.project].filter(Boolean).join(' · ')
+                  return (
+                    <tr key={id}>
+                      <td className="kz-t" title={sub ? `${task?.title ?? ''} · ${sub}` : task?.title}>
+                        <b>{task?.title ?? '(tarea borrada)'}</b>
+                        {sub && <span>{sub}</span>}
+                      </td>
+                      <td className="r">{t.turns}</td>
+                      <td className="r">{fmtTokens(fresh(t))}</td>
+                      <td className="r">{fmtTokens(t.cacheRead)}</td>
+                      <td className="r">
+                        <b>{fmtUsd(t.cost).replace('.', ',')}</b>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState kind="chart" title="Aún no hay consumo registrado" text="Aparece cuando chateas con Claude desde una tarea." />
+        )}
+      </section>
+    </div>
   )
 }

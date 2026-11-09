@@ -6,7 +6,7 @@ import { taskColor, useAppearance } from '../theme'
 import { G } from './glyphs'
 
 export const PANEL_LABEL: Record<string, string> = {
-  today: 'Hoy',
+  today: 'Inicio',
   board: 'Tablero',
   workspace: 'Espacio',
   hours: 'Horas',
@@ -15,6 +15,8 @@ export const PANEL_LABEL: Record<string, string> = {
   usage: 'Consumo',
   groups: 'Carpetas',
   music: 'Música',
+  web: 'Navegador',
+  notes: 'Notas',
   whatsapp: 'WhatsApp',
   settings: 'Ajustes'
 }
@@ -39,7 +41,7 @@ export function TaskTabs({ tasks, active, panel, unread, onPanel, onSelect, onCl
   useAppearance()
   return (
     <div className="tabs">
-      <button className={`tab panel ${active === null ? 'active' : ''}`} onClick={onPanel} title="Volver al panel">
+      <button className={`tab panel ${active === null ? 'active' : ''}`} onClick={onPanel} title="Volver a Inicio">
         <span>☰ {PANEL_LABEL[panel] ?? 'Panel'}</span>
       </button>
       {tasks.map((id) => {
@@ -115,6 +117,26 @@ Arrastra para reordenar; suéltala fuera de la ventana para abrirla aparte`}
 
 export type TaskMode = 'chat' | 'design' | 'git' | 'files'
 
+/** Modos de la tarea: Chat, Diseño, Git y Archivos. */
+export function ModeSeg({ mode, onMode, designing }: { mode: TaskMode; onMode(m: TaskMode): void; designing?: boolean }): ReactNode {
+  return (
+    <div className="seg grad modeseg">
+      <button className={mode === 'chat' ? 'on' : ''} onClick={() => onMode('chat')}>
+        <G n="chat" size={14} /> Chat
+      </button>
+      <button className={mode === 'design' ? 'on' : ''} onClick={() => onMode('design')} title="Mockups y diseños de esta tarea">
+        <G n="design" size={14} /> Diseño {designing && <i className="tdot run" />}
+      </button>
+      <button className={mode === 'git' ? 'on' : ''} onClick={() => onMode('git')} title="Control de Git del proyecto: cambios, commit, ramas e historial">
+        <G n="git" size={14} /> Git
+      </button>
+      <button className={mode === 'files' ? 'on' : ''} onClick={() => onMode('files')} title="Explorar y leer el código de la tarea (solo lectura)">
+        <G n="code" size={14} /> Archivos
+      </button>
+    </div>
+  )
+}
+
 interface ConvTabsProps {
   taskId: string
   active: string | null
@@ -128,30 +150,19 @@ interface ConvTabsProps {
   docked?: boolean // ventana suelta: el botón la devuelve a la principal
   /** Las conversaciones se listan en el panel de la izquierda: aquí solo van los modos. */
   listMode?: boolean
+  /** Los modos van en la fila de la tarea (TaskHead): aquí no se dibujan. */
+  noModes?: boolean
 }
 
 /** Nivel 2: Chat / Diseño de la tarea activa y, en Chat, sus conversaciones (cambian al cambiar de tarea). */
-export function ConvTabs({ taskId, active, mode, unread, onMode, onSelect, onClose, onNew, onPop, docked, listMode }: ConvTabsProps): ReactNode {
+export function ConvTabs({ taskId, active, mode, unread, onMode, onSelect, onClose, onNew, onPop, docked, listMode, noModes }: ConvTabsProps): ReactNode {
   const db = useDB()
   const convs = openConvs(db, taskId)
   const hidden = closedConvs(db, taskId).length
   const designing = !!designConv(db, taskId)?.chat.running
   return (
     <div className="tabs sub">
-      <div className="seg modeseg">
-        <button className={mode === 'chat' ? 'on' : ''} onClick={() => onMode('chat')}>
-          <G n="chat" size={14} /> Chat
-        </button>
-        <button className={mode === 'design' ? 'on' : ''} onClick={() => onMode('design')} title="Mockups y diseños de esta tarea">
-          <G n="design" size={14} /> Diseño {designing && <i className="tdot run" />}
-        </button>
-        <button className={mode === 'git' ? 'on' : ''} onClick={() => onMode('git')} title="Control de Git del proyecto: cambios, commit, ramas e historial">
-          <G n="git" size={14} /> Git
-        </button>
-        <button className={mode === 'files' ? 'on' : ''} onClick={() => onMode('files')} title="Explorar y leer el código de la tarea (solo lectura)">
-          <G n="code" size={14} /> Archivos
-        </button>
-      </div>
+      {!noModes && <ModeSeg mode={mode} onMode={onMode} designing={designing} />}
       {mode === 'chat' && !listMode && convs.map(({ id, chat }) => (
         <div
           key={id}

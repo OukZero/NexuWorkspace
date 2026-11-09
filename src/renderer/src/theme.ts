@@ -85,6 +85,13 @@ function mk(label: string, base: 'light' | 'dark', c: Palette, accent: string | 
 }
 
 export const PRESETS: Record<string, Preset> = {
+  // predeterminado: paleta del rediseño (fondo oscuro, acento violeta, tarjetas sólidas)
+  shutoki: mk(
+    'Shutoki',
+    'dark',
+    { bg: '#0b0b12', panel: '#12121c', panel2: '#171724', line: '#22222f', text: '#ecebf4', muted: '#9a99b0', user: '#262045', code: '#08080e', over: '#1d1d2c' },
+    '#7c5cff'
+  ),
   medianoche: {
     label: 'Medianoche',
     base: 'dark',
@@ -270,7 +277,7 @@ export interface Appearance extends Look {
 }
 
 const DEFAULT_LOOK: Look = {
-  mode: 'system', preset: '', custom: DEFAULT_CUSTOM, accent: 'auto', uiFont: '', codeFont: '', lineHeight: 145,
+  mode: 'system', preset: 'shutoki', custom: DEFAULT_CUSTOM, accent: 'auto', uiFont: '', codeFont: '', lineHeight: 145,
   radius: 'soft', shadow: 1, bubbles: 'solid', syntax: 'auto'
 }
 export const DEFAULT_APPEARANCE: Appearance = {

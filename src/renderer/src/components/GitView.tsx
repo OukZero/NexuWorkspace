@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { GitBranches, GitCommit, GitFile, GitRepo, GitStatus, IssueRef, RemoteInfo } from '../../../shared/types'
+import * as Popover from '@radix-ui/react-popover'
+import { createPortal } from 'react-dom'
 import { baseName } from '../utils'
 import { findTask, useDB } from '../store'
+import { useTaskSlot, useTaskSlotLeft } from '../taskSlot'
 import { useUi } from '../ui'
 import { CiPanel } from './CiBadges'
 import { DiffView } from './DiffView'
 import { pruneReviewed, reviewKey, toggleReviewed, useReviewed } from '../reviewed'
 import { EmptyState } from './EmptyState'
+import { G } from './glyphs'
 import { Select, type SelectOption } from './Select'
 
 type Sel = { path: string; kind: 'staged' | 'work' | 'untracked' } | { hash: string }
@@ -30,8 +34,8 @@ function Row({ f, dir, side, selected, onSelect, actions }: { f: GitFile; dir: s
     <div className={`gfile ${selected ? 'on' : ''}${seen ? ' seen' : ''}`} onClick={onSelect} title={`${f.path} · ${label}${seen ? ' · revisado' : ''}`}>
       <span className={`gl g-${l}`}>{l}</span>
       <span className="gname">
+        {f.path.includes('/') && <small>{f.path.slice(0, f.path.lastIndexOf('/') + 1)}</small>}
         <b>{baseName(f.path)}</b>
-        <small>{f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : ''}</small>
       </span>
       <span className="gact" onClick={(e) => e.stopPropagation()}>
         <button className={`icon gseen${seen ? ' on' : ''}`} title={seen ? 'Quitar la marca de revisado' : 'Marcar como revisado'} aria-label={seen ? 'Quitar la marca de revisado' : 'Marcar como revisado'} aria-pressed={seen} onClick={() => toggleReviewed(reviewKey(dir, f.path))}>
@@ -47,6 +51,8 @@ function Row({ f, dir, side, selected, onSelect, actions }: { f: GitFile; dir: s
 export function GitView({ taskId }: { taskId: string }): ReactNode {
   const db = useDB()
   const ui = useUi()
+  const slotR = useTaskSlot()
+  const slotL = useTaskSlotLeft()
   const task = findTask(db, taskId)
   const [repos, setRepos] = useState<GitRepo[]>([])
   const [dir, setDir] = useState<string>('')
@@ -158,7 +164,6 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
   if (current && !current.isRepo) {
     return (
       <>
-        <h1>Git</h1>
         <EmptyState
           kind="folders"
           title={`«${current.name}» no es un repositorio de Git`}
@@ -263,9 +268,87 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
       ]
     : []
 
-  return (
-    <div className="gitv">
-      <div className="gbar">
+  // PR de la rama actual: va en una pastilla discreta de la barra (con un menú), no en un bloque aparte
+  const pr = st && task.pr && task.pr.branch === st.branch ? task.pr : null
+  const prPill = pr ? (
+    <Popover.Root>
+      <Popover.Trigger asChild>
+        <button className={`gprpill ${pr.exists ? 'open' : ''}`} title="Pull request de esta rama: enlace, mensaje para quien revisa y descripción">
+          <i aria-hidden /> {pr.exists ? `PR #${pr.number} abierto` : 'PR pendiente'}
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content className="gpr-pop" align="end" sideOffset={8} collisionPadding={12}>
+          <div className="gpr-h">
+            <b>{pr.exists ? `PR #${pr.number} abierto` : 'Rama publicada: falta abrir el PR'}</b>
+            <span className="meta">
+              {pr.branch} → {pr.base} · lo revisa otra persona
+            </span>
+          </div>
+          <input readOnly className="gpr-url" value={pr.url} aria-label="Enlace del PR" onFocus={(e) => e.currentTarget.select()} />
+          <div className="gpr-b">
+            <button className="btn sm primary" onClick={() => void ui.run('url:open', pr.url)}>
+              {pr.exists ? 'Abrir PR' : 'Crear PR en el navegador'}
+            </button>
+            <button className="btn sm" onClick={() => copy(pr.url, 'Enlace')}>
+              Copiar enlace
+            </button>
+            <button className="btn sm" title="Mensaje listo para pegar en el chat de quien va a revisar" onClick={() => copy(reviewerMessage(), 'Mensaje para el revisor')}>
+              Copiar mensaje para quien revisa
+            </button>
+            <button
+              className="btn sm"
+              disabled={!!busy}
+              title="Redacta título y descripción del PR a partir de los commits y el diff"
+              onClick={() => void act('descripción', () => window.api.call('git:prText', dir, taskId).then(setPrDraft), 'Descripción lista: cópiala al PR')}
+            >
+              {busy === 'descripción' ? '✦ Redactando…' : '✦ Descripción del PR'}
+            </button>
+            <button className="btn sm" disabled={!!busy} title="Vuelve a comprobar si el PR ya existe" onClick={() => void pushBranch()}>
+              ⟳ Actualizar
+            </button>
+          </div>
+          {prDraft && (
+            <div className="gpr-draft">
+              <input readOnly value={prDraft.title} aria-label="Título propuesto" />
+              <textarea readOnly rows={8} value={prDraft.body} aria-label="Descripción propuesta" />
+              <div className="gpr-b">
+                <button className="btn sm" onClick={() => copy(prDraft.title, 'Título')}>
+                  Copiar título
+                </button>
+                <button className="btn sm" onClick={() => copy(prDraft.body, 'Descripción')}>
+                  Copiar descripción
+                </button>
+                <button className="btn sm" onClick={() => setPrDraft(null)}>
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          )}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  ) : st?.upstream && remote && st.branch !== remote.base ? (
+    <button className="btn sm ghost" disabled={!!busy} title="Comprueba si ya hay un PR y obtiene su enlace" onClick={() => void pushBranch()}>
+      Obtener enlace del PR
+    </button>
+  ) : null
+
+  // el diff seleccionado: título (asunto del commit o ruta), hash y recuento de líneas
+  const selCommit = sel && 'hash' in sel ? commits.find((c) => c.hash === sel.hash) : undefined
+  const diffStat = (() => {
+    let add = 0
+    let del = 0
+    for (const l of diff.split('\n')) {
+      if (l.startsWith('+') && !l.startsWith('+++')) add++
+      else if (l.startsWith('-') && !l.startsWith('---')) del++
+    }
+    return { add, del }
+  })()
+
+  // rama, estado del remoto y acciones: van en la fila de la tarea (junto a los modos) para no empujar el contenido hacia abajo
+  const barLeft = (
+    <>
         {repos.length > 1 && (
           <Select
             value={dir}
@@ -275,7 +358,7 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
           />
         )}
         <span className="gbranch" title={st?.root}>
-          ⎇
+          <G n="git" size={13} />
           <Select
             value={br?.current ?? ''}
             ariaLabel="Rama"
@@ -287,7 +370,7 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
           />
         </span>
         {newBranch === null ? (
-          <button className="btn sm" onClick={() => setNewBranch('')}>
+          <button className="btn sm ghost" title="Crear una rama nueva" onClick={() => setNewBranch('')}>
             ＋ Rama
           </button>
         ) : (
@@ -308,8 +391,42 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
             </button>
           </span>
         )}
-        <span className="grow" />
-        {st && !st.upstream && <span className="meta">sin rama remota</span>}
+        {st && <span className={`gstat ${st.upstream ? 'ok' : 'off'}`}>{st.upstream ? 'La rama ya está en el remoto' : 'La rama aún no está en el remoto'}</span>}
+        {task.issue && (
+          <>
+            <button className="chip issue" title={`${task.issue.title}\nClic para abrir la issue`} onClick={() => void ui.run('url:open', task.issue!.url)}>
+              #{task.issue.number} · {task.issue.title}
+            </button>
+            <button className="icon" title="Desvincular la issue de la tarea" aria-label="Desvincular la issue" onClick={() => void ui.run('issue:link', taskId, null)}>
+              ✕
+            </button>
+          </>
+        )}
+        {st && !st.upstream && remote?.kind === 'github' && (
+          <>
+            <button className="btn sm" disabled={!!busy} onClick={() => (panel === 'pick' ? setPanel(null) : void openPick())} title="Elige una issue abierta: se crea su rama desde la base actualizada y queda vinculada a la tarea">
+              ⎇ Rama desde una issue…
+            </button>
+            <button
+              className="btn sm"
+              disabled={!!busy}
+              title="Crea la issue en GitHub con el título y la descripción de la tarea, y su rama"
+              onClick={() => {
+                setDraftIssue({ title: task.title, body: task.description })
+                setPanel(panel === 'create' ? null : 'create')
+              }}
+            >
+              ＋ Issue desde la tarea
+            </button>
+          </>
+        )}
+        {st && !st.upstream && remote && remote.kind !== 'github' && <span className="meta">{remote.kind === 'gitlab' ? 'GitLab' : remote.kind === 'azure' ? 'Azure DevOps' : remote.host}: enlace del PR sí, issues no</span>}
+    </>
+  )
+  const barRight = (
+    <>
+        {prPill}
+        {busy && <span className="meta">{busy}…</span>}
         <button className="btn sm" disabled={!!busy} title="Traer los cambios del remoto sin aplicarlos" onClick={() => void act('fetch', () => window.api.call('git:sync', dir, 'fetch'), 'Fetch hecho')}>
           ⟳ Fetch
         </button>
@@ -325,49 +442,29 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
           ↑ {st?.upstream ? 'Push' : 'Publicar'}
           {st?.ahead ? ` ${st.ahead}` : ''}
         </button>
-        <button className="btn sm accent" disabled={!!busy} title="Revisión de código con IA: hallazgos, simulación de escenarios y veredicto (solo lectura)" onClick={() => void startReview()}>
+        <button className="btn sm primary" disabled={!!busy} title="Revisión de código con IA: hallazgos, simulación de escenarios y veredicto (solo lectura)" onClick={() => void startReview()}>
           ✦ Revisar código
         </button>
-        {busy && <span className="meta">{busy}…</span>}
-      </div>
-      {error && <div className="gerr">{error}</div>}
+    </>
+  )
 
-      <div className="gwork">
-        <div className="gwork-row">
-          {task.issue ? (
-            <>
-              <button className="chip issue" title={`${task.issue.title}\nClic para abrir la issue`} onClick={() => void ui.run('url:open', task.issue!.url)}>
-                #{task.issue.number} · {task.issue.title}
-              </button>
-              <button className="icon" title="Desvincular la issue de la tarea" aria-label="Desvincular la issue" onClick={() => void ui.run('issue:link', taskId, null)}>
-                ✕
-              </button>
-            </>
-          ) : (
-            <span className="meta">Sin issue vinculada{task.branch ? ` · rama de la tarea: ${task.branch}` : ''}</span>
-          )}
+  return (
+    <div className="gitv">
+      {slotL && slotR ? (
+        <>
+          {createPortal(barLeft, slotL)}
+          {createPortal(barRight, slotR)}
+        </>
+      ) : (
+        <div className="gbar">
+          {barLeft}
           <span className="grow" />
-          {remote?.kind === 'github' && (
-            <>
-              <button className="btn sm" disabled={!!busy} onClick={() => (panel === 'pick' ? setPanel(null) : void openPick())} title="Elige una issue abierta: se crea su rama desde la base actualizada y queda vinculada a la tarea">
-                ⎇ Rama desde una issue…
-              </button>
-              <button
-                className="btn sm"
-                disabled={!!busy}
-                title="Crea la issue en GitHub con el título y la descripción de la tarea, y su rama"
-                onClick={() => {
-                  setDraftIssue({ title: task.title, body: task.description })
-                  setPanel(panel === 'create' ? null : 'create')
-                }}
-              >
-                ＋ Issue desde la tarea
-              </button>
-            </>
-          )}
-          {remote && remote.kind !== 'github' && <span className="meta">{remote.kind === 'gitlab' ? 'GitLab' : remote.kind === 'azure' ? 'Azure DevOps' : remote.host}: enlace del PR sí, issues no</span>}
+          {barRight}
         </div>
-
+      )}
+      {error && <div className="gerr">{error}</div>}
+      {(panel || (st && task.branch === st.branch)) && (
+        <div className="gwork">
         {panel === 'pick' && (
           <div className="gpanel">
             <div className="gpanel-h">
@@ -413,74 +510,13 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
             </div>
           </div>
         )}
-
-        {st && task.pr && task.pr.branch === st.branch ? (
-          <div className="gpr">
-            <div className="gpr-h">
-              <b>{task.pr.exists ? `PR #${task.pr.number} abierto` : 'Rama publicada: falta abrir el PR'}</b>
-              <span className="meta">
-                {task.pr.branch} → {task.pr.base} · lo revisa otra persona
-              </span>
-            </div>
-            <input readOnly className="gpr-url" value={task.pr.url} aria-label="Enlace del PR" onFocus={(e) => e.currentTarget.select()} />
-            <div className="gpr-b">
-              <button className="btn sm primary" onClick={() => void ui.run('url:open', task.pr!.url)}>
-                {task.pr.exists ? 'Abrir PR' : 'Crear PR en el navegador'}
-              </button>
-              <button className="btn sm" onClick={() => copy(task.pr!.url, 'Enlace')}>
-                Copiar enlace
-              </button>
-              <button className="btn sm" title="Mensaje listo para pegar en el chat de quien va a revisar" onClick={() => copy(reviewerMessage(), 'Mensaje para el revisor')}>
-                Copiar mensaje para quien revisa
-              </button>
-              <button
-                className="btn sm"
-                disabled={!!busy}
-                title="Redacta título y descripción del PR a partir de los commits y el diff"
-                onClick={() => void act('descripción', () => window.api.call('git:prText', dir, taskId).then(setPrDraft), 'Descripción lista: cópiala al PR')}
-              >
-                {busy === 'descripción' ? '✦ Redactando…' : '✦ Descripción del PR'}
-              </button>
-              <button className="btn sm" disabled={!!busy} title="Vuelve a comprobar si el PR ya existe" onClick={() => void pushBranch()}>
-                ⟳ Actualizar
-              </button>
-            </div>
-            {prDraft && (
-              <div className="gpr-draft">
-                <input readOnly value={prDraft.title} aria-label="Título propuesto" />
-                <textarea readOnly rows={8} value={prDraft.body} aria-label="Descripción propuesta" />
-                <div className="gpr-b">
-                  <button className="btn sm" onClick={() => copy(prDraft.title, 'Título')}>
-                    Copiar título
-                  </button>
-                  <button className="btn sm" onClick={() => copy(prDraft.body, 'Descripción')}>
-                    Copiar descripción
-                  </button>
-                  <button className="btn sm" onClick={() => setPrDraft(null)}>
-                    Cerrar
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          st?.upstream &&
-          remote &&
-          st.branch !== remote.base && (
-            <div className="gwork-row">
-              <span className="meta">La rama ya está en el remoto.</span>
-              <button className="btn sm" disabled={!!busy} onClick={() => void pushBranch()}>
-                Obtener el enlace del PR
-              </button>
-            </div>
-          )
-        )}
         {st && task.branch === st.branch && <CiPanel taskId={taskId} />}
-      </div>
+        </div>
+      )}
 
       <div className="gcols">
         <div className="gleft">
-          <div className="gcommit">
+          <div className="gcard gcommit">
             <textarea
               rows={3}
               value={msg}
@@ -522,6 +558,7 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
             </div>
           </div>
 
+          <div className="gcard glist">
           {conflicts.length > 0 && (
             <section>
               <h4 className="gh err">Conflictos · {conflicts.length}</h4>
@@ -601,29 +638,40 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
             <h4 className="gh clickable" onClick={() => setShowLog((s) => !s)}>
               {showLog ? '▾' : '▸'} Historial · {commits.length}
             </h4>
-            {showLog &&
-              commits.map((c) => (
-                <div key={c.hash} className={`gcommitrow ${sel && 'hash' in sel && sel.hash === c.hash ? 'on' : ''}`} onClick={() => setSel({ hash: c.hash })} title={`${c.short} · ${c.author}`}>
-                  <span className="gsub">{c.subject}</span>
-                  <small>
-                    {c.short} · {c.author} · {new Date(c.date).toLocaleDateString('es', { day: 'numeric', month: 'short' })}
-                  </small>
-                </div>
-              ))}
+            {showLog && commits.length > 0 && (
+              <ul className="gtl">
+                {commits.map((c, i) => (
+                  <li key={c.hash} className={`${i === 0 ? 'latest' : ''}${sel && 'hash' in sel && sel.hash === c.hash ? ' on' : ''}`} onClick={() => setSel({ hash: c.hash })} title={`${c.short} · ${c.author}`}>
+                    <div className="gtl-m">{c.subject}</div>
+                    <div className="gtl-meta">
+                      <em>{c.short}</em> · {c.author} · {new Date(c.date).toLocaleDateString('es', { day: 'numeric', month: 'short' }).replace('.', '')}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
             {showLog && !commits.length && <div className="meta gempty">Aún no hay commits.</div>}
           </section>
+          </div>
         </div>
 
         <div className="gright">
           {sel ? (
             <>
               <div className="gdiffhead">
-                <b>{'hash' in sel ? `Commit ${sel.hash.slice(0, 7)}` : sel.path}</b>
+                <b title={'hash' in sel ? selCommit?.subject : sel.path}>{'hash' in sel ? (selCommit?.subject ?? `Commit ${sel.hash.slice(0, 7)}`) : sel.path}</b>
+                {'hash' in sel && <span className="gh-hash">{sel.hash.slice(0, 7)}</span>}
                 {'path' in sel && <span className="chip">{sel.kind === 'staged' ? 'preparado' : sel.kind === 'untracked' ? 'nuevo' : 'cambios'}</span>}
+                <span className="grow" />
                 {'path' in sel && task.folder && (
-                  <button className="btn sm" style={{ marginLeft: 'auto' }} onClick={() => void ui.run('vscode:open', st?.root ?? task.folder)}>
+                  <button className="btn sm" onClick={() => void ui.run('vscode:open', st?.root ?? task.folder)}>
                     Abrir en VS Code
                   </button>
+                )}
+                {diff && !diff.startsWith('No se pudo') && (
+                  <span className="chip">
+                    +{diffStat.add} −{diffStat.del}
+                  </span>
                 )}
               </div>
               <DiffView text={diff} />

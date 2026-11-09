@@ -4,8 +4,11 @@ import type { RedmineDay } from '../../../shared/types'
 import { useDB } from '../store'
 import { dayKey } from '../utils'
 import { useUi } from '../ui'
+import { G } from './glyphs'
 
 const r2 = (n: number): number => Math.round(n * 100) / 100
+/** Horas con coma decimal, como en el resto de la app. */
+const f2 = (n: number): string => String(r2(n)).replace('.', ',')
 const DOW = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb']
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 
@@ -111,18 +114,16 @@ export function RedmineView(): ReactNode {
 
   return (
     <>
-      <h1>Redmine</h1>
-      <div className="sub">Horas imputadas en Redmine frente a lo que registraste en Shutoki</div>
       <div className="rm-tools">
         <div className="rm-month" role="group" aria-label="Mes">
           <button aria-label="Mes anterior" onClick={() => setMonth(shift(month, -1))}>
-            ‹
+            <G n="chevron" size={15} />
           </button>
           <span>
             {MONTHS[m - 1]} <b>{y}</b>
           </span>
           <button aria-label="Mes siguiente" onClick={() => setMonth(shift(month, 1))}>
-            ›
+            <G n="chevron" size={15} />
           </button>
         </div>
         <button className="rm-pill" disabled={month === today.slice(0, 7)} onClick={() => setMonth(today.slice(0, 7))}>
@@ -130,13 +131,28 @@ export function RedmineView(): ReactNode {
         </button>
         <span className="grow" />
         <button className="rm-pill" disabled={loading} onClick={() => void load()}>
-          <i className={loading ? 'spin' : ''}>↻</i> {loading ? 'Leyendo…' : 'Actualizar'}
+          <i className={loading ? 'spin' : ''}>
+            <G n="reset" size={13} />
+          </i>{' '}
+          {loading ? 'Leyendo…' : 'Actualizar'}
         </button>
         <button className="rm-pill ghost" onClick={() => void ui.run('redmine:login')}>
-          Abrir Redmine
+          <G n="popout" size={13} /> Abrir Redmine
         </button>
       </div>
       {error && <div className="empty" style={{ marginBottom: 12 }}>⚠ {error}</div>}
+      {!db.settings.redmineUrl && (
+        <div className="rm-alert">
+          <G n="settings" size={15} />
+          <span>
+            Falta la dirección de Redmine.{' '}
+            <button className="rm-link" onClick={() => ui.go('settings')}>
+              Configúrala en Ajustes
+            </button>{' '}
+            para ver tus horas imputadas.
+          </span>
+        </div>
+      )}
 
       <div className="rm-top">
         <div className="rm-card rm-ringcard">
@@ -153,22 +169,30 @@ export function RedmineView(): ReactNode {
         <div className="rm-kpis">
           <div className="rm-card rm-kpi" style={{ ['--k' as string]: 'var(--accent2)' }}>
             <span>Imputado</span>
-            <b>{r2(spent)} h</b>
+            <b>
+              {f2(spent)}<em>h</em>
+            </b>
             <small>{count('full') + count('over')} días completos</small>
           </div>
           <div className="rm-card rm-kpi" style={{ ['--k' as string]: missing > 0.01 ? 'var(--warn)' : 'var(--accent2)' }}>
             <span>Faltan hasta hoy</span>
-            <b>{r2(missing)} h</b>
+            <b>
+              {f2(missing)}<em>h</em>
+            </b>
             <small>{count('part') + count('none')} días por completar</small>
           </div>
           <div className="rm-card rm-kpi" style={{ ['--k' as string]: pending > 0.01 ? 'var(--danger)' : 'var(--accent)' }}>
             <span>En Shutoki sin enviar</span>
-            <b>{r2(pending)} h</b>
+            <b>
+              {f2(pending)}<em>h</em>
+            </b>
             <small>de {r2(shutoki)} h registradas</small>
           </div>
           <div className="rm-card rm-kpi" style={{ ['--k' as string]: 'var(--accent)' }}>
             <span>Horas laborables</span>
-            <b>{r2(max)} h</b>
+            <b>
+              {f2(max)}<em>h</em>
+            </b>
             <small>{days.filter((d) => d.max > 0).length} días del mes</small>
           </div>
         </div>
@@ -176,7 +200,7 @@ export function RedmineView(): ReactNode {
 
       <div className="rm-card">
         <div className="rm-h">
-          <b>Horas por día</b>
+          <span className="rm-eb">Horas por día</span>
           <span className="rm-keys">
             <i style={{ background: 'var(--accent2)' }} /> Redmine
             <i className="ghost" /> Shutoki sin enviar
@@ -208,7 +232,11 @@ export function RedmineView(): ReactNode {
               ))}
             </div>
           ) : (
-            <div className="meta">Sin datos. Inicia sesión en Redmine y pulsa «Actualizar».</div>
+            <div className="rm-empty">
+              <G n="usage" size={26} />
+              <b>Sin datos todavía</b>
+              <span>Inicia sesión en Redmine y pulsa «Actualizar».</span>
+            </div>
           )
         )}
       </div>
@@ -216,7 +244,7 @@ export function RedmineView(): ReactNode {
       {days.length > 0 && (
         <div className="rm-card">
           <div className="rm-h">
-            <b>Calendario</b>
+            <span className="rm-eb">Calendario</span>
             <span className="rm-keys">
               {(['full', 'over', 'part', 'none', 'future'] as State[]).map((s) => (
                 <span key={s}>

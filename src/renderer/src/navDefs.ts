@@ -3,29 +3,30 @@ import type { View } from './ui'
 /** Secciones del menú lateral: [vista, icono, nombre]. Su orden y visibilidad se configuran en Apariencia. */
 export const NAV_GROUPS: Array<{ title: string; items: Array<[View, string, string]> }> = [
   {
-    title: 'Trabajo',
+    title: 'Hoy',
     items: [
-      ['today', '☀', 'Panel'],
+      ['today', '⌂', 'Inicio'],
       ['board', '▦', 'Tablero'],
       ['workspace', '▥', 'Espacio'],
-      ['groups', '🗂', 'Carpetas'],
+      ['chat', '💬', 'Chats'],
       ['history', '☰', 'Historial']
     ]
   },
   {
-    title: 'Registro',
+    title: 'Tiempo',
     items: [
       ['hours', '⏱', 'Horas'],
       ['redmine', '✓', 'Redmine'],
-      ['usage', '◔', 'Consumo']
+      ['usage', '◔', 'Consumo IA']
     ]
   },
   {
-    title: 'Extras',
+    title: 'Herramientas',
     items: [
       ['notes', '✎', 'Notas'],
-      ['web', '🌐', 'Web'],
+      ['web', '🌐', 'Navegador'],
       ['music', '♫', 'Música'],
+      ['groups', '🗂', 'Carpetas'],
       ['whatsapp', '💬', 'WhatsApp']
     ]
   }

@@ -12,6 +12,12 @@ export interface Ui {
   /** Conversación visible dentro de la tarea activa. */
   activeConv: string | null
   quickTick: number // cambia cuando hay que enfocar la captura rápida
+  /** Estado de las conversaciones para el aviso del menú: esperan tu respuesta, con mensajes sin leer o respondiendo. */
+  /** Modo visible de la tarea activa (solo con view === 'chat'). */
+  activeMode: 'chat' | 'design' | 'git' | 'files'
+  /** Abre la tarea en uno de sus modos: Chat, Diseño, Git o Archivos. */
+  openMode(taskId: string, mode: 'chat' | 'design' | 'git' | 'files'): void
+  chatAlerts: { waiting: number; unread: number; running: number }
   go(v: View): void
   /** Abre la pestaña de la tarea (y su última conversación; si no tiene, crea una). */
   openChat(taskId: string, convId?: string): void
@@ -37,6 +43,8 @@ export interface Ui {
   confirm(message: string, opts?: { title?: string; confirmLabel?: string; danger?: boolean }): Promise<boolean>
   /** Terminal de la tarea: el panel integrado (como VS Code) o una ventana aparte, según Ajustes. Con sesión, retoma esa conversación. */
   openTerminal(taskId: string, sessionId?: string): void
+  /** Abre la pestaña Git de la tarea. */
+  openGit(taskId: string): void
   /** Confeti discreto al completar una tarea. */
   celebrate(): void
   openHelp(): void

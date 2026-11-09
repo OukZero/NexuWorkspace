@@ -15,6 +15,7 @@ import { SettingsView } from './components/SettingsView'
 import { Sidebar } from './components/Sidebar'
 import { StatusBar } from './components/StatusBar'
 import { ConvTabs, TaskTabs, type TaskMode } from './components/TabBar'
+import { TaskHead } from './components/TaskHead'
 import { DesignView } from './components/DesignView'
 import { GitView } from './components/GitView'
 import { FilesView, type FileRequest } from './components/FilesView'
@@ -214,14 +215,56 @@ export function App(): ReactNode {
     if (activeConv === convId) setSel((s) => ({ ...s, [active]: rest[rest.length - 1].id }))
   }
 
+  // indicador de mensajes nuevos que todavía no viste, por conversación
+  const convIds = tabs.flatMap((t) => openConvs(db, t).map((c) => c.id))
+  useEffect(() => {
+    setSeen((s) => {
+      let next = s
+      for (const id of convIds) {
+        const n = db.chats[id]?.messages.length ?? 0
+        if ((id === activeConv || s[id] === undefined) && s[id] !== n) next = { ...next, [id]: n }
+      }
+      return next
+    })
+  }, [db, activeConv, convIds.join('|')])
+  const unreadConvs = new Set(convIds.filter((id) => id !== activeConv && (db.chats[id]?.messages.length ?? 0) > (seen[id] ?? Infinity)))
+  const liveChats = Object.values(db.chats).filter((c) => !c.closed && findTask(db, c.taskId))
+  const chatAlerts = { waiting: liveChats.filter((c) => c.pending?.length).length, unread: unreadConvs.size, running: liveChats.filter((c) => c.running).length }
+  const unreadTasks = new Set(tabs.filter((t) => openConvs(db, t).some((c) => unreadConvs.has(c.id))))
+
+  /** «Chats» del menú: vuelve a la última conversación en la que estabas (o a la más reciente de todas). */
+  const goChats = (): void => {
+    if (activeTask && findTask(db, activeTask)) {
+      if (!openConvs(db, activeTask).length) return void openChat(activeTask)
+      setTaskTabs((t) => (t.includes(activeTask) ? t : [...t, activeTask]))
+      setView('chat')
+      return
+    }
+    const last = (c: (typeof db.chats)[string]): number => c.messages[c.messages.length - 1]?.ts || c.createdAt
+    const recent = Object.entries(db.chats)
+      .filter(([, c]) => !c.closed && findTask(db, c.taskId))
+      .sort((a, b) => last(b[1]) - last(a[1]))[0]
+    if (recent) return void openChat(recent[1].taskId, recent[0])
+    toast('Aún no tienes conversaciones: abre una tarea y pulsa «Abrir chat».')
+  }
+
   const ui: Ui = {
     view,
     panel,
     activeTask: active,
     activeConv,
     quickTick,
+    chatAlerts,
+    activeMode: mode,
+    openMode: (taskId, m) => {
+      if (m === 'chat') return void openChat(taskId)
+      setTaskTabs((t) => (t.includes(taskId) ? t : [...t, taskId]))
+      setModes((s) => ({ ...s, [taskId]: m }))
+      setActiveTask(taskId)
+      setView('chat')
+    },
     go: (v) => {
-      if (v === 'chat') return
+      if (v === 'chat') return goChats()
       setView(v)
       setPanel(v)
     },
@@ -267,6 +310,12 @@ export function App(): ReactNode {
         setDockOpen(true)
         setTermReq((r) => ({ taskId, sessionId, nonce: (r?.nonce ?? 0) + 1 }))
       })
+    },
+    openGit: (taskId) => {
+      setTaskTabs((t) => (t.includes(taskId) ? t : [...t, taskId]))
+      setModes((m) => ({ ...m, [taskId]: 'git' }))
+      setActiveTask(taskId)
+      setView('chat')
     },
     celebrate: () => confettiEnabled() && setConfetti((n) => n + 1),
     openHelp: () => setModal({ kind: 'help' }),
@@ -399,20 +448,6 @@ export function App(): ReactNode {
     }
   }, [savedKey])
 
-  // indicador de mensajes nuevos que todavía no viste, por conversación
-  const convIds = tabs.flatMap((t) => openConvs(db, t).map((c) => c.id))
-  useEffect(() => {
-    setSeen((s) => {
-      let next = s
-      for (const id of convIds) {
-        const n = db.chats[id]?.messages.length ?? 0
-        if ((id === activeConv || s[id] === undefined) && s[id] !== n) next = { ...next, [id]: n }
-      }
-      return next
-    })
-  }, [db, activeConv, convIds.join('|')])
-  const unreadConvs = new Set(convIds.filter((id) => id !== activeConv && (db.chats[id]?.messages.length ?? 0) > (seen[id] ?? Infinity)))
-  const unreadTasks = new Set(tabs.filter((t) => openConvs(db, t).some((c) => unreadConvs.has(c.id))))
 
   const hour = new Date().getHours()
   const hello = hour < 12 ? 'Buenos días' : hour < 20 ? 'Buenas tardes' : 'Buenas noches'
@@ -427,14 +462,18 @@ export function App(): ReactNode {
     redmine: 'Horas imputadas y pendientes',
     usage: 'Consumo de la IA y límites de tu plan',
     whatsapp: 'WhatsApp Web dentro de la app',
+    web: 'Pestañas integradas para webs de trabajo',
+    notes: 'Se guardan como archivos Markdown en tu equipo',
     music: 'Spotify: reproduce, pausa y cambia de pista sin salir de la app',
     groups: 'Conjuntos de carpetas a los que la IA puede acceder',
     settings: 'Preferencias de la aplicación'
   }
   const heading =
     view === 'chat' && activeTaskObj
-      ? { title: mode === 'design' ? 'Diseño' : mode === 'git' ? 'Git' : mode === 'files' ? 'Archivos' : 'Chat IA', sub: activeTaskObj.title }
-      : view === 'today' || view === 'chat'
+      ? { title: mode === 'design' ? 'Diseño' : mode === 'git' ? 'Git' : mode === 'files' ? 'Archivos' : 'Chat IA', sub: `Tarea: ${activeTaskObj.title}${activeTaskObj.project ? ' · ' + activeTaskObj.project : ''}` }
+      : view === 'today'
+        ? { title: 'Inicio', sub: `${hello}${myName ? ', ' + myName : ''} · ${new Date().toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })}` }
+        : view === 'chat'
         ? { title: `${hello}${myName ? ', ' + myName : ''}`, sub: `${new Date().toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })} · ${openTasks} ${openTasks === 1 ? 'tarea activa' : 'tareas activas'}` }
         : { title: PANEL_LABEL[view] ?? 'Panel', sub: SUBS[view] ?? '' }
 
@@ -515,7 +554,7 @@ export function App(): ReactNode {
               </button>
             </header>
           )}
-          {(!popTask && (tabs.length > 0 || active)) || (popTask && active) ? (
+          {(!popTask && view === 'chat' && (tabs.length > 0 || active)) || (popTask && active) ? (
             <div className="subbar">
               {!popTask && tabs.length > 0 && (
                 <TaskTabs
@@ -538,6 +577,7 @@ export function App(): ReactNode {
                   active={activeConv}
                   mode={mode}
                   listMode={!popTask}
+                  noModes={!popTask}
                   onMode={(m) => setModes((s) => ({ ...s, [active]: m }))}
                   unread={unreadConvs}
                   onSelect={(id) => showConv(active, id)}
@@ -552,6 +592,7 @@ export function App(): ReactNode {
               )}
             </div>
           ) : null}
+          {!popTask && active && view === 'chat' && <TaskHead taskId={active} mode={mode} onMode={(m) => setModes((s) => ({ ...s, [active]: m }))} />}
         </div>
         <div className="scroll">
           <section id="view">{content}</section>

@@ -7,12 +7,15 @@ import { useUi } from '../ui'
 import { isWorkTask } from '../utils'
 import { G } from './glyphs'
 import { Markdown } from './Markdown'
+import { Menu } from './Menu'
 import { Select } from './Select'
 
+/** «8 nov · 14:54»: día y hora de la última modificación. */
 const when = (ts: number): string => {
   const d = new Date(ts)
-  const today = new Date()
-  return d.toDateString() === today.toDateString() ? d.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString('es', { day: 'numeric', month: 'short' })
+  const day = d.toLocaleDateString('es', { day: 'numeric', month: 'short' }).replace('.', '')
+  const hm = d.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+  return d.toDateString() === new Date().toDateString() ? `Hoy · ${hm}` : `${day} · ${hm}`
 }
 
 const preview = (n: Note): string => n.body.replace(/[#>*`\-\n]+/g, ' ').trim().slice(0, 90)
@@ -31,6 +34,7 @@ function Editor({ note, onDeleted }: { note: Note; onDeleted: () => void }): Rea
   const draft = useRef({ title, body, tags, taskId, pinned })
   const dirty = useRef(false)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const area = useRef<HTMLTextAreaElement>(null)
 
   const flush = (): void => {
     clearTimeout(timer.current)
@@ -59,12 +63,78 @@ function Editor({ note, onDeleted }: { note: Note; onDeleted: () => void }): Rea
     await deleteNote(note.id)
     onDeleted()
   }
+  const togglePin = (): void => {
+    setPinned(!pinned)
+    change({ pinned: !pinned })
+  }
+
+  // formato: inserta la sintaxis Markdown en la selección del cuadro de texto
+  const edit = (fn: (v: string, s: number, e: number) => { text: string; start: number; end: number }): void => {
+    const el = area.current
+    if (!el) return
+    const r = fn(el.value, el.selectionStart, el.selectionEnd)
+    setBody(r.text)
+    change({ body: r.text })
+    requestAnimationFrame(() => {
+      el.focus()
+      el.setSelectionRange(r.start, r.end)
+    })
+  }
+  const wrap = (a: string, b: string, placeholder: string): void =>
+    edit((v, s, e) => {
+      const sel = v.slice(s, e) || placeholder
+      return { text: v.slice(0, s) + a + sel + b + v.slice(e), start: s + a.length, end: s + a.length + sel.length }
+    })
+  const bullets = (): void =>
+    edit((v, s, e) => {
+      const ls = v.lastIndexOf('\n', s - 1) + 1
+      const block = v.slice(ls, e)
+      const out = block.split('\n').map((l) => (l.startsWith('- ') ? l : `- ${l}`)).join('\n')
+      return { text: v.slice(0, ls) + out + v.slice(e), start: s + 2, end: e + (out.length - block.length) }
+    })
+  const link = (): void =>
+    edit((v, s, e) => {
+      const sel = v.slice(s, e) || 'texto'
+      const at = s + sel.length + 3
+      return { text: `${v.slice(0, s)}[${sel}](https://)${v.slice(e)}`, start: at, end: at + 8 }
+    })
+
+  const tools: Array<[string, 'bold' | 'italic' | 'bullets' | 'code' | 'link', () => void]> = [
+    ['Negrita', 'bold', () => wrap('**', '**', 'texto')],
+    ['Cursiva', 'italic', () => wrap('*', '*', 'texto')],
+    ['Lista', 'bullets', bullets],
+    ['Código', 'code', () => wrap('`', '`', 'código')],
+    ['Enlace', 'link', link]
+  ]
 
   return (
-    <div className="nt-ed">
-      <div className="nt-bar">
+    <div className="editor">
+      <div className="ed-tools">
+        {tools.map(([label, icon, run]) => (
+          <button key={label} title={label} aria-label={label} disabled={reading} onClick={run}>
+            <G n={icon} size={15} />
+          </button>
+        ))}
+        <span className="sp" />
+        <span className="chip">Markdown</span>
+        <span className={`chip ${saved ? 'ok' : 'prio'}`} role="status">
+          {saved ? 'Guardado' : 'Guardando…'}
+        </span>
+        <Menu
+          trigger={<G n="more" size={16} />}
+          className="ed-more"
+          title="Más acciones"
+          items={[
+            { label: reading ? 'Seguir editando' : 'Vista previa', icon: reading ? '✎' : '👁', onSelect: () => setReading(!reading) },
+            { label: pinned ? 'Quitar de las ancladas' : 'Anclar arriba', icon: '★', onSelect: togglePin },
+            { kind: 'sep' },
+            { label: 'Eliminar nota', icon: '✕', danger: true, onSelect: () => void remove() }
+          ]}
+        />
+      </div>
+      <div className="ed-body">
         <input
-          className="nt-title"
+          className="ed-title"
           value={title}
           placeholder="Título"
           aria-label="Título de la nota"
@@ -74,70 +144,47 @@ function Editor({ note, onDeleted }: { note: Note; onDeleted: () => void }): Rea
             change({ title: e.target.value })
           }}
         />
-        <button
-          className={`ib ${pinned ? 'on' : ''}`}
-          title={pinned ? 'Quitar de las ancladas' : 'Anclar arriba'}
-          aria-label={pinned ? 'Quitar de las ancladas' : 'Anclar la nota'}
-          aria-pressed={pinned}
-          onClick={() => {
-            setPinned(!pinned)
-            change({ pinned: !pinned })
-          }}
-        >
-          ★
-        </button>
-        <div className="seg">
-          <button className={!reading ? 'on' : ''} onClick={() => setReading(false)}>
-            Editar
-          </button>
-          <button className={reading ? 'on' : ''} onClick={() => setReading(true)}>
-            Vista
-          </button>
+        <div className="ed-meta">
+          <Select
+            className="nt-task"
+            value={taskId}
+            ariaLabel="Tarea vinculada"
+            searchable
+            options={[{ value: '', label: 'Sin tarea' }, ...tasks.map((t) => ({ value: t.id, label: t.title }))]}
+            onChange={(v) => {
+              setTaskId(v)
+              change({ taskId: v })
+            }}
+          />
+          <input
+            className="nt-tags"
+            value={tags}
+            placeholder="Etiquetas separadas por comas"
+            aria-label="Etiquetas"
+            onChange={(e) => {
+              setTags(e.target.value)
+              change({ tags: e.target.value })
+            }}
+          />
         </div>
-        <button className="ib" title="Eliminar nota" aria-label="Eliminar nota" onClick={() => void remove()}>
-          <G n="x" size={16} />
-        </button>
+        {reading ? (
+          <div className="nt-prev">{body.trim() ? <Markdown text={body} /> : <div className="meta">Nota vacía.</div>}</div>
+        ) : (
+          <textarea
+            ref={area}
+            className="nt-body"
+            value={body}
+            placeholder="Escribe en Markdown: # títulos, - listas, **negrita**, `código`…"
+            aria-label="Contenido de la nota"
+            spellCheck
+            onChange={(e) => {
+              setBody(e.target.value)
+              change({ body: e.target.value })
+            }}
+            onBlur={flush}
+          />
+        )}
       </div>
-      <div className="nt-meta">
-        <Select
-          className="nt-task"
-          value={taskId}
-          ariaLabel="Tarea vinculada"
-          searchable
-          options={[{ value: '', label: 'Sin tarea' }, ...tasks.map((t) => ({ value: t.id, label: t.title }))]}
-          onChange={(v) => {
-            setTaskId(v)
-            change({ taskId: v })
-          }}
-        />
-        <input
-          className="nt-tags"
-          value={tags}
-          placeholder="Etiquetas separadas por comas"
-          aria-label="Etiquetas"
-          onChange={(e) => {
-            setTags(e.target.value)
-            change({ tags: e.target.value })
-          }}
-        />
-        <span className="nt-state">{saved ? 'Guardado' : 'Guardando…'}</span>
-      </div>
-      {reading ? (
-        <div className="nt-prev">{body.trim() ? <Markdown text={body} /> : <div className="meta">Nota vacía.</div>}</div>
-      ) : (
-        <textarea
-          className="nt-body"
-          value={body}
-          placeholder="Escribe en Markdown: # títulos, - listas, **negrita**, `código`…"
-          aria-label="Contenido de la nota"
-          spellCheck
-          onChange={(e) => {
-            setBody(e.target.value)
-            change({ body: e.target.value })
-          }}
-          onBlur={flush}
-        />
-      )}
     </div>
   )
 }
@@ -183,10 +230,13 @@ export function NotesView(): ReactNode {
     <div className="notes">
       <aside className="nt-list" aria-label="Notas">
         <div className="nt-top">
-          <input value={q} placeholder="Buscar en las notas…" aria-label="Buscar en las notas" onChange={(e) => setQ(e.target.value)} />
+          <label className="nt-search">
+            <G n="search" size={13} />
+            <input value={q} placeholder="Buscar notas…" aria-label="Buscar en las notas" onChange={(e) => setQ(e.target.value)} />
+          </label>
           <div className="nt-new">
-            <button className="btn sm primary" onClick={() => void create()}>
-              <G n="plus" size={14} /> Nueva
+            <button className="btn sm p" onClick={() => void create()}>
+              <G n="plus" size={13} /> Nueva
             </button>
             <button className="ib" title="Nueva desde plantilla" aria-label="Nueva nota desde plantilla" aria-expanded={menu} onClick={() => setMenu(!menu)}>
               <G n="chevron" size={14} />
@@ -221,15 +271,15 @@ export function NotesView(): ReactNode {
         <div className="nt-items">
           {shown.map((n) => (
             <button key={n.id} className={`nt-item ${sel === n.id ? 'on' : ''}`} onClick={() => setSel(n.id)}>
-              <span className="nt-it">
-                {n.pinned && <b className="nt-pin">★</b>}
-                {n.title}
-              </span>
-              <span className="nt-ip">{preview(n) || 'Nota vacía'}</span>
-              <span className="nt-im">
-                {when(n.updatedAt)}
+              <b className="nt-it">
+                {n.pinned && <span className="nt-pin">★</span>}
+                {n.title || 'Sin título'}
+              </b>
+              <small className="nt-im">
+                {preview(n) ? when(n.updatedAt) : `Nota vacía · ${when(n.updatedAt).split(' · ')[1]}`}
                 {taskName(n.taskId) && ` · ${taskName(n.taskId)}`}
-              </span>
+              </small>
+              <span className="nt-ip">{preview(n) || ' '}</span>
             </button>
           ))}
           {!shown.length && <div className="nt-empty">{notes.length ? 'Ninguna nota coincide.' : 'Aún no tienes notas. Crea la primera con «Nueva».'}</div>}

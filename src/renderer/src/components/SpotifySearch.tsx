@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import type { SpotifyPlaylist, SpotifySearchResult } from '../../../shared/types'
 import { spotifyPlay, spotifyQueue } from '../spotify'
 import { useUi } from '../ui'
@@ -9,6 +9,51 @@ const clean = (e: unknown): string => (e as Error).message.replace(/^Error invok
 const mmss = (ms: number): string => {
   const s = Math.max(0, Math.round(ms / 1000))
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
+const PALETTE: [string, string][] = [['#7c5cff', '#2a1d66'], ['#3aa0ff', '#0d3a66'], ['#ff8a5c', '#66300f'], ['#9be36c', '#22521b'], ['#e6e6f0', '#55556a'], ['#f06bd0', '#5a1d4a'], ['#f5b94a', '#6b4a0f'], ['#ff5d7a', '#5c1224']]
+
+function Tile({ p, i, busy, onPlay }: { p: SpotifyPlaylist; i: number; busy: boolean; onPlay: (uri: string) => void }): ReactNode {
+  const [c1, c2] = PALETTE[i % PALETTE.length]
+  const letter = (p.name.match(/[p{L}p{N}]/u)?.[0] ?? '♪').toUpperCase()
+  return (
+    <div className="mu-pl" onClick={() => !busy && onPlay(p.uri)}>
+      <div className="mu-thumb" style={p.art ? { backgroundImage: `url("${p.art}")` } : ({ '--c1': c1, '--c2': c2 } as CSSProperties)}>
+        {!p.art && letter}
+      </div>
+      <b title={p.name}>{p.name}</b>
+      <small>{p.owner ? `Playlist · ${p.owner}` : 'Playlist'}</small>
+      <button
+        className="mu-pl-go"
+        title="Reproducir"
+        aria-label={`Reproducir ${p.name}`}
+        disabled={busy}
+        onClick={(e) => {
+          e.stopPropagation()
+          onPlay(p.uri)
+        }}
+      >
+        <G n="play" size={13} />
+      </button>
+    </div>
+  )
+}
+
+/** Fila compacta de playlist (panel del Espacio): miniatura de 34 px, nombre y propietario. */
+function Li({ p, i, busy, onPlay }: { p: SpotifyPlaylist; i: number; busy: boolean; onPlay: (uri: string) => void }): ReactNode {
+  const [c1, c2] = PALETTE[i % PALETTE.length]
+  const letter = (p.name.match(/[\p{L}\p{N}]/u)?.[0] ?? '♪').toUpperCase()
+  return (
+    <button className="mu-li" disabled={busy} onClick={() => onPlay(p.uri)} title={`Reproducir ${p.name}`}>
+      <span className="mu-thumb" style={p.art ? { backgroundImage: `url("${p.art}")` } : ({ '--c1': c1, '--c2': c2 } as CSSProperties)}>
+        {!p.art && letter}
+      </span>
+      <span className="mu-li-t">
+        <b>{p.name}</b>
+        <small>{p.owner || 'Playlist'}</small>
+      </span>
+    </button>
+  )
 }
 
 interface RowProps {
@@ -46,7 +91,7 @@ function Row({ art, title, sub, tail, uri, busy, onPlay, onQueue }: RowProps): R
 }
 
 /** Buscador de canciones y playlists de la vista «Música»; sin texto muestra tus playlists. */
-export function SpotifySearch(): ReactNode {
+export function SpotifySearch({ compact }: { compact?: boolean }): ReactNode {
   const ui = useUi()
   const [q, setQ] = useState('')
   const [res, setRes] = useState<SpotifySearchResult | null>(null)
@@ -134,8 +179,19 @@ export function SpotifySearch(): ReactNode {
   } else if (mine && mine.length > 0) {
     body = (
       <>
-        <div className="mu-h">Tus playlists · {mine.length}</div>
-        <div className="mu-scroll">{playlistRows(mine)}</div>
+        {compact ? (
+          <div className="mu-list">
+            {mine.map((p, i) => (
+              <Li key={p.uri} p={p} i={i} busy={playing === p.uri} onPlay={(u) => void play(u)} />
+            ))}
+          </div>
+        ) : (
+          <div className="mu-pl-grid">
+            {mine.map((p, i) => (
+              <Tile key={p.uri} p={p} i={i} busy={playing === p.uri} onPlay={(u) => void play(u)} />
+            ))}
+          </div>
+        )}
       </>
     )
   } else if (mineErr) {
@@ -147,15 +203,18 @@ export function SpotifySearch(): ReactNode {
   }
 
   return (
-    <section className="mu-search" aria-label="Buscar en Spotify">
-      <div className="mu-sbox">
-        <G n="search" size={16} />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar canciones o playlists…" aria-label="Buscar canciones o playlists en Spotify" spellCheck={false} />
-        {q && (
-          <button className="ib" title="Limpiar" aria-label="Limpiar la búsqueda" onClick={() => setQ('')}>
-            <G n="x" size={14} />
-          </button>
-        )}
+    <section className={`mu-pls ${compact ? 'mu-plain' : 'mu-card'}`} aria-label="Buscar en Spotify">
+      <div className="mu-card-h">
+        <span className="mu-eyebrow">{active ? 'Resultados' : mine ? `Tus playlists · ${mine.length}` : 'Tus playlists'}</span>
+        <div className="mu-sbox">
+          <G n="search" size={13} />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar canciones o playlists…" aria-label="Buscar canciones o playlists en Spotify" spellCheck={false} />
+          {q && (
+            <button className="ib" title="Limpiar" aria-label="Limpiar la búsqueda" onClick={() => setQ('')}>
+              <G n="x" size={13} />
+            </button>
+          )}
+        </div>
       </div>
       {searching && active && res && <div className="meta">Buscando…</div>}
       {body}

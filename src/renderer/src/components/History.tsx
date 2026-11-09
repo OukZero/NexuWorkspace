@@ -6,6 +6,7 @@ import { convLabel } from '../conversations'
 import { findTask, useDB } from '../store'
 import { useUi } from '../ui'
 import { EmptyState } from './EmptyState'
+import { G } from './glyphs'
 import { Select } from './Select'
 
 const MAX_SHOWN = 200
@@ -82,10 +83,11 @@ export function History(): ReactNode {
 
   return (
     <>
-      <h1>Historial</h1>
-      <div className="sub">Todas tus conversaciones, abiertas y cerradas. La búsqueda mira también dentro de los mensajes.</div>
-      <div className="filters" role="search">
-        <input className="f-q" value={query} placeholder="Buscar en conversaciones…" aria-label="Buscar en conversaciones" onChange={(e) => setQuery(e.target.value)} />
+      <div className="filters hist-filters" role="search">
+        <label className="hist-q">
+          <G n="search" size={15} />
+          <input value={query} placeholder="Buscar en conversaciones y mensajes…" aria-label="Buscar en conversaciones y mensajes" onChange={(e) => setQuery(e.target.value)} />
+        </label>
         <Select value={task} ariaLabel="Tarea" searchable onChange={setTask} options={taskOptions} menuMinWidth={260} />
         <Select
           value={prov}
@@ -97,16 +99,13 @@ export function History(): ReactNode {
             { value: 'copilot', label: 'Solo Copilot' }
           ]}
         />
-        <Select
-          value={state}
-          ariaLabel="Estado"
-          onChange={setState}
-          options={[
-            { value: '', label: 'Abiertas y cerradas' },
-            { value: 'open', label: 'Abiertas' },
-            { value: 'closed', label: 'Cerradas' }
-          ]}
-        />
+        <div className="seg" role="group" aria-label="Estado">
+          {([['', 'Todas'], ['open', 'Abiertas'], ['closed', 'Cerradas']] as const).map(([k, l]) => (
+            <button key={k} className={state === k ? 'on' : ''} aria-pressed={state === k} onClick={() => setState(k)}>
+              {l}
+            </button>
+          ))}
+        </div>
         {(query || task || prov || state) && (
           <button
             className="btn sm"
@@ -130,19 +129,21 @@ export function History(): ReactNode {
             const p: Provider = chat.provider ?? 'claude'
             return (
               <button key={id} className="hist-row" onClick={() => void open(id, chat.taskId, chat.closed)}>
-                <div className="hist-h">
-                  <b className="hist-t">{convLabel(chat)}</b>
-                  <span className={`chip prov-${p}`}>{p === 'copilot' ? 'Copilot' : 'Claude'}</span>
-                  {chat.model && <span className="chip">{chat.model}</span>}
-                  {chat.closed && <span className="chip">cerrada</span>}
-                  {chat.running && <span className="chip">respondiendo…</span>}
-                  <span className="hist-d">{when(lastTs(chat))}</span>
+                <div className="hist-main">
+                  <span className="hist-t">{convLabel(chat)}</span>
+                  <div className="hist-tags">
+                    <span className="chip">{p === 'copilot' ? 'Copilot' : 'Claude'}</span>
+                    {chat.model && <span className="chip ai">{chat.model}</span>}
+                    {chat.closed && <span className="chip ok">cerrada</span>}
+                    {chat.running && <span className="chip prio">respondiendo…</span>}
+                  </div>
+                  <div className="hist-m">
+                    {t?.title ?? '(tarea borrada)'}
+                    {t?.client ? ` · ${t.client}` : ''} · {chat.messages.filter((m) => m.role !== 'system').length} mensajes
+                  </div>
+                  <div className="hist-s">{snippet(chat, q)}</div>
                 </div>
-                <div className="meta">
-                  {t?.title ?? '(tarea borrada)'}
-                  {t?.client ? ` · ${t.client}` : ''} · {chat.messages.filter((m) => m.role !== 'system').length} mensajes
-                </div>
-                <div className="hist-s">{snippet(chat, q)}</div>
+                <div className="hist-d">{when(lastTs(chat))}</div>
               </button>
             )
           })}

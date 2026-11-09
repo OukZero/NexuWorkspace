@@ -8,7 +8,7 @@ import { useUi } from '../ui'
 const REDIRECT = 'http://127.0.0.1:53682/callback'
 
 /** Ajustes de Spotify: Client ID de la app propia, lista de enfoque y control automático desde el pomodoro. */
-export function SpotifySettings(): ReactNode {
+export function SpotifySettings({ card }: { card?: boolean }): ReactNode {
   const db = useDB()
   const ui = useUi()
   const s = db.settings
@@ -43,6 +43,58 @@ export function SpotifySettings(): ReactNode {
       ui.toast('Spotify conectado')
     }
   }
+
+  const disconnect = (): void => {
+    void ui.run('spotify:disconnect').then((r) => {
+      if (r) {
+        setSt(r)
+        setSpotifyStatus(r)
+      }
+    })
+  }
+
+  if (card)
+    return (
+      <section className="mu-card mu-cfg">
+        <div className="mu-eyebrow">Spotify</div>
+        <p className="mu-cfg-d">Controla Spotify desde cualquier pantalla. Crea una app en developer.spotify.com y añade esta URI de redirección.</p>
+        <label className="mu-field">
+          <span>URI de redirección</span>
+          <input className="mu-mono" value={REDIRECT} readOnly onFocus={(e) => e.currentTarget.select()} />
+        </label>
+        <label className="mu-field">
+          <span>Client ID</span>
+          <input className="mu-mono" autoComplete="off" value={clientId} placeholder="a1b2c3…" onChange={(e) => setClientId(e.target.value)} />
+        </label>
+        <div className="mu-state">
+          <span>Estado</span>
+          <span className={`mu-status${st?.connected ? ' ok' : ''}`}>{st?.connected ? 'Conectado' : st?.configured ? 'Sin conectar' : 'Sin configurar'}</span>
+        </div>
+        {st?.error && <div className="mu-err">{st.error}</div>}
+        <label className="mu-field">
+          <span>Lista de enfoque (enlace de Spotify o URI)</span>
+          <input value={focusUri} placeholder="https://open.spotify.com/playlist/…" onChange={(e) => setFocusUri(e.target.value)} />
+        </label>
+        <label className="mu-check">
+          <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
+          Pomodoro: reproducir al empezar el foco y pausar en los descansos
+        </label>
+        <div className="mu-hr" />
+        <div className="mu-cfg-btns">
+          <button className="btn sm" onClick={() => void save().then((r) => r && ui.toast('Spotify guardado'))}>
+            Guardar
+          </button>
+          <button className="btn sm p" disabled={busy || !clientId.trim()} onClick={() => void connect()}>
+            {st?.connected ? 'Reconectar' : 'Conectar'}
+          </button>
+          {st?.connected && (
+            <button className="btn sm danger" onClick={disconnect}>
+              Desconectar
+            </button>
+          )}
+        </div>
+      </section>
+    )
 
   return (
     <>

@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { ReactNode } from 'react'
 import type { FileContent, FileEntry, FileRoot } from '../../../shared/types'
 import { findTask, useDB } from '../store'
+import { useTaskSlot } from '../taskSlot'
 import { useUi } from '../ui'
 import { CodeViewer } from './CodeViewer'
+import { G, type GlyphName } from './glyphs'
 
 export interface FileRequest {
   taskId: string
@@ -14,6 +17,18 @@ export interface FileRequest {
 
 const sep = (p: string): string => p.replace(/\\/g, '/')
 const fmtSize = (n: number): string => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`)
+
+const CODE = new Set(['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'css', 'scss', 'html', 'htm', 'vue', 'py', 'sql', 'xml', 'java', 'c', 'h', 'cpp', 'hpp', 'rs', 'cs', 'go', 'sh', 'bash', 'ps1', 'psm1', 'yml', 'yaml', 'toml', 'xaml', 'csproj'])
+const CONFIG = new Set(['json', 'lock', 'env', 'ini', 'conf', 'config', 'gitignore', 'editorconfig'])
+const IMAGE = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'svg', 'bmp'])
+const extOf = (name: string): string => (name.includes('.') ? (name.toLowerCase().split('.').pop() ?? '') : '')
+/** Icono del archivo según su tipo: código, configuración, imagen o documento. */
+const fileIcon = (name: string): GlyphName => {
+  const e = extOf(name)
+  return CODE.has(e) ? 'code' : CONFIG.has(e) ? 'settings' : IMAGE.has(e) ? 'image' : 'files'
+}
+const LANG: Record<string, string> = { ts: 'TypeScript', tsx: 'TypeScript', js: 'JavaScript', jsx: 'JavaScript', mjs: 'JavaScript', cjs: 'JavaScript', json: 'JSON', css: 'CSS', scss: 'SCSS', html: 'HTML', htm: 'HTML', vue: 'Vue', md: 'Markdown', markdown: 'Markdown', py: 'Python', sql: 'SQL', xml: 'XML', svg: 'SVG', java: 'Java', c: 'C', h: 'C', cpp: 'C++', hpp: 'C++', rs: 'Rust', cs: 'C#', go: 'Go', yml: 'YAML', yaml: 'YAML', sh: 'Shell', bash: 'Shell', ps1: 'PowerShell', toml: 'TOML', txt: 'Texto' }
+const langOf = (name: string): string => LANG[extOf(name)] ?? (extOf(name) ? extOf(name).toUpperCase() : 'Texto')
 
 interface Open {
   root: string
@@ -50,9 +65,12 @@ function Node({
   const sel = !dir && current?.root === root && current.rel === here
   return (
     <>
-      <div className={`ftree-row ${sel ? 'on' : ''}`} style={{ paddingLeft: 8 + depth * 14 }} onClick={toggle} title={here}>
-        <span className="ftree-ico">{dir ? (open ? '▾' : '▸') : '·'}</span>
-        <span className={dir ? 'ftree-dir' : ''}>{name}</span>
+      <div className={`ftree-row${sel ? ' on' : ''}${dir ? ' dir' : ''}`} style={{ paddingLeft: 8 + depth * 16 }} onClick={toggle} title={here}>
+        <span className={`ftree-chev${open ? ' open' : ''}`}>{dir && <G n="chevron" size={11} stroke={2} />}</span>
+        <span className="ftree-ic">
+          <G n={dir ? 'folders' : fileIcon(name)} size={15} />
+        </span>
+        <span className="ftree-n">{name}</span>
       </div>
       {open &&
         kids?.map((k) => <Node key={k.name} taskId={taskId} root={root} rel={here} name={k.name} dir={k.dir} depth={depth + 1} openFile={openFile} current={current} />)}
@@ -72,6 +90,7 @@ export function FilesView({ taskId, request }: { taskId: string; request: FileRe
   const [err, setErr] = useState('')
   const [q, setQ] = useState('')
   const [hits, setHits] = useState<Open[]>([])
+  const taskSlot = useTaskSlot()
 
   useEffect(() => {
     let live = true
@@ -140,17 +159,29 @@ export function FilesView({ taskId, request }: { taskId: string; request: FileRe
   }, [q, roots, taskId])
 
   if (!task) return null
+  const codeBtn = (
+    <button className="btn sm" title="Abrir la carpeta en VS Code (aquí solo se lee)" onClick={() => void ui.run('vscode:open', cur?.root ?? roots[0]?.path ?? task.folder)}>
+      <G n="popout" size={13} /> Abrir en VS Code
+    </button>
+  )
   return (
     <div className="files">
+      {taskSlot ? createPortal(codeBtn, taskSlot) : null}
       <aside className="files-side">
-        <input className="files-search" value={q} placeholder="Buscar archivo por nombre…" aria-label="Buscar archivo" onChange={(e) => setQ(e.target.value)} />
+        <label className="files-q">
+          <G n="search" size={13} />
+          <input value={q} placeholder="Buscar archivo por nombre…" aria-label="Buscar archivo" onChange={(e) => setQ(e.target.value)} />
+        </label>
         <div className="files-tree">
           {q.trim().length >= 2 ? (
             hits.length ? (
               hits.map((h) => (
-                <div key={h.root + h.rel} className={`ftree-row ${cur?.root === h.root && cur.rel === h.rel ? 'on' : ''}`} onClick={() => open(h)} title={h.rel}>
-                  <span className="ftree-ico">·</span>
-                  <span>{h.rel}</span>
+                <div key={h.root + h.rel} className={`ftree-row${cur?.root === h.root && cur.rel === h.rel ? ' on' : ''}`} onClick={() => open(h)} title={h.rel}>
+                  <span className="ftree-chev" />
+                  <span className="ftree-ic">
+                    <G n={fileIcon(h.rel)} size={15} />
+                  </span>
+                  <span className="ftree-n">{h.rel}</span>
                 </div>
               ))
             ) : (
@@ -161,11 +192,17 @@ export function FilesView({ taskId, request }: { taskId: string; request: FileRe
           ) : roots.length ? (
             roots.map((r) => (
               <div key={r.path}>
-                <div className="ftree-root" title={r.path}>
-                  📁 {r.name}
+                <div className="ftree-row dir root" title={r.path}>
+                  <span className="ftree-chev open">
+                    <G n="chevron" size={11} stroke={2} />
+                  </span>
+                  <span className="ftree-ic">
+                    <G n="folders" size={15} />
+                  </span>
+                  <span className="ftree-n">{r.name}</span>
                 </div>
                 {rootTops[r.path]?.map((e) => (
-                  <Node key={e.name} taskId={taskId} root={r.path} rel="" name={e.name} dir={e.dir} depth={0} openFile={open} current={cur} />
+                  <Node key={e.name} taskId={taskId} root={r.path} rel="" name={e.name} dir={e.dir} depth={1} openFile={open} current={cur} />
                 ))}
               </div>
             ))
@@ -180,16 +217,20 @@ export function FilesView({ taskId, request }: { taskId: string; request: FileRe
         {cur ? (
           <>
             <div className="files-bar">
-              <code className="grow" title={`${cur.root}/${cur.rel}`}>
+              <span className="files-ic" aria-hidden>
+                <G n="code" size={15} />
+              </span>
+              <b className="files-path" title={`${cur.root}/${cur.rel}`}>
                 {cur.rel}
-              </code>
+              </b>
+              <span className="chip">{langOf(cur.rel)}</span>
+              <span className="grow" />
               {content && <span className="meta">{fmtSize(content.size)}</span>}
-              <button className="rm-pill" onClick={() => void navigator.clipboard.writeText(`${cur.root}\\${cur.rel.replace(/\//g, '\\')}`).then(() => ui.toast('Ruta copiada'))}>
+              <button className="btn sm ghost" title="Copiar la ruta completa del archivo" onClick={() => void navigator.clipboard.writeText(`${cur.root}\\${cur.rel.replace(/\//g, '\\')}`).then(() => ui.toast('Ruta copiada'))}>
                 Copiar ruta
               </button>
-              <button className="rm-pill" onClick={() => void ui.run('vscode:open', cur.root)}>
-                Abrir en VS Code
-              </button>
+              {!taskSlot && codeBtn}
+              <span className="chip">solo lectura</span>
             </div>
             {err ? (
               <div className="empty" style={{ margin: 16 }}>

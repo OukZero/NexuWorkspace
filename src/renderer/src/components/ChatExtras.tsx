@@ -1,3 +1,4 @@
+import * as Popover from '@radix-ui/react-popover'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { ContextKind, ContextPreview, PromptTemplate } from '../../../shared/types'
@@ -13,30 +14,15 @@ export function ContextBar({ taskId, kinds, onChange, terminalText }: { taskId: 
   const db = useDB()
   const task = findTask(db, taskId)
   const [preview, setPreview] = useState<ContextPreview | null>(null)
-  const [open, setOpen] = useState(false)
-  // plegada por defecto: una línea con lo que va; se despliega para elegir
-  const [expanded, setExpandedState] = useState(() => {
-    try {
-      return localStorage.getItem('shutoki.ctxOpen') === '1'
-    } catch {
-      return false
-    }
-  })
-  const setExpanded = (v: boolean): void => {
-    setExpandedState(v)
-    try {
-      localStorage.setItem('shutoki.ctxOpen', v ? '1' : '0')
-    } catch {
-      /* sin storage */
-    }
-  }
+  const [pop, setPop] = useState(false)
+  const [showPrev, setShowPrev] = useState(false)
   const notes = task?.sessions?.length ?? 0
 
   const toggle = (k: ContextKind): void => onChange(kinds.includes(k) ? kinds.filter((x) => x !== k) : [...kinds, k])
 
-  // vista previa al abrirla y cada vez que cambian las piezas
+  // vista previa: solo con el panel abierto y la vista activada; se vuelve a pedir cada vez que cambian las piezas
   useEffect(() => {
-    if (!open) return
+    if (!pop || !showPrev) return
     let alive = true
     if (!kinds.length) {
       setPreview(null)
@@ -53,7 +39,7 @@ export function ContextBar({ taskId, kinds, onChange, terminalText }: { taskId: 
     return () => {
       alive = false
     }
-  }, [open, kinds, taskId, terminalText])
+  }, [pop, showPrev, kinds, taskId, terminalText])
 
   const disabled = (k: ContextKind): string | null => {
     if (k === 'notes' && !notes) return 'Aún no hay notas de sesión en esta tarea'
@@ -61,60 +47,63 @@ export function ContextBar({ taskId, kinds, onChange, terminalText }: { taskId: 
     if (k === 'terminal' && !terminalText.trim()) return 'La terminal de la tarea está vacía'
     return null
   }
+  const on = kinds.filter((k) => !disabled(k))
 
-  if (!expanded) {
-    const on = kinds.filter((k) => !disabled(k))
-    return (
-      <div className="ctxbar folded">
-        <button type="button" className="ctx-sum" title="Elegir qué contexto se anexa a tu próximo mensaje" onClick={() => setExpanded(true)}>
-          Contexto · {on.length ? on.map((k) => CONTEXT_LABEL[k].toLowerCase()).join(', ') : 'ninguno'}
-        </button>
-      </div>
-    )
-  }
-
+  // un solo botón dentro del compositor; el detalle se abre en un panel flotante, así no empuja el chat
   return (
-    <div className="ctxbar">
-      <span className="ctx-lead" title="Datos de apoyo que se anexan solos a tu próximo mensaje">
-        Contexto
-      </span>
-      {ALL_CONTEXT.map((k) => {
-        const off = disabled(k)
-        return (
-          <button key={k} type="button" className={`ctx-chip ${kinds.includes(k) && !off ? 'on' : ''}`} disabled={!!off} title={off ?? CONTEXT_HINT[k]} aria-pressed={kinds.includes(k)} onClick={() => toggle(k)}>
-            {CONTEXT_LABEL[k]}
-            {k === 'notes' && notes > 0 ? ` · ${notes}` : ''}
-          </button>
-        )
-      })}
-      {kinds.length > 0 && (
-        <>
-          <button type="button" className="ctx-link" onClick={() => setOpen((o) => !o)}>
-            {open ? 'Ocultar' : 'Ver lo que se envía'}
-          </button>
-          <button type="button" className="ctx-link" onClick={() => onChange([])}>
-            Quitar todo
-          </button>
-          <button type="button" className="ctx-link" onClick={() => setExpanded(false)}>
-            Plegar
-          </button>
-        </>
-      )}
-      {open && (
-        <div className="ctx-preview">
-          {preview ? (
-            <>
-              <div className="meta">
-                {preview.chars.toLocaleString('es')} caracteres (≈ {Math.round(preview.chars / 4).toLocaleString('es')} tokens){preview.chars > 40000 ? ' · es mucho: considera quitar el diff' : ''}
-              </div>
-              <pre>{preview.text || 'No hay datos para estas piezas todavía.'}</pre>
-            </>
-          ) : (
-            <div className="meta">Cargando…</div>
+    <Popover.Root open={pop} onOpenChange={setPop}>
+      <Popover.Trigger asChild>
+        <button type="button" className={`ctx-trigger${on.length ? ' on' : ''}`} title={on.length ? `Se anexa a tu próximo mensaje: ${on.map((k) => CONTEXT_LABEL[k].toLowerCase()).join(', ')}` : 'Elegir qué contexto se anexa a tu próximo mensaje'} aria-label="Contexto del mensaje">
+          Contexto{on.length ? ` · ${on.length}` : ''}
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content className="ctx-pop" side="top" align="start" sideOffset={8} collisionPadding={12}>
+          <div className="ctx-pop-h">
+            <b>Contexto de tu próximo mensaje</b>
+            <span className="meta">Datos de apoyo que se anexan solos</span>
+          </div>
+          <div className="ctx-pop-chips">
+            {ALL_CONTEXT.map((k) => {
+              const off = disabled(k)
+              return (
+                <button key={k} type="button" className={`ctx-chip ${kinds.includes(k) && !off ? 'on' : ''}`} disabled={!!off} title={off ?? CONTEXT_HINT[k]} aria-pressed={kinds.includes(k)} onClick={() => toggle(k)}>
+                  {CONTEXT_LABEL[k]}
+                  {k === 'notes' && notes > 0 ? ` · ${notes}` : ''}
+                </button>
+              )
+            })}
+          </div>
+          <div className="ctx-pop-f">
+            {kinds.length > 0 && (
+              <button type="button" className="ctx-link" onClick={() => setShowPrev((o) => !o)}>
+                {showPrev ? 'Ocultar lo que se envía' : 'Ver lo que se envía'}
+              </button>
+            )}
+            <span className="grow" />
+            {kinds.length > 0 && (
+              <button type="button" className="ctx-link" onClick={() => onChange([])}>
+                Quitar todo
+              </button>
+            )}
+          </div>
+          {showPrev && kinds.length > 0 && (
+            <div className="ctx-preview">
+              {preview ? (
+                <>
+                  <div className="meta">
+                    {preview.chars.toLocaleString('es')} caracteres (≈ {Math.round(preview.chars / 4).toLocaleString('es')} tokens){preview.chars > 40000 ? ' · es mucho: considera quitar el diff' : ''}
+                  </div>
+                  <pre>{preview.text || 'No hay datos para estas piezas todavía.'}</pre>
+                </>
+              ) : (
+                <div className="meta">Cargando…</div>
+              )}
+            </div>
           )}
-        </div>
-      )}
-    </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   )
 }
 

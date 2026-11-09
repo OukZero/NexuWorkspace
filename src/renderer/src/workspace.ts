@@ -33,7 +33,7 @@ export const KIND_LABEL: Record<PaneKind, string> = {
   git: 'Git',
   files: 'Archivos',
   terminal: 'Terminal',
-  panel: 'Panel',
+  panel: 'Inicio',
   tasks: 'Tareas de hoy',
   board: 'Tablero',
   hours: 'Horas',
@@ -56,9 +56,9 @@ export interface LayoutDef {
 const at = (c: PaneContent[], i: number): PaneContent => c[i] ?? { kind: 'empty' }
 export const LAYOUTS: LayoutDef[] = [
   { id: 'solo', label: 'Un panel', n: 1, build: (c) => pane(at(c, 0)) },
-  { id: 'cols2', label: 'Dos columnas', n: 2, build: (c) => split('row', [pane(at(c, 0)), pane(at(c, 1))]) },
+  { id: 'cols2', label: 'Dos columnas', n: 2, build: (c) => split('row', [pane(at(c, 0)), pane(at(c, 1))], [55.5, 44.5]) },
   { id: 'rows2', label: 'Dos filas', n: 2, build: (c) => split('col', [pane(at(c, 0)), pane(at(c, 1))]) },
-  { id: 'cols3', label: 'Tres columnas', n: 3, build: (c) => split('row', [pane(at(c, 0)), pane(at(c, 1)), pane(at(c, 2))]) },
+  { id: 'cols3', label: 'Tres columnas', n: 3, build: (c) => split('row', [pane(at(c, 0)), pane(at(c, 1)), pane(at(c, 2))], [37.5, 31.25, 31.25]) },
   { id: 'main2', label: 'Principal + 2', n: 3, build: (c) => split('row', [pane(at(c, 0)), split('col', [pane(at(c, 1)), pane(at(c, 2))])], [58, 42]) },
   { id: 'grid4', label: 'Cuadrícula 2×2', n: 4, build: (c) => split('col', [split('row', [pane(at(c, 0)), pane(at(c, 1))]), split('row', [pane(at(c, 2)), pane(at(c, 3))])]) }
 ]
@@ -66,7 +66,7 @@ export const LAYOUTS: LayoutDef[] = [
 const firstPane = (n: WNode): WNode => (n.t === 'pane' ? n : firstPane(n.kids[0]))
 
 function defaultState(): WState {
-  const root = LAYOUTS.find((l) => l.id === 'main2')!.build([{ kind: 'chat' }, { kind: 'git' }, { kind: 'terminal' }])
+  const root = LAYOUTS.find((l) => l.id === 'cols2')!.build([{ kind: 'chat' }, { kind: 'music' }])
   return { root, focus: firstPane(root).id }
 }
 

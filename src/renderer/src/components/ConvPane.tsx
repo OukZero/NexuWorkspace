@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { closedConvs, convLabel, openConvs } from '../conversations'
 import { setConvsOpen, useConvsPane } from '../convsPane'
 import { useDB } from '../store'
-import { fmtTokens } from '../../../shared/advice'
+import { useUi } from '../ui'
 import { G } from './glyphs'
 
 interface Props {
@@ -40,6 +40,7 @@ function ago(ts: number, now: number): string {
 export function ConvPane({ taskId, active, unread, onSelect, onClose, onNew, onMore }: Props): ReactNode {
   const db = useDB()
   const pane = useConvsPane()
+  const ui = useUi()
   if (!pane.open) return null
   const now = Date.now()
   const convs = openConvs(db, taskId)
@@ -61,6 +62,9 @@ export function ConvPane({ taskId, active, unread, onSelect, onClose, onNew, onM
         <span className="grow" />
         <button className="mini" title="Nueva conversación en esta tarea" aria-label="Nueva conversación" onClick={onNew}>
           <G n="plus" size={15} />
+        </button>
+        <button className="mini" title="Abrir una conversación cerrada o de otra tarea" aria-label="Más conversaciones" onClick={onMore}>
+          <G n="more" size={15} />
         </button>
         <button className="mini" title="Ocultar esta lista" aria-label="Ocultar la lista de conversaciones" onClick={() => setConvsOpen(false)}>
           <G n="list" size={15} />
@@ -84,8 +88,7 @@ export function ConvPane({ taskId, active, unread, onSelect, onClose, onNew, onM
                 <b>{convLabel(chat)}</b>
                 <small>
                   <i className={`sd ${chat.running ? 'run' : unread.has(id) ? 'unread' : ''}`} aria-hidden />
-                  {chat.running ? 'respondiendo…' : unread.has(id) ? 'sin leer' : ago(last, now)}
-                  {chat.usage?.contextTokens ? ` · ${fmtTokens(chat.usage.contextTokens)}` : ''}
+                  {chat.messages.filter((m) => m.role !== 'system').length} mensajes · {chat.running ? 'respondiendo…' : unread.has(id) ? 'sin leer' : ago(last, now)}
                 </small>
                 <button
                   className="sess-x"
@@ -105,8 +108,8 @@ export function ConvPane({ taskId, active, unread, onSelect, onClose, onNew, onM
         {!convs.length && <div className="meta" style={{ padding: 10 }}>Sin conversaciones abiertas.</div>}
       </div>
       <div className="pf">
-        <button className="btn sm" onClick={onMore} title="Abrir una conversación cerrada o de otra tarea">
-          Más…{hidden > 0 ? ` · ${hidden} cerrada${hidden > 1 ? 's' : ''}` : ''}
+        <button className="btn sm" onClick={() => ui.go('history')} title={hidden > 0 ? `Hay ${hidden} conversación${hidden > 1 ? 'es' : ''} cerrada${hidden > 1 ? 's' : ''}: se reabren desde el Historial` : 'Todas tus conversaciones, abiertas y cerradas'}>
+          Ver todas en Historial
         </button>
       </div>
     </section>

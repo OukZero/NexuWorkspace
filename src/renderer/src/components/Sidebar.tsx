@@ -21,8 +21,10 @@ import {
   type Density,
   type ThemeMode
 } from '../theme'
-import { msToday, useDB, useNow } from '../store'
-import { fmtH } from '../utils'
+import { activeEntry, findTask, msToday, useDB, useNow } from '../store'
+import { baseName, fmtH } from '../utils'
+import { workFolder } from '../../../shared/util'
+import { getSideWide, setSideWide, useSideWide } from '../sideMode'
 import { useUi, type View } from '../ui'
 import { UpdateChip } from './UpdateCard'
 import { showSettingsTab } from './SettingsView'
@@ -42,7 +44,7 @@ function initials(n: string): string {
   return (p.length ? p[0][0] + (p[1]?.[0] || '') : '?').toUpperCase()
 }
 
-function Profile(): ReactNode {
+function Profile({ wide }: { wide?: boolean }): ReactNode {
   const ui = useUi()
   const [open, setOpen] = useState(false)
   const [name, setNameState] = useState(getName())
@@ -66,8 +68,18 @@ function Profile(): ReactNode {
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
-        <button className="rail-av" data-tip={name.trim() || 'Perfil y apariencia'} aria-label="Perfil y apariencia">
-          {initials(name)}
+        <button className={wide ? 'wide-user' : 'rail-av'} data-tip={wide ? undefined : name.trim() || 'Perfil y apariencia'} title={wide ? 'Perfil y apariencia' : undefined} aria-label="Perfil y apariencia">
+          {wide ? (
+            <>
+              <span className="wide-av">{initials(name)}</span>
+              <span className="wide-who">
+                <b>{name.trim() || 'Tu nombre'}</b>
+                <small>Perfil y apariencia</small>
+              </span>
+            </>
+          ) : (
+            initials(name)
+          )}
         </button>
       </Popover.Trigger>
       <Popover.Portal>
@@ -210,7 +222,7 @@ function Profile(): ReactNode {
   )
 }
 
-const NAV_ICON: Record<string, GlyphName> = { today: 'panelhome', workspace: 'workspace', board: 'board', groups: 'folders', history: 'history', hours: 'hours', redmine: 'redmine', usage: 'usage', music: 'music', notes: 'files', web: 'popout', whatsapp: 'chat' }
+const NAV_ICON: Record<string, GlyphName> = { today: 'panelhome', workspace: 'workspace', board: 'board', groups: 'folders', history: 'history', chat: 'chats', hours: 'hours', redmine: 'redmine', usage: 'usage', music: 'music', notes: 'files', web: 'popout', whatsapp: 'chat' }
 
 /** Avance del día como anillo, bajo el logo: horas registradas frente al objetivo. */
 function DayRing(): ReactNode {
@@ -230,13 +242,14 @@ function DayRing(): ReactNode {
   )
 }
 
-function ThemeToggle(): ReactNode {
+function ThemeToggle({ small }: { small?: boolean }): ReactNode {
   useAppearance()
   const dark = document.documentElement.dataset.theme !== 'light'
   return (
     <button
-      className="rb"
-      data-tip={dark ? 'Tema claro' : 'Tema oscuro'}
+      className={small ? 'ib' : 'rb'}
+      data-tip={small ? undefined : dark ? 'Tema claro' : 'Tema oscuro'}
+      title={small ? (dark ? 'Tema claro' : 'Tema oscuro') : undefined}
       aria-label={dark ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
       onClick={() => {
         if (getPreset()) setPreset('') // los estilos con nombre son de un solo modo: se vuelve al clásico día / noche
@@ -258,35 +271,173 @@ function useBadges(): Record<string, number> {
   return b
 }
 
-/** Menú principal como barra de iconos: los nombres van en el tooltip y el orden se configura en Apariencia. */
+/** Jornada de hoy como barra fina (menú ancho): horas registradas frente al objetivo. */
+function DayBar(): ReactNode {
+  const db = useDB()
+  const now = useNow(30000)
+  const ms = msToday(db, now)
+  const target = db.settings.targetHours * 3600000
+  const p = Math.min(1, target ? ms / target : 0)
+  return (
+    <div className="wide-day" role="img" aria-label={`${fmtH(ms)} horas de ${db.settings.targetHours} hoy`} title={`${fmtH(ms)} h de ${db.settings.targetHours} h hoy`}>
+      <div>
+        <span>Jornada de hoy</span>
+        <b>
+          {fmtH(ms).replace('.', ',')} h<small> / {db.settings.targetHours} h</small>
+        </b>
+      </div>
+      <i>
+        <b style={{ width: `${p * 100}%` }} />
+      </i>
+    </div>
+  )
+}
+
+const MODES: Array<['chat' | 'design' | 'git' | 'files', string, GlyphName]> = [
+  ['chat', 'Chat IA', 'chat'],
+  ['design', 'Diseño', 'design'],
+  ['git', 'Git', 'git'],
+  ['files', 'Archivos', 'code']
+]
+
+const openPalette = (): void => {
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))
+}
+
+const LOGO = (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 3c4 2 6 6 4 10-1 2-3 3-4 8-1-5-3-6-4-8-2-4 0-8 4-10z" />
+  </svg>
+)
+
+/** Menú principal: ancho (nombres, secciones y tarea activa) o reducido a una barra de iconos. Ctrl+B cambia entre ambos. */
 export function Sidebar(): ReactNode {
   const ui = useUi()
   const db = useDB()
   const badges = useBadges()
+  const wide = useSideWide()
   useAppearance() // repinta al reordenar u ocultar secciones
+  const ca = ui.chatAlerts
+  const chatN = ca.waiting + ca.unread
+  /** Texto del aviso del botón «Chats»: qué conversaciones necesitan atención. */
+  const chatTip = (label: string): string => {
+    const p: string[] = []
+    if (ca.waiting) p.push(`${ca.waiting} esperando tu respuesta`)
+    if (ca.unread) p.push(`${ca.unread} sin leer`)
+    if (ca.running) p.push(`${ca.running} respondiendo`)
+    return p.length ? `${label} · ${p.join(' · ')}` : label
+  }
   const pending = db.tasks.filter((t) => !t.archived && (!t.recurrence || t.recurrence.type === 'none') && (t.status === 'today' || t.status === 'doing')).length
+  /** Aviso de cada botón: número (rojo si espera tu respuesta) o un punto si solo está respondiendo. */
+  const badgeOf = (v: string): { n: number; need: boolean; dot: boolean } => {
+    if (v === 'chat') return { n: chatN, need: ca.waiting > 0, dot: chatN === 0 && ca.running > 0 }
+    if (v === 'today') return { n: pending, need: false, dot: false }
+    return { n: badges[v] ?? 0, need: false, dot: false }
+  }
+
+  // Ctrl+B: ancho ↔ reducido (sin pisar el teclado dentro de cuadros de texto)
+  useEffect(() => {
+    const on = (e: KeyboardEvent): void => {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'b') return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      e.preventDefault()
+      setSideWide(!getSideWide())
+    }
+    window.addEventListener('keydown', on)
+    return () => window.removeEventListener('keydown', on)
+  }, [])
+
+  // tarea activa: la de la pestaña abierta o, si estás en otra pantalla, la del timer
+  const task = findTask(db, ui.activeTask ?? activeEntry(db)?.taskId ?? db.paused)
+  const folder = task ? workFolder(task, db.groups) : ''
+
+  if (wide) {
+    return (
+      <aside className="side rail-side wide" aria-label="Principal">
+        <div className="wide-brand">
+          <button className="wide-brand-b" onClick={openPalette} title="Búsqueda global (Ctrl+K)" aria-label="Búsqueda global">
+            <span className="wide-logo">{LOGO}</span>
+            <span className="wide-bn">
+              <b>Shutoki</b>
+              <small>AI Workspace</small>
+            </span>
+          </button>
+          <button className="ib" title="Reducir el menú (Ctrl+B)" aria-label="Reducir el menú" onClick={() => setSideWide(false)}>
+            <G n="chevron" size={15} />
+          </button>
+        </div>
+        <nav id="nav" className="wide-nav">
+          {NAV_GROUPS.map((g) => (
+            <div key={g.title} className="nav-group wide-group">
+              <div className="wide-gt">{g.title}</div>
+              {navOrder(g.items.map(([id, , label]) => ({ id, label }))).map(({ id: v, label }) => {
+                const b = badgeOf(v)
+                return (
+                  <button key={v} className={`wi${ui.view === v ? ' on' : ''}`} title={v === 'chat' ? chatTip(label) : undefined} aria-current={ui.view === v ? 'page' : undefined} onClick={() => ui.go(v)}>
+                    <G n={NAV_ICON[v] ?? 'today'} size={17} />
+                    <span className="wi-t">{label}</span>
+                    {b.n > 0 ? <span className={`wi-n${b.need ? ' need' : ''}`}>{b.n > 9 ? '9+' : b.n}</span> : b.dot ? <span className="wi-dot" aria-hidden /> : null}
+                  </button>
+                )
+              })}
+            </div>
+          ))}
+          {task && (
+            <div className="nav-group wide-group">
+              <div className="wide-gt">Tarea activa</div>
+              <button className="wide-task" onClick={() => ui.openChat(task.id)} title={`${task.title}${folder ? ` · ${folder}` : ''}\nAbrir su chat`}>
+                <small>{task.title}</small>
+                <b>{[folder ? baseName(folder) : task.project || 'Sin carpeta', task.branch].filter(Boolean).join(' · ')}</b>
+              </button>
+              {MODES.map(([m, label, icon]) => (
+                <button key={m} className={`wi${ui.view === 'chat' && ui.activeTask === task.id && ui.activeMode === m ? ' on' : ''}`} onClick={() => ui.openMode(task.id, m)}>
+                  <G n={icon} size={17} />
+                  <span className="wi-t">{label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </nav>
+        <span className="sp" />
+        <DayBar />
+        <div className="wide-foot">
+          <Profile wide />
+          <UpdateChip />
+          <ThemeToggle small />
+          <button className={`ib${ui.view === 'settings' ? ' on' : ''}`} title="Ajustes" aria-label="Ajustes" onClick={() => ui.go('settings')}>
+            <G n="settings" size={16} />
+          </button>
+        </div>
+      </aside>
+    )
+  }
+
   return (
     <aside className="side rail-side" aria-label="Principal">
-      <button className="rail-logo" data-tip="Shutoki AI Workspace · Ctrl+K" aria-label="Búsqueda global" onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}>
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M12 3c4 2 6 6 4 10-1 2-3 3-4 8-1-5-3-6-4-8-2-4 0-8 4-10z" />
-        </svg>
+      <button className="rail-logo" data-tip="Shutoki AI Workspace · Ctrl+K" aria-label="Búsqueda global" onClick={openPalette}>
+        {LOGO}
       </button>
       <nav id="nav">
         {NAV_GROUPS.map((g, gi) => (
           <div key={g.title} className="nav-group">
             {gi > 0 && <span className="rail-sep" />}
-            {navOrder(g.items.map(([id, , label]) => ({ id, label }))).map(({ id: v, label }) => (
-              <button key={v} className={`rb ${ui.view === v ? 'on' : ''}`} data-tip={badges[v] ? `${label} · ${badges[v]} sin leer` : label} aria-label={badges[v] ? `${label}, ${badges[v]} sin leer` : label} aria-current={ui.view === v ? 'page' : undefined} onClick={() => ui.go(v)}>
-                <G n={NAV_ICON[v] ?? 'today'} />
-                {v === 'today' && pending > 0 && <span className="rb-badge">{pending > 9 ? '9+' : pending}</span>}
-                {badges[v] > 0 && <span className="rb-badge">{badges[v] > 9 ? '9+' : badges[v]}</span>}
-              </button>
-            ))}
+            {navOrder(g.items.map(([id, , label]) => ({ id, label }))).map(({ id: v, label }) => {
+              const b = badgeOf(v)
+              return (
+                <button key={v} className={`rb ${ui.view === v ? 'on' : ''}`} data-tip={v === 'chat' ? chatTip(label) : badges[v] ? `${label} · ${badges[v]} sin leer` : label} aria-label={badges[v] ? `${label}, ${badges[v]} sin leer` : label} aria-current={ui.view === v ? 'page' : undefined} onClick={() => ui.go(v)}>
+                  <G n={NAV_ICON[v] ?? 'today'} />
+                  {b.n > 0 ? <span className={`rb-badge${b.need ? ' need' : ''}`}>{b.n > 9 ? '9+' : b.n}</span> : b.dot ? <span className="rb-dot" aria-hidden /> : null}
+                </button>
+              )
+            })}
           </div>
         ))}
       </nav>
       <span className="sp" />
+      <button className="rb" data-tip="Ampliar el menú · Ctrl+B" aria-label="Ampliar el menú" onClick={() => setSideWide(true)}>
+        <G n="chevron" size={16} />
+      </button>
       <DayRing />
       <UpdateChip />
       <ThemeToggle />
