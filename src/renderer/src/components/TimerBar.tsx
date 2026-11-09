@@ -2,45 +2,38 @@ import type { ReactNode } from 'react'
 import { activeEntry, findTask, useDB, useNow } from '../store'
 import { fmtDur } from '../utils'
 import { useUi } from '../ui'
+import { G } from './glyphs'
+import { Pomodoro } from './Pomodoro'
 
+/** Timer en curso como píldora de la barra superior: tarea, tiempo y controles. Sin timer no ocupa espacio. */
 export function TimerBar(): ReactNode {
   const db = useDB()
   const ui = useUi()
   const now = useNow()
   const a = activeEntry(db)
+  const t = findTask(db, a?.taskId ?? db.paused)
+  if (!t || (!a && !db.paused)) return null
+  const running = !!a
 
-  if (a) {
-    const t = findTask(db, a.taskId)
-    return (
-      <div className="timerbar">
-        <span className="pulse" />
-        <div className="name">
-          {t?.title} <span className="chip">{t?.project || 'sin proyecto'}</span>
-        </div>
-        <div className="t">{fmtDur(now - a.start)}</div>
-        <button className="btn" onClick={() => ui.run('timer:pause')}>
-          ⏸ Pausar
-        </button>
-        <button className="btn" onClick={() => ui.run('timer:stop')}>
-          ■ Detener
-        </button>
-      </div>
-    )
-  }
-
-  const paused = findTask(db, db.paused)
-  if (!paused) return null
   return (
-    <div className="timerbar">
-      <span className="pulse" style={{ background: 'var(--warn)', animation: 'none' }} />
-      <div className="name">
-        {paused.title} <span className="chip">en pausa</span>
-      </div>
-      <button className="btn primary" onClick={() => ui.run('timer:resume')}>
-        ▶ Reanudar
+    <div className={`now ${running ? 'run' : 'paused'}`} role="timer" aria-label={`Timer de ${t.title}`}>
+      <span className="now-d" aria-hidden />
+      <button className="now-n" title={`${t.title}${t.project ? ` · ${t.project}` : ''} — abrir la tarea`} onClick={() => ui.openTask(t)}>
+        {t.title}
       </button>
-      <button className="btn" onClick={() => ui.run('timer:stop')}>
-        ■ Detener
+      {running ? <span className="now-c">{fmtDur(now - a.start)}</span> : <span className="now-c muted">en pausa</span>}
+      <Pomodoro />
+      {running ? (
+        <button className="now-b" title="Pausar" aria-label="Pausar el timer" onClick={() => void ui.run('timer:pause')}>
+          <G n="pause" size={12} />
+        </button>
+      ) : (
+        <button className="now-b" title="Reanudar" aria-label="Reanudar el timer" onClick={() => void ui.run('timer:resume')}>
+          <G n="play" size={12} />
+        </button>
+      )}
+      <button className="now-b stop" title="Detener" aria-label="Detener el timer" onClick={() => void ui.run('timer:stop')}>
+        <G n="stop" size={12} />
       </button>
     </div>
   )

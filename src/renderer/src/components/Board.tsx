@@ -2,12 +2,13 @@ import { useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { taskColor, useAppearance } from '../theme'
 import type { Recurrence, Status, Task } from '../../../shared/types'
-import { applyFilters, useFilters } from '../filters'
+import { applyFilters, isFiltering, useFilters } from '../filters'
 import { taskMs, useDB, useNow } from '../store'
 import { DOW, PRIO, STATUS, fmtH, isWorkTask } from '../utils'
 import { useUi } from '../ui'
 import { EmptyState } from './EmptyState'
 import { FilterBar } from './FilterBar'
+import { G } from './glyphs'
 
 const recText = (r: Recurrence): string =>
   r.type === 'daily' ? 'todos los días' : r.type === 'weekdays' ? 'lunes a viernes' : 'semanal: ' + (r.days || []).map((d) => DOW[d]).join(' ')
@@ -22,6 +23,7 @@ export function Board(): ReactNode {
 
   const [dragging, setDragging] = useState<string | null>(null)
   const filters = useFilters()
+  const [showFilters, setShowFilters] = useState(false)
   const open = applyFilters(db.tasks.filter(isWorkTask), filters)
   const cutoff = Date.now() - 7 * 86400000
   const routines = db.tasks.filter((t) => t.recurrence && t.recurrence.type !== 'none')
@@ -58,36 +60,47 @@ export function Board(): ReactNode {
       <div className="title">{t.title}</div>
       <div className="meta">
         {t.project && <span className="chip">{t.project}</span>}
-        <span className={`chip ${t.priority}`}>{PRIO[t.priority]}</span>
-        {taskMs(db, t.id, now) > 0 && <span>⏱ {fmtH(taskMs(db, t.id, now))} h</span>}
-        <button
-          className="icon"
-          style={{ marginLeft: 'auto' }}
-          onClick={(e) => {
-            e.stopPropagation()
-            ui.openChat(t.id)
-          }}
-        >
-          💬
-        </button>
-        <button
-          className="icon"
-          onClick={(e) => {
-            e.stopPropagation()
-            ui.editTask(t)
-          }}
-        >
-          ✎
-        </button>
+        {t.priority === 'high' && <span className="chip high">{PRIO.high}</span>}
+        {taskMs(db, t.id, now) > 0 && <span>{fmtH(taskMs(db, t.id, now)).replace('.', ',')} h</span>}
+        <span className="card-hv">
+          <button
+            className="ib"
+            title="Chat de la tarea"
+            aria-label="Chat de la tarea"
+            onClick={(e) => {
+              e.stopPropagation()
+              ui.openChat(t.id)
+            }}
+          >
+            <G n="chat" size={15} />
+          </button>
+          <button
+            className="ib"
+            title="Editar"
+            aria-label="Editar la tarea"
+            onClick={(e) => {
+              e.stopPropagation()
+              ui.editTask(t)
+            }}
+          >
+            <G n="edit" size={15} />
+          </button>
+        </span>
       </div>
     </div>
   )
 
   return (
     <>
-      <h1>Tablero</h1>
-      <div className="sub">Arrastra las tarjetas entre columnas · el borde de color indica la prioridad</div>
-      <FilterBar />
+      <h1 className="day-h">
+        Tablero
+        <span className="grow" />
+        <button className={`ib ${showFilters || isFiltering(filters) ? 'on' : ''}`} title="Filtrar y ordenar" aria-label="Filtrar y ordenar" aria-pressed={showFilters} onClick={() => setShowFilters((v) => !v)}>
+          <G n="filter" size={16} />
+        </button>
+      </h1>
+      <div className="sub">Arrastra las tarjetas entre columnas</div>
+      {(showFilters || isFiltering(filters)) && <FilterBar />}
       <div className="board">
         {statuses.map((st) => {
           const arr = open.filter((t) => t.status === st && (st !== 'done' || (t.doneAt || 0) > cutoff))
@@ -115,7 +128,7 @@ export function Board(): ReactNode {
           )
         })}
       </div>
-      <h3>Rutinas recurrentes</h3>
+      <div className="lbl">Rutinas recurrentes</div>
       {routines.length ? (
         routines.map((t) => (
           <div key={t.id} className="row" onClick={() => ui.editTask(t)}>

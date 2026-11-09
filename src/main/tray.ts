@@ -1,11 +1,15 @@
 import { app, Menu, nativeImage, Tray } from 'electron'
 import fs from 'fs'
 import path from 'path'
+import { withDot } from './badge'
 import { commit, getDb } from './db'
 import { stopActive } from './timer'
 import { showWin } from './windows'
 
 let tray: Tray | null = null
+let baseIcon: Electron.NativeImage | null = null
+let unread = 0
+let openWsp: () => void = () => {}
 
 /** Arranque con Windows: se inicia oculto (en la bandeja) para que el timer y los avisos sigan funcionando. */
 export function applyLoginItem(): void {
@@ -14,25 +18,45 @@ export function applyLoginItem(): void {
   else app.setLoginItemSettings({ openAtLogin, path: process.execPath, args: [app.getAppPath(), '--hidden'] })
 }
 
-export function initTray(): void {
+function trayMenu(): Electron.Menu {
+  return Menu.buildFromTemplate([
+    { label: 'Abrir Shutoki AI Workspace', click: showWin },
+    { label: unread > 0 ? `Abrir WhatsApp (${unread} sin leer)` : 'Abrir WhatsApp', click: () => openWsp() },
+    {
+      label: 'Detener el timer',
+      click: () => {
+        stopActive()
+        getDb().paused = null
+        commit()
+      }
+    },
+    { type: 'separator' },
+    { label: 'Salir', click: () => app.quit() }
+  ])
+}
+
+export function initTray(onWhatsApp: () => void): void {
+  openWsp = onWhatsApp
   const icon = path.join(__dirname, '../../resources/shutoki-ai.ico')
   if (!fs.existsSync(icon)) return // sin icono no hay bandeja (se genera con `npm run icon`)
-  tray = new Tray(nativeImage.createFromPath(icon))
+  baseIcon = nativeImage.createFromPath(icon)
+  tray = new Tray(baseIcon)
   tray.setToolTip('Shutoki AI Workspace')
   tray.on('click', showWin)
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: 'Abrir Shutoki AI Workspace', click: showWin },
-      {
-        label: 'Detener el timer',
-        click: () => {
-          stopActive()
-          getDb().paused = null
-          commit()
-        }
-      },
-      { type: 'separator' },
-      { label: 'Salir', click: () => app.quit() }
-    ])
-  )
+  tray.setContextMenu(trayMenu())
+}
+
+/** Quita el icono de la bandeja al salir: si no, Windows lo deja como «fantasma» en los iconos ocultos hasta pasar el cursor. */
+export function destroyTray(): void {
+  if (tray && !tray.isDestroyed()) tray.destroy()
+  tray = null
+}
+
+/** Muestra en la bandeja los mensajes de WhatsApp sin leer (punto rojo y texto al pasar el ratón). */
+export function setUnreadBadge(n: number): void {
+  unread = n
+  if (!tray) return
+  if (baseIcon) tray.setImage(n > 0 ? withDot(baseIcon) : baseIcon)
+  tray.setToolTip(n > 0 ? `Shutoki AI Workspace · WhatsApp: ${n} sin leer` : 'Shutoki AI Workspace')
+  tray.setContextMenu(trayMenu())
 }

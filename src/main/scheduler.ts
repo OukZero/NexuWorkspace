@@ -2,6 +2,7 @@ import { powerMonitor } from 'electron'
 import { dayKey } from '../shared/util'
 import { commit, getDb, save, uid } from './db'
 import { activeEntry, minutesToday, stopActive } from './timer'
+import { meetingHoursToday } from './calendar'
 import { notify } from './notify'
 
 // Una tarea con recurrence != none es plantilla. Cada día genera una copia para hoy.
@@ -83,13 +84,14 @@ export function checkReminder(): void {
   const hours = minutesToday() / 60
   const pending = db.tasks.filter((t) => t.status === 'today' || t.status === 'doing').length
   const missing = db.settings.targetHours - hours
+  const meet = meetingHoursToday()
   notify({
     kind: 'reminder',
     title: 'Cierre del día',
     body:
       (missing > 0
         ? `Llevas ${hours.toFixed(1)} h de ${db.settings.targetHours} h: te faltan ${missing.toFixed(1)} h por registrar.`
-        : `Objetivo cumplido: ${hours.toFixed(1)} h registradas.`) + ` ${pending} tareas pendientes hoy. Abre el borrador del día para revisarlo.`,
+        : `Objetivo cumplido: ${hours.toFixed(1)} h registradas.`) + (meet > 0 ? ` Reuniones de hoy: ${meet.toFixed(1)} h.` : '') + ` ${pending} tareas pendientes hoy. Abre el borrador del día para revisarlo.`,
     goto: 'hours'
   })
 }

@@ -102,7 +102,7 @@ async function tokenFor(info: RemoteInfo): Promise<string> {
 
 const NO_TOKEN = 'No se encontró un token de GitHub. Inicia sesión en Git (se guarda en el Administrador de credenciales al hacer push) o pega un token en Ajustes → Integraciones.'
 
-async function ghApi<T>(info: RemoteInfo, apiPath: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+export async function ghApi<T>(info: RemoteInfo, apiPath: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
   if (info.kind !== 'github') throw new Error('Las issues solo están disponibles para repositorios de GitHub.')
   const token = await tokenFor(info)
   if (!token) throw new Error(NO_TOKEN)

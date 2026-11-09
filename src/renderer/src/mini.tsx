@@ -6,10 +6,16 @@ import { initTheme } from './theme'
 import './styles/mini.css'
 
 initTheme()
-void initStore().then(() => {
+
+async function boot(): Promise<void> {
+  const st = await window.api.call('auth:status')
+  window.api.onAuth((s) => s.signedIn !== st.signedIn && location.reload())
+  if (!st.signedIn) return // sin sesión la ventana flotante no muestra nada
+  await initStore()
   createRoot(document.getElementById('root') as HTMLElement).render(
     <StrictMode>
       <Mini />
     </StrictMode>
   )
-})
+}
+void boot()

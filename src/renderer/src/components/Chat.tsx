@@ -10,7 +10,11 @@ import { baseName, hhmm } from '../utils'
 import { useUi } from '../ui'
 import { ContextBar, TemplateMenu } from './ChatExtras'
 import { ChecksButton, LimitBanner, ProfileSelect, WorktreeBar } from './ChatSafety'
-import { IconSend, IconStop } from './icons'
+import { IconStop } from './icons'
+import { G } from './glyphs'
+import { setLayout, useLayout } from '../layout'
+import { setConvsOpen, useConvsPane } from '../convsPane'
+import { onChatDraft, takeChatDraft } from '../chatDraft'
 import { Markdown } from './Markdown'
 import { Menu } from './Menu'
 import { Select, type SelectOption } from './Select'
@@ -68,9 +72,11 @@ export function AttachmentList({ items, onRemove }: { items: Attachment[]; onRem
 }
 
 /** Una conversación con Claude. Cada una tiene su propio contexto, aunque comparta tarea con otras. */
-export function ChatView({ convId }: { convId: string }): ReactNode {
+export function ChatView({ convId, embedded }: { convId: string; embedded?: boolean }): ReactNode {
   const db = useDB()
   const ui = useUi()
+  const lay = useLayout()
+  const convs = useConvsPane()
   const chat = db.chats[convId]
   const taskId = chat?.taskId ?? ''
   const task = findTask(db, taskId)
@@ -110,6 +116,19 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [convId])
+
+  // borrador dejado por otra vista (p. ej. «Preguntar a Claude sobre esta página» del panel Web): texto y contexto a adjuntar
+  useEffect(() => {
+    const take = (): void => {
+      const d = takeChatDraft(taskId)
+      if (!d) return
+      setCtxKinds((cur) => [...new Set([...cur, ...d.kinds])])
+      setInput(d.text)
+      area.current?.focus()
+    }
+    take()
+    return onChatDraft(take)
+  }, [taskId, convId])
 
   // salida reciente de la terminal de la tarea (para el contexto); se refresca de vez en cuando
   useEffect(() => {
@@ -317,12 +336,15 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
     ui.toast('Abriendo Claude Desktop (sesión nueva)')
   }
 
-  return (
+  const body = (
     <>
+      <section className="chatpane">
       <div className="chat-head">
-        <button className="icon back" title="Volver" aria-label="Volver" onClick={() => ui.go(ui.panel)}>
-          ←
-        </button>
+        {!embedded && !convs.open && (
+          <button className="ib" title="Mostrar la lista de conversaciones" aria-label="Mostrar la lista de conversaciones" onClick={() => setConvsOpen(true)}>
+            <G n="list" />
+          </button>
+        )}
         <div className="grow">
           <b>{task?.title}</b>
           <div className="meta">
@@ -331,19 +353,28 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
             {chat && <span title="Conversación actual"> · {convLabel(chat)}</span>}
           </div>
         </div>
-        {chat?.usage?.contextTokens ? <ContextMeter usage={chat.usage} settings={db.settings} /> : null}
-        <button className="btn sm accent" disabled={summarizing} onClick={summarize} title="Genera un resumen de la conversación y lo agrega a «Lo realizado» de la tarea">
-          {summarizing ? 'Resumiendo…' : '✦ Resumir'}
+        {chat?.usage?.contextTokens ? (
+          <button className="pill ctx-pill" title="Sesión y contexto: consumo, compactar y resumir" onClick={() => setLayout({ sideOpen: !(lay.sideOpen && lay.sideTab === 'session'), sideTab: 'session' })}>
+            <ContextMeter usage={chat.usage} settings={db.settings} />
+          </button>
+        ) : null}
+        <button className="ib" disabled={summarizing} onClick={summarize} title={summarizing ? 'Resumiendo…' : 'Resumir: agrega lo hecho a «Lo realizado» de la tarea'} aria-label="Resumir la conversación">
+          <G n="sparkle" />
         </button>
-        <button className="btn sm" onClick={() => ui.viewTask(taskId)} title="Ver el detalle de la tarea">
-          Ver tarea
+        <button className="btn sm taskbtn" onClick={() => ui.viewTask(taskId)} title="Ver el detalle de la tarea: descripción, subtareas, notas y sesiones" aria-label="Ver el detalle de la tarea">
+          <G n="info" size={15} />
+          <span>Ver tarea</span>
         </button>
-        <button className="btn sm" onClick={() => ui.openTerminal(taskId)} title="Terminal en la carpeta del proyecto (Ctrl+`)">
-          &gt;_ Terminal
+        <button className="ib" onClick={() => ui.openTerminal(taskId)} title="Terminal en la carpeta del proyecto (Ctrl+`)" aria-label="Abrir terminal">
+          <G n="terminal" />
+        </button>
+        <button className={`ib ${lay.sideOpen ? 'on' : ''}`} onClick={() => setLayout({ sideOpen: !lay.sideOpen })} title="Inspector: sesión, archivos y actividad" aria-label="Inspector" aria-pressed={lay.sideOpen}>
+          <G n="panel" />
         </button>
         {chat?.kind !== 'review' && <ChecksButton taskId={taskId} convId={convId} />}
         <Menu
-          trigger="⋯"
+          trigger={<G n="more" />}
+          className="ib"
           title="Más acciones"
           items={[
             { label: 'Editar tarea', icon: '✎', onSelect: () => task && ui.editTask(task) },
@@ -359,7 +390,6 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
       </div>
       <WorktreeBar convId={convId} />
       <LimitBanner convId={convId} />
-      <div className="chat-wrap">
         <div className="chat-main">
           <div
             className="msgs"
@@ -373,7 +403,16 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
               <div className="empty">Conversación nueva para esta tarea. {ai} trabajará en la carpeta del proyecto y puede editar archivos.</div>
             )}
             {messages.map((m, i) => (
-              <div key={i} className={`msg ${m.role}`}>
+              <div key={i} className={`msg ${m.role}`} data-ai={m.role === 'assistant' ? provider : undefined}>
+                {m.role === 'assistant' && (
+                  <div className="mhead">
+                    <span className="mav" aria-hidden>
+                      <G n="sparkle" size={15} />
+                    </span>
+                    <b className="mwho">{ai}</b>
+                    {m.ts > 0 && <span className="time">{hhmm(m.ts)}</span>}
+                  </div>
+                )}
                 {m.attachments?.length ? <AttachmentList items={m.attachments} /> : null}
                 {m.role === 'user' ? <span style={{ whiteSpace: 'pre-wrap' }}>{m.text}</span> : <Markdown text={m.text} />}
                 {m.context?.length ? (
@@ -396,7 +435,7 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
                     ↩ Volver a antes de esto
                   </button>
                 )}
-                {m.role !== 'system' && m.ts > 0 && <span className="time">{hhmm(m.ts)}</span>}
+                {m.role === 'user' && m.ts > 0 && <span className="time">{hhmm(m.ts)}</span>}
               </div>
             ))}
             {chat?.pending?.map((p) => (
@@ -422,7 +461,14 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
               </div>
             ))}
             {running && (
-              <div className="msg assistant live">
+              <div className="msg assistant live" data-ai={provider}>
+                <div className="mhead">
+                  <span className="mav" aria-hidden>
+                    <G n="sparkle" size={15} />
+                  </span>
+                  <b className="mwho">{ai}</b>
+                  {live && <span className="time">escribiendo…</span>}
+                </div>
                 {live ? (
                   <Markdown text={live} />
                 ) : (
@@ -430,13 +476,13 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
                     <i />
                     <i />
                     <i />
-                    &nbsp;{ai} está trabajando…
+                    &nbsp;Trabajando…
                   </span>
                 )}
               </div>
             )}
           </div>
-          <div className={`suggest ${running ? 'hidden' : ''}`}>
+          <div className={`suggest ${running || input.trim() ? 'hidden' : ''}`}>
             {templates
               .filter((t) => t.pinned)
               .map((t) => (
@@ -484,7 +530,7 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
             </div>
           )}
           <div
-            className={`composer ${dragging ? 'drag' : ''}`}
+            className={`composer cbox ${dragging ? 'drag' : ''}`}
             onDragOver={(e) => {
               e.preventDefault()
               setDragging(true)
@@ -492,29 +538,19 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
             onDragLeave={() => setDragging(false)}
             onDrop={onDrop}
           >
-            <button className="btn clip" title="Adjuntar archivos o fotos (también puedes pegar o arrastrar)" onClick={() => void pickFiles()}>
-              📎
-            </button>
             <textarea
               ref={area}
               rows={1}
               value={input}
-              placeholder={`Escribe a ${ai}… (# plantillas, / comandos; pega o arrastra fotos y archivos)`}
+              placeholder={`Escribe a ${ai}…   #  plantillas   /  comandos`}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKey}
               onPaste={onPaste}
             />
-            <button
-              className={`btn primary send ${running ? 'stop' : ''}`}
-              disabled={!running && !input.trim() && !files.length}
-              title={running ? 'Detener respuesta' : 'Enviar (Enter)'}
-              onClick={() => (running ? void ui.run('chat:cancel', convId) : void send())}
-            >
-              {running ? <IconStop /> : <IconSend />}
-            </button>
-          </div>
-          <div className="composer-hint">
-            <span className="hint-pick">
+            <div className="cfoot">
+              <button className="ib clip" title="Adjuntar archivos o fotos (también puedes pegar o arrastrar)" aria-label="Adjuntar" onClick={() => void pickFiles()}>
+                <G n="files" size={16} />
+              </button>
               {chat?.kind !== 'design' && (
                 <Select
                   className="mini-sel"
@@ -556,13 +592,36 @@ export function ChatView({ convId }: { convId: string }): ReactNode {
                 searchable
                 creatable
               />
-              <span>Enter envía · Shift+Enter nueva línea</span>
+              <span className="cfoot-sp" />
+              {running && <span className="cfoot-run">{ai} está respondiendo…</span>}
+              <button
+                className={`btn primary send ${running ? 'stop' : ''}`}
+                disabled={!running && !input.trim() && !files.length}
+                title={running ? `${ai} está respondiendo… · Detener` : 'Enviar (Enter)'}
+                onClick={() => (running ? void ui.run('chat:cancel', convId) : void send())}
+              >
+                {running ? <IconStop /> : <G n="send" size={16} stroke={2.2} />}
+              </button>
+            </div>
+          </div>
+          <div className="composer-hint">
+            <span>
+              <kbd>↵</kbd> enviar
             </span>
-            <span>{running ? `${ai} está respondiendo…` : ''}</span>
+            <span>
+              <kbd>⇧ ↵</kbd> nueva línea
+            </span>
+            <span>
+              <kbd>#</kbd> plantillas
+            </span>
+            <span>
+              <kbd>/</kbd> comandos
+            </span>
           </div>
         </div>
-        <SidePanel convId={convId} />
-      </div>
+      </section>
+      <SidePanel convId={convId} mode={embedded ? 'drawer' : 'dock'} />
     </>
   )
+  return embedded ? <div className="chat-embed">{body}</div> : body
 }

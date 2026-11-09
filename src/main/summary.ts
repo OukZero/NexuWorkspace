@@ -94,9 +94,9 @@ function localSummary(d: Digest): string {
 }
 
 // ejecuta `claude -p` con el prompt por stdin y devuelve la salida de texto
-export function askClaude(prompt: string, cmd: string, timeoutMs = 120000): Promise<string> {
+export function askClaude(prompt: string, cmd: string, timeoutMs = 120000, model?: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(`${cmd} -p`, { shell: true, cwd: os.tmpdir(), windowsHide: true })
+    const child = spawn(`${cmd}${model ? ` --model ${model}` : ''} -p`, { shell: true, cwd: os.tmpdir(), windowsHide: true })
     let out = ''
     let err = ''
     const timer = setTimeout(() => {

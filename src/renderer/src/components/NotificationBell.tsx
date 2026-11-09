@@ -4,9 +4,10 @@ import type { ReactNode } from 'react'
 import type { NotificationKind } from '../../../shared/types'
 import { useDB, useNow } from '../store'
 import { useUi } from '../ui'
+import { G } from './glyphs'
 
-const ICON: Record<NotificationKind, string> = { daily: '☀', reminder: '⏱', done: '✓', attention: '!', permission: '🔐', idle: '⏸' }
-const TONE: Record<NotificationKind, string> = { daily: 'accent', reminder: 'warn', done: 'ok', attention: 'danger', permission: 'warn', idle: 'muted' }
+const ICON: Record<NotificationKind, string> = { daily: '☀', reminder: '⏱', done: '✓', attention: '!', permission: '🔐', idle: '⏸', ci: '⚙', whatsapp: '💬', calendar: '📅' }
+const TONE: Record<NotificationKind, string> = { daily: 'accent', reminder: 'warn', done: 'ok', attention: 'danger', permission: 'warn', idle: 'muted', ci: 'accent', whatsapp: 'ok', calendar: 'warn' }
 
 function ago(ts: number, now: number): string {
   const s = Math.max(0, Math.round((now - ts) / 1000))
@@ -17,7 +18,7 @@ function ago(ts: number, now: number): string {
 }
 
 /** Campanita con el centro de notificaciones: todo lo que la app avisó, para volver a verlo y abrir su destino. */
-export function NotificationBell(): ReactNode {
+export function NotificationBell({ variant = 'rail' }: { variant?: 'rail' | 'top' }): ReactNode {
   const db = useDB()
   const ui = useUi()
   const now = useNow(60000)
@@ -28,11 +29,9 @@ export function NotificationBell(): ReactNode {
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
-        <button className="side-search side-bell" title="Notificaciones">
-          <span className="ni bell-ico">
-            🔔{unread > 0 && <i className="bell-badge">{unread > 9 ? '9+' : unread}</i>}
-          </span>
-          <span className="nl">Notificaciones{unread > 0 ? ` · ${unread}` : ''}</span>
+        <button className={variant === 'top' ? 'ib' : 'rb'} title={unread ? `Notificaciones · ${unread} sin leer` : 'Notificaciones'} data-tip={unread ? `Notificaciones · ${unread} sin leer` : 'Notificaciones'} aria-label={unread ? `Notificaciones, ${unread} sin leer` : 'Notificaciones'}>
+          <G n="bell" />
+          {unread > 0 && <span className={variant === 'top' ? 'bd' : 'rb-badge'}>{variant === 'top' ? '' : unread > 9 ? '9+' : unread}</span>}
         </button>
       </Popover.Trigger>
       <Popover.Portal>

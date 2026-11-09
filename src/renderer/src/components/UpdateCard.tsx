@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { UpdateState } from '../../../shared/types'
 import { useUi } from '../ui'
+import { G } from './glyphs'
 
 /** Estado de las actualizaciones, siempre al día (llega por evento desde el proceso principal). */
 export function useUpdate(): UpdateState | null {
@@ -35,14 +36,13 @@ export function UpdateChip(): ReactNode {
   }
   return (
     <button
-      className={`upd-chip ${s.status}`}
-      title={s.status === 'downloading' ? `Descargando la versión ${s.version}…` : s.status === 'available' ? `Hay una versión nueva (${s.version}). Clic para descargarla` : `La versión ${s.version} está lista. Clic para reiniciar y actualizar`}
+      className={`rb upd-rb ${s.status}`}
+      aria-label="Actualización disponible"
+      data-tip={s.status === 'downloading' ? `Descargando la versión ${s.version}…` : s.status === 'available' ? `Hay una versión nueva (${s.version}). Clic para descargarla` : `La versión ${s.version} está lista. Clic para reiniciar y actualizar`}
       onClick={() => (s.status === 'ready' ? void install() : s.status === 'available' ? void ui.run('update:download') : ui.go('settings'))}
     >
-      <span className="ni" aria-hidden>
-        {s.status === 'ready' ? '⟳' : '⇩'}
-      </span>
-      <span className="nl">{s.status === 'ready' ? `Reiniciar para ${s.version}` : s.status === 'available' ? `Descargar ${s.version}` : `Descargando ${s.percent ?? 0}%`}</span>
+      <G n="download" />
+      {s.status === 'downloading' && <span className="rb-badge">{s.percent ?? 0}</span>}
     </button>
   )
 }

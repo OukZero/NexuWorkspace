@@ -7,6 +7,7 @@ import { useUi } from '../ui'
 import { NAV_GROUPS } from '../navDefs'
 import { LIMITS, applyPreset, deletePreset, savePreset, savedLayouts, setLayout, useLayout } from '../layout'
 import { Select } from './Select'
+import { BackgroundPicker } from './BackgroundPicker'
 
 // ---------- utilidades ----------
 const hexToRgb = (h: string): [number, number, number] => {
@@ -221,6 +222,10 @@ export function AppearanceSettings(): ReactNode {
       </div>
 
       {/* ---------------- acento ---------------- */}
+      <h3>Fondo</h3>
+      <div className="sub">Elige un fondo integrado o agrega tus propias imágenes. Los paneles se vuelven translúcidos para que se vea.</div>
+      <BackgroundPicker />
+
       <h3>Color de acento</h3>
       <div className="ap-swatches">
         <button className={`ap-sw auto ${a.accent === 'auto' ? 'on' : ''}`} title="Del tema: cada estilo trae el suyo" aria-label="Acento del tema" onClick={() => update({ accent: 'auto' })} />

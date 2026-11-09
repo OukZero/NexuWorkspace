@@ -4,6 +4,7 @@ import fs from 'fs'
 import path from 'path'
 import { getDb, registerWindow } from './db'
 import { lifecycle } from './lifecycle'
+import { isSignedIn } from './auth'
 import { closeSplash } from './splash'
 
 let win: BrowserWindow | null = null
@@ -41,7 +42,7 @@ const miniSize = (): readonly [number, number] => MINI_SIZE[getDb().settings.min
 
 /** Muestra la ventana flotante (si no está desactivada en Ajustes). */
 function showMini(): void {
-  if (getDb().settings.miniEnabled === false) return
+  if (getDb().settings.miniEnabled === false || !isSignedIn()) return
   if (mini && !mini.isDestroyed()) mini.showInactive()
 }
 
@@ -163,7 +164,7 @@ export function createWindows(): void {
     title: 'Shutoki AI Workspace',
     ...icon(),
     autoHideMenuBar: true,
-    webPreferences: { preload: preload(), contextIsolation: true, nodeIntegration: false }
+    webPreferences: { preload: preload(), contextIsolation: true, nodeIntegration: false, webviewTag: true }
   })
   registerWindow(win)
   win.once('ready-to-show', () => closeSplash(() => !hidden && win?.show()))
@@ -184,6 +185,8 @@ export function createWindows(): void {
   loadPage(win, 'index')
   createMini()
   // al minimizar aparece la ventana flotante; al volver, se oculta
+  win.on('enter-full-screen', () => emit('fullscreen', true))
+  win.on('leave-full-screen', () => emit('fullscreen', false))
   win.on('minimize', showMini)
   win.on('restore', hideMini)
   win.on('show', hideMini)

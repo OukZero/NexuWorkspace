@@ -1,17 +1,10 @@
 import * as Popover from '@radix-ui/react-popover'
-import { useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   ACCENTS,
   PRESETS,
-  clearBgImage,
-  getBgDim,
-  getBgGlass,
-  setBgGlass,
-  getBgImage,
   getPreset,
-  setBgDim,
-  setBgImageFile,
   setPreset,
   getAccent,
   getDensity,
@@ -31,14 +24,12 @@ import {
 import { msToday, useDB, useNow } from '../store'
 import { fmtH } from '../utils'
 import { useUi, type View } from '../ui'
-import { NotificationBell } from './NotificationBell'
 import { UpdateChip } from './UpdateCard'
 import { showSettingsTab } from './SettingsView'
 import { NAV_GROUPS } from '../navDefs'
-import { setLayout, useLayout } from '../layout'
-import { Resizer } from './Resizer'
+import { BackgroundPicker } from './BackgroundPicker'
+import { G, type GlyphName } from './glyphs'
 
-const COLLAPSE_KEY = 'shutoki.sidebar'
 
 const THEMES: Array<[ThemeMode, string]> = [
   ['light', '☀ Día'],
@@ -51,23 +42,6 @@ function initials(n: string): string {
   return (p.length ? p[0][0] + (p[1]?.[0] || '') : '?').toUpperCase()
 }
 
-function DayBar(): ReactNode {
-  const db = useDB()
-  const now = useNow()
-  const ms = msToday(db, now)
-  const target = db.settings.targetHours * 3600000
-  return (
-    <div id="dayBar">
-      <div>
-        <b>{fmtH(ms)} h</b> / {db.settings.targetHours} h hoy
-      </div>
-      <div className="bar">
-        <i style={{ width: `${Math.min(100, (ms / target) * 100)}%` }} />
-      </div>
-    </div>
-  )
-}
-
 function Profile(): ReactNode {
   const ui = useUi()
   const [open, setOpen] = useState(false)
@@ -77,10 +51,6 @@ function Profile(): ReactNode {
   const [density, setDensityState] = useState<Density>(getDensity())
   const [font, setFontState] = useState(getFontScale())
   const [preset, setPresetState] = useState(getPreset())
-  const [hasBg, setHasBg] = useState(!!getBgImage())
-  const [dim, setDimState] = useState(getBgDim())
-  const [glass, setGlassState] = useState(getBgGlass())
-  const fileRef = useRef<HTMLInputElement>(null)
   const choosePreset = (k: string): void => {
     setPreset(k)
     setPresetState(k)
@@ -95,17 +65,11 @@ function Profile(): ReactNode {
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
-      <div className="profile">
-        <Popover.Trigger asChild>
-          <button className="profile-btn" title="Perfil y apariencia">
-            <span className="avatar">{initials(name)}</span>
-            <span className="pname">{name.trim() || 'Tu perfil'}</span>
-            <span className="pcaret" aria-hidden>
-              ⋯
-            </span>
-          </button>
-        </Popover.Trigger>
-      </div>
+      <Popover.Trigger asChild>
+        <button className="rail-av" data-tip={name.trim() || 'Perfil y apariencia'} aria-label="Perfil y apariencia">
+          {initials(name)}
+        </button>
+      </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content className="pmenu" side="right" align="end" sideOffset={10} collisionPadding={12}>
           <div className="pm-head">
@@ -180,69 +144,7 @@ function Profile(): ReactNode {
                 </div>
               </>
             )}
-            {section(
-              'Fondo',
-              <>
-                <div className="seg">
-                  <button onClick={() => fileRef.current?.click()}>{hasBg ? 'Cambiar imagen' : 'Elegir imagen…'}</button>
-                  {hasBg && (
-                    <button
-                      onClick={() => {
-                        clearBgImage()
-                        setHasBg(false)
-                      }}
-                    >
-                      Quitar
-                    </button>
-                  )}
-                </div>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  onChange={(e) => {
-                    const f = e.target.files?.[0]
-                    e.target.value = ''
-                    if (!f) return
-                    setBgImageFile(f).then(
-                      () => setHasBg(true),
-                      () => ui.toast('No se pudo usar esa imagen (muy grande o no válida)', true)
-                    )
-                  }}
-                />
-                {hasBg && (
-                  <>
-                    <small className="pm-lbl">Atenuar fondo · {dim}%</small>
-                    <input
-                      type="range"
-                      min={40}
-                      max={95}
-                      step={5}
-                      value={dim}
-                      aria-label="Atenuar fondo"
-                      onChange={(e) => {
-                        setBgDim(Number(e.target.value))
-                        setDimState(Number(e.target.value))
-                      }}
-                    />
-                    <small className="pm-lbl">Opacidad de paneles · {glass}%</small>
-                    <input
-                      type="range"
-                      min={40}
-                      max={100}
-                      step={5}
-                      value={glass}
-                      aria-label="Opacidad de paneles"
-                      onChange={(e) => {
-                        setBgGlass(Number(e.target.value))
-                        setGlassState(Number(e.target.value))
-                      }}
-                    />
-                  </>
-                )}
-              </>
-            )}
+            {section('Fondo', <BackgroundPicker />)}
             {section(
               'Lectura',
               <>
@@ -308,73 +210,90 @@ function Profile(): ReactNode {
   )
 }
 
-function Brand(): ReactNode {
-  const [ok, setOk] = useState(true) // si icon.png no existe todavía (npm run icon), queda el símbolo ◆
+const NAV_ICON: Record<string, GlyphName> = { today: 'panelhome', workspace: 'workspace', board: 'board', groups: 'folders', history: 'history', hours: 'hours', redmine: 'redmine', usage: 'usage', music: 'music', notes: 'files', web: 'popout', whatsapp: 'chat' }
+
+/** Avance del día como anillo, bajo el logo: horas registradas frente al objetivo. */
+function DayRing(): ReactNode {
+  const db = useDB()
+  const now = useNow(30000)
+  const ms = msToday(db, now)
+  const target = db.settings.targetHours * 3600000
+  const p = Math.min(1, target ? ms / target : 0)
+  const c = 2 * Math.PI * 9
   return (
-    <div className="brand">
-      {ok ? <img className="brand-icon" src={`${import.meta.env.BASE_URL}icon.png`} alt="" onError={() => setOk(false)} /> : <span>◆</span>}
-      <span className="brand-text">Shutoki<small>AI Workspace</small></span>
-    </div>
+    <span className="rail-ring" data-tip={`${fmtH(ms)} h de ${db.settings.targetHours} h hoy`} role="img" aria-label={`${fmtH(ms)} horas de ${db.settings.targetHours} hoy`}>
+      <svg viewBox="0 0 24 24" width="22" height="22">
+        <circle cx="12" cy="12" r="9" stroke="var(--line)" />
+        <circle cx="12" cy="12" r="9" stroke="var(--accent2)" strokeDasharray={`${p * c} ${c}`} strokeLinecap="round" />
+      </svg>
+    </span>
   )
 }
 
+function ThemeToggle(): ReactNode {
+  useAppearance()
+  const dark = document.documentElement.dataset.theme !== 'light'
+  return (
+    <button
+      className="rb"
+      data-tip={dark ? 'Tema claro' : 'Tema oscuro'}
+      aria-label={dark ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
+      onClick={() => {
+        if (getPreset()) setPreset('') // los estilos con nombre son de un solo modo: se vuelve al clásico día / noche
+        setMode(dark ? 'light' : 'dark')
+      }}
+    >
+      <G n={dark ? 'sun' : 'moon'} />
+    </button>
+  )
+}
+
+/** Mensajes sin leer de los servicios de mensajería (vista → número), enviados por el proceso principal. */
+function useBadges(): Record<string, number> {
+  const [b, setB] = useState<Record<string, number>>({})
+  useEffect(() => {
+    void window.api.call('badges:get').then(setB, () => undefined)
+    return window.api.onBadges(setB)
+  }, [])
+  return b
+}
+
+/** Menú principal como barra de iconos: los nombres van en el tooltip y el orden se configura en Apariencia. */
 export function Sidebar(): ReactNode {
   const ui = useUi()
+  const db = useDB()
+  const badges = useBadges()
   useAppearance() // repinta al reordenar u ocultar secciones
-  const lay = useLayout()
-  // el menú se pliega a una barra de iconos y recuerda su estado
-  const [collapsed, setCollapsed] = useState(() => {
-    try {
-      return localStorage.getItem(COLLAPSE_KEY) === '1'
-    } catch {
-      return false
-    }
-  })
-  const toggle = (): void => {
-    setCollapsed(!collapsed)
-    try {
-      localStorage.setItem(COLLAPSE_KEY, collapsed ? '0' : '1')
-    } catch {
-      /* sin storage */
-    }
-  }
+  const pending = db.tasks.filter((t) => !t.archived && (!t.recurrence || t.recurrence.type === 'none') && (t.status === 'today' || t.status === 'doing')).length
   return (
-    <aside className={`side ${collapsed ? 'collapsed' : ''}`}>
-      {!collapsed && <Resizer value={lay.sidebarW} onChange={(w) => setLayout({ sidebarW: w })} onReset={() => setLayout({ sidebarW: 200 })} label="Ancho del menú" />}
-      <Brand />
+    <aside className="side rail-side" aria-label="Principal">
+      <button className="rail-logo" data-tip="Shutoki AI Workspace · Ctrl+K" aria-label="Búsqueda global" onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M12 3c4 2 6 6 4 10-1 2-3 3-4 8-1-5-3-6-4-8-2-4 0-8 4-10z" />
+        </svg>
+      </button>
       <nav id="nav">
-        {NAV_GROUPS.map((g) => (
+        {NAV_GROUPS.map((g, gi) => (
           <div key={g.title} className="nav-group">
-            <div className="nav-title">{g.title}</div>
-            {navOrder(g.items.map(([id, icon, label]) => ({ id, icon, label }))).map(({ id: v, icon, label }) => (
-              <button key={v} className={ui.view === v ? 'active' : ''} title={label} onClick={() => ui.go(v)}>
-                <span className="ni">{icon}</span>
-                <span className="nl">{label}</span>
+            {gi > 0 && <span className="rail-sep" />}
+            {navOrder(g.items.map(([id, , label]) => ({ id, label }))).map(({ id: v, label }) => (
+              <button key={v} className={`rb ${ui.view === v ? 'on' : ''}`} data-tip={badges[v] ? `${label} · ${badges[v]} sin leer` : label} aria-label={badges[v] ? `${label}, ${badges[v]} sin leer` : label} aria-current={ui.view === v ? 'page' : undefined} onClick={() => ui.go(v)}>
+                <G n={NAV_ICON[v] ?? 'today'} />
+                {v === 'today' && pending > 0 && <span className="rb-badge">{pending > 9 ? '9+' : pending}</span>}
+                {badges[v] > 0 && <span className="rb-badge">{badges[v] > 9 ? '9+' : badges[v]}</span>}
               </button>
             ))}
           </div>
         ))}
       </nav>
-      <div className="side-foot">
-        <DayBar />
-        <UpdateChip />
-        <NotificationBell />
-        <button className="side-search" title="Búsqueda global (Ctrl+K)" onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}>
-          <span className="ni">⌕</span>
-          <span className="nl">Buscar · Ctrl+K</span>
-        </button>
-        <small>Ctrl+Alt+N: captura rápida</small>
-        <button className="side-toggle" title={collapsed ? 'Expandir el menú' : 'Plegar el menú'} onClick={toggle}>
-          {collapsed ? '»' : '«'}
-        </button>
-        <nav className="nav-foot">
-          <button className={ui.view === 'settings' ? 'active' : ''} title="Ajustes" onClick={() => ui.go('settings')}>
-            <span className="ni">⚙</span>
-            <span className="nl">Ajustes</span>
-          </button>
-        </nav>
-        <Profile />
-      </div>
+      <span className="sp" />
+      <DayRing />
+      <UpdateChip />
+      <ThemeToggle />
+      <button className={`rb ${ui.view === 'settings' ? 'on' : ''}`} data-tip="Ajustes" aria-label="Ajustes" onClick={() => ui.go('settings')}>
+        <G n="settings" />
+      </button>
+      <Profile />
     </aside>
   )
 }

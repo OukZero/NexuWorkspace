@@ -18,10 +18,12 @@ interface Opts {
   flash?: boolean
   /** Reenviar también a Telegram (por defecto sí; los permisos van con botones por otra vía). */
   tg?: boolean
+  /** Acción propia al hacer click en el aviso del sistema (en vez de ir a «goto»). */
+  onClick?: () => void
 }
 
 /** Guarda la notificación en el centro de notificaciones (campanita) y, si se pide, muestra el aviso del sistema. */
-export function notify({ kind, title, body, goto, os = true, flash = false, tg = true }: Opts): void {
+export function notify({ kind, title, body, goto, os = true, flash = false, tg = true, onClick }: Opts): void {
   const db = getDb()
   const item: AppNotification = { id: uid(), ts: Date.now(), kind, title, body, ...(goto ? { goto } : {}), read: false }
   db.notifications = [item, ...(db.notifications ?? [])].slice(0, MAX)
@@ -31,6 +33,7 @@ export function notify({ kind, title, body, goto, os = true, flash = false, tg =
   const n = new Notification({ title, body })
   n.on('click', () => {
     markRead(item.id)
+    if (onClick) return onClick()
     showWin()
     if (goto) emit('goto', goto)
   })

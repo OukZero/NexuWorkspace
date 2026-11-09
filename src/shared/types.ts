@@ -1,6 +1,6 @@
 // Contrato compartido entre main, preload y renderer.
 
-export type Status = 'next' | 'today' | 'doing' | 'done'
+export type Status = 'next' | 'today' | 'doing' | 'review' | 'done'
 export type Priority = 'high' | 'med' | 'low'
 export type RecurrenceType = 'none' | 'daily' | 'weekdays' | 'weekly'
 
@@ -52,6 +52,10 @@ export interface Task {
   branchDir?: string
   /** Último PR publicado desde la rama de la tarea (lo revisa otra persona). */
   pr?: PrLink
+  /** Entorno de la tarea: lo que se abre de un clic (carpeta, navegador, Postman, base de datos…). */
+  launch?: LaunchItem[]
+  /** Número del PR por el que la tarea ya pasó a «En revisión» (para no volver a moverla si la devuelves a mano). */
+  reviewPr?: number
   /** Notas de sesión: lo hecho, lo decidido y lo pendiente al cerrar cada conversación. */
   sessions?: SessionNote[]
 }
@@ -103,7 +107,7 @@ export interface SessionNote {
 }
 
 /** Piezas de contexto que se pueden anexar automáticamente a un mensaje. */
-export type ContextKind = 'task' | 'branch' | 'status' | 'diff' | 'base' | 'terminal' | 'notes'
+export type ContextKind = 'task' | 'branch' | 'status' | 'diff' | 'base' | 'terminal' | 'notes' | 'ci' | 'web'
 
 /** Plantilla de prompt reutilizable. Admite variables {{tarea}}, {{descripcion}}, {{rama}}, {{issue}} y {{archivos}}; lo que va entre [corchetes] se rellena a mano. */
 export interface PromptTemplate {
@@ -166,7 +170,7 @@ export interface RedmineDay {
   max: number
 }
 
-export type NotificationKind = 'daily' | 'reminder' | 'done' | 'attention' | 'permission' | 'idle'
+export type NotificationKind = 'daily' | 'reminder' | 'done' | 'attention' | 'permission' | 'idle' | 'ci' | 'whatsapp' | 'calendar'
 
 export interface AppNotification {
   id: string
@@ -177,6 +181,37 @@ export interface AppNotification {
   /** A dónde lleva al hacer click: una vista (p. ej. «hours», «daily») o «chat:<conversación>». */
   goto?: string
   read: boolean
+}
+
+/** Un check de integración continua (GitHub Actions u otro servicio que reporte a GitHub). */
+export interface CiCheck {
+  id?: number
+  name: string
+  state: 'success' | 'failure' | 'pending' | 'skipped'
+  url?: string
+}
+
+export interface CiPr {
+  number: number
+  url: string
+  state: 'open' | 'closed' | 'merged'
+  draft: boolean
+  /** Resultado de las revisiones: aprobado, con cambios pedidos o sin veredicto aún. */
+  review: 'approved' | 'changes' | 'pending'
+  comments: number
+  /** GitHub dice que la rama tiene conflictos con la base. */
+  conflicts: boolean
+}
+
+/** Estado de CI y PR de la rama de una tarea. */
+export interface CiStatus {
+  taskId: string
+  branch: string
+  state: 'success' | 'failure' | 'pending' | 'none'
+  checks: CiCheck[]
+  pr?: CiPr
+  ts: number
+  error?: string
 }
 
 /** Carpeta que se puede explorar en el visor de archivos de una tarea. */
@@ -549,6 +584,8 @@ export interface Settings {
   miniEnabled?: boolean
   /** Avisar al acercarse a los límites de la cuenta (por defecto sí). */
   limitAlerts?: boolean
+  /** Mover la tarea a «En revisión» al abrirse su PR, y a «Hecha» al fusionarse (por defecto sí). */
+  prAutoReview?: boolean
   /** Pasar al modelo más barato desde este % de uso de la cuenta (0 = nunca). */
   cheapAt?: number
   profiles?: AgentProfile[]
@@ -574,6 +611,21 @@ export interface Settings {
   telegramDetails?: boolean
   /** Conversación a la que van los mensajes escritos en Telegram. */
   telegramConv?: string
+  /** Spotify: Client ID de la app del usuario, lista de enfoque (URI o enlace) y si el pomodoro la controla solo. */
+  spotifyClientId?: string
+  /** Calendario de Outlook (Microsoft Graph): Client ID de tu app de Azure, inquilino (common, organizations o un id) y minutos de aviso antes de cada reunión (0 = sin aviso). */
+  outlookClientId?: string
+  /** Permitir que Claude consulte páginas web (WebFetch y WebSearch) en todos los chats; por defecto sí. */
+  claudeWeb?: boolean
+  /** Sitios guardados para los paneles «Web». */
+  webLinks?: WebLink[]
+  outlookTenant?: string
+  meetingRemindMin?: number
+  spotifyFocusUri?: string
+  spotifyAuto?: boolean
+  /** Dispositivo elegido para reproducir (id y nombre: el id cambia en el reproductor web, el nombre sirve de respaldo). */
+  spotifyDeviceId?: string
+  spotifyDeviceName?: string
   /** Token de GitHub (opcional): si está vacío se usa el del Administrador de credenciales de Git. */
   githubToken?: string
   /** Plantillas de prompts; ausente = las predeterminadas. */
@@ -599,6 +651,88 @@ export interface TelegramStatus {
   error?: string
 }
 
+/** Reunión del calendario (solo lectura). Las fechas son milisegundos. */
+export interface CalEvent {
+  id: string
+  title: string
+  start: number
+  end: number
+  allDay: boolean
+  /** Ocupa tu tiempo (no es «libre»). */
+  busy: boolean
+  tentative?: boolean
+  joinUrl?: string
+  webLink?: string
+  location?: string
+  organizer?: string
+}
+export interface CalendarStatus {
+  configured: boolean
+  connected: boolean
+  error?: string
+  syncedAt?: number
+}
+export interface CalendarSave {
+  clientId: string
+  tenant: string
+  remindMin: number
+}
+/** Tiempo reservado para trabajar en una tarea. */
+export interface FocusBlock {
+  id: string
+  taskId: string
+  start: number
+  end: number
+  /** Ya se avisó de que llegó la hora. */
+  notified?: boolean
+}
+
+export interface SpotifyStatus {
+  configured: boolean
+  connected: boolean
+  error?: string
+}
+export interface SpotifyNow {
+  playing: boolean
+  title: string
+  artist: string
+  /** Carátula (URL) y progreso en milisegundos. */
+  art?: string
+  progressMs?: number
+  durationMs?: number
+  device?: string
+  /** Volumen del dispositivo (0-100); no viene si el dispositivo no permite cambiarlo desde la API. */
+  volume?: number
+}
+export type SpotifyAction = 'play' | 'pause' | 'next' | 'prev' | 'focus'
+/** Dispositivo en el que puede sonar Spotify (este equipo, el móvil, un altavoz…). */
+export interface SpotifyDevice {
+  id: string
+  name: string
+  type: string
+  active: boolean
+}
+/** Canción de un resultado de búsqueda. */
+export interface SpotifyTrack {
+  uri: string
+  title: string
+  artist: string
+  album: string
+  art?: string
+  durationMs: number
+}
+/** Playlist de un resultado de búsqueda o de la biblioteca del usuario. */
+export interface SpotifyPlaylist {
+  uri: string
+  name: string
+  owner: string
+  art?: string
+}
+export interface SpotifySearchResult {
+  tracks: SpotifyTrack[]
+  playlists: SpotifyPlaylist[]
+}
+
 /** Proyecto de Redmine (por nombre) con su id y las tareas conocidas. */
 export type RedmineCatalog = Record<string, { id: string; issues: Array<{ id: string; label: string }> }>
 
@@ -618,6 +752,8 @@ export interface DB {
   lastDailyDay?: string
   /** Centro de notificaciones: lo que la app avisó (también lo que no llegó a mostrarse como aviso del sistema). */
   notifications?: AppNotification[]
+  /** Bloques de tiempo reservados para una tarea (solo locales, no se escriben en el calendario). */
+  focusBlocks?: FocusBlock[]
 }
 
 /** Tarea nueva o parcial: sin id se crea una nueva. */
@@ -642,6 +778,26 @@ export interface IpcChannels {
   'skills:install': { args: [string]; ret: string }
   'skills:remove': { args: [string]; ret: string }
   'window:skills': { args: []; ret: void } // abre la ventana del catálogo de skills
+  'calendar:status': { args: []; ret: CalendarStatus }
+  'calendar:save': { args: [CalendarSave]; ret: CalendarStatus }
+  'calendar:connect': { args: []; ret: CalendarStatus }
+  'calendar:disconnect': { args: []; ret: CalendarStatus }
+  'calendar:events': { args: [boolean?]; ret: CalEvent[] } // true = volver a consultar ahora
+  'focus:save': { args: [Partial<FocusBlock> & { taskId: string; start: number; end: number }]; ret: FocusBlock }
+  'focus:delete': { args: [string]; ret: void }
+  'web:attach': { args: [string, number, 'web' | 'wsp']; ret: boolean } // la página <webview> del panel ya está lista: id del panel e id de su WebContents
+  'web:active': { args: [string]; ret: void } // esta página es la que se está viendo (la que lee Claude)
+  'whatsapp:visible': { args: [boolean]; ret: void }
+  'assistant:plan': { args: [string]; ret: AssistantPlan }
+  'assistant:read': { args: [string | null, string]; ret: string } // dirección (null = página a la vista) y pregunta
+  'launch:run': { args: [string, string?]; ret: string[] } // tarea y, opcionalmente, un elemento; devuelve los errores
+  'file:pick': { args: [('app' | 'file')?]; ret: string | null }
+  'notes:list': { args: []; ret: Note[] }
+  'notes:save': { args: [NoteInput]; ret: Note }
+  'notes:delete': { args: [string]; ret: void }
+  'badges:get': { args: []; ret: Record<string, number> } // sin leer actuales (para pintar al abrir o recargar la ventana)
+  'whatsapp:open': { args: []; ret: void } // lleva a la vista de WhatsApp dentro de la app
+  'window:fullscreen': { args: [boolean?]; ret: boolean } // pantalla completa de la ventana actual (sin argumento alterna); devuelve el estado nuevo
   'win:restore': { args: []; ret: void }
   'mini:hide': { args: []; ret: void } // oculta la ventana flotante hasta la próxima vez que se minimice la principal
   'claude:login': { args: []; ret: void }
@@ -663,6 +819,9 @@ export interface IpcChannels {
   'git:remote': { args: [string]; ret: RemoteInfo | null }
   'git:push': { args: [string, string?]; ret: PushResult } // repo, tarea -> resultado con enlace al PR
   'git:prText': { args: [string, string?]; ret: { title: string; body: string } }
+  'ci:all': { args: []; ret: Record<string, CiStatus> }
+  'ci:refresh': { args: [string]; ret: CiStatus | null }
+  'ci:failure': { args: [string]; ret: string } // texto con los checks fallidos de la tarea, listo para la IA
   'issue:list': { args: [string]; ret: IssueRef[] }
   'issue:create': { args: [string, string, string, string[]?]; ret: IssueRef }
   'issue:branch': { args: [string, string, number]; ret: { branch: string; issue: IssueRef } } // tarea, repo, nº de issue
@@ -724,6 +883,24 @@ export interface IpcChannels {
   'telegram:link': { args: []; ret: string }
   'telegram:unlink': { args: []; ret: TelegramStatus }
   'telegram:test': { args: []; ret: void }
+  'spotify:status': { args: []; ret: SpotifyStatus }
+  'spotify:save': { args: [{ clientId: string; focusUri: string; auto: boolean }]; ret: SpotifyStatus }
+  'spotify:connect': { args: []; ret: SpotifyStatus }
+  'spotify:disconnect': { args: []; ret: SpotifyStatus }
+  'spotify:now': { args: []; ret: SpotifyNow | null }
+  'spotify:control': { args: [SpotifyAction]; ret: void }
+  'spotify:devices': { args: []; ret: SpotifyDevice[] }
+  'spotify:volume': { args: [number]; ret: void } // volumen 0-100 del dispositivo activo
+  /** Traspasa la reproducción a ese dispositivo (conserva si estaba sonando) y lo recuerda como el preferido. */
+  'spotify:transfer': { args: [string]; ret: void }
+  /** Busca canciones y playlists por texto. */
+  'spotify:search': { args: [string]; ret: SpotifySearchResult }
+  /** Playlists de la biblioteca del usuario (pide el permiso de lectura de playlists). */
+  'spotify:playlists': { args: []; ret: SpotifyPlaylist[] }
+  /** Reproduce una canción (spotify:track:…) o una lista (spotify:playlist:… / spotify:album:…). */
+  'spotify:play': { args: [string]; ret: void }
+  /** Añade una canción (spotify:track:…) a la cola. */
+  'spotify:queue': { args: [string]; ret: void }
   'redmine:login': { args: []; ret: void }
   'redmine:days': { args: [string, string]; ret: RedmineDay[] }
   'redmine:send': { args: [string, string[], Record<string, number>, Record<string, string>?]; ret: RedmineResult }
@@ -736,6 +913,29 @@ export interface IpcChannels {
   'git:commits': { args: [string]; ret: Record<string, string[]> }
   'draft:fillNotes': { args: [string]; ret: number }
   'excel:export': { args: [string, string]; ret: string | null }
+  'auth:status': { args: []; ret: AuthStatus }
+  'auth:signIn': { args: [string, string]; ret: AuthStatus }
+  /** Contraseña nueva cuando el administrador creó el usuario con una temporal. */
+  'auth:newPassword': { args: [string]; ret: AuthStatus }
+  'auth:signOut': { args: []; ret: void }
+  'auth:forgot': { args: [string]; ret: void }
+  'auth:confirmForgot': { args: [string, string, string]; ret: void } // correo, código, contraseña nueva
+}
+
+/** Estado de la sesión (login con AWS Cognito). */
+export interface AuthStatus {
+  /** Hay un User Pool configurado (resources/auth.config.json o variables SHUTOKI_COGNITO_*). */
+  configured: boolean
+  signedIn: boolean
+  /** El login está desactivado (resources/auth.config.json → enabled: false): la app no pide sesión. */
+  disabled?: boolean
+  email?: string
+  /** Sesión aceptada sin poder validarla en línea (sin internet). */
+  offline?: boolean
+  /** Falta elegir una contraseña nueva (el usuario entró con la temporal). */
+  needsNewPassword?: boolean
+  /** Por qué se cerró la sesión: caducó o el administrador revocó/desactivó el acceso. */
+  reason?: 'expired' | 'revoked'
 }
 
 /** Estado de las actualizaciones automáticas. 'dev' = la app no está instalada (no se actualiza sola). */
@@ -750,6 +950,79 @@ export interface UpdateState {
   checkedAt?: number
 }
 
+/** Qué se abre: carpeta o archivo (con el programa predeterminado), enlace web, programa (.exe, .lnk, .bat), VS Code o la terminal de la tarea. */
+export type LaunchKind = 'folder' | 'url' | 'app' | 'file' | 'vscode' | 'terminal'
+
+/** Una cosa que se abre al lanzar el entorno de la tarea. En `target` y `args`, {folder} se sustituye por la carpeta de la tarea. */
+export interface LaunchItem {
+  id: string
+  kind: LaunchKind
+  label?: string
+  target: string
+  /** Argumentos del programa (solo kind «app»), separados por espacios; admite comillas dobles. */
+  args?: string
+}
+
+/** Sitio guardado para abrir en un panel «Web». */
+export interface WebLink {
+  id: string
+  name: string
+  url: string
+}
+export interface WebState {
+  url: string
+  title: string
+  canBack: boolean
+  canForward: boolean
+  loading: boolean
+}
+
+/** Lo que el asistente propone hacer. Se valida en el proceso principal y no se ejecuta hasta que el usuario lo confirma. */
+export type AssistantAction =
+  | { type: 'open_view'; view: string }
+  | { type: 'create_task'; title: string; description?: string; priority?: Priority; status?: 'today' | 'next' }
+  | { type: 'set_status'; taskId: string; status: Status }
+  | { type: 'start_timer'; taskId: string }
+  | { type: 'stop_timer' }
+  | { type: 'create_note'; title: string; body: string; taskId?: string }
+  | { type: 'block_time'; taskId: string; start: number; minutes: number }
+  | { type: 'launch_env'; taskId: string }
+  | { type: 'open_web'; url: string }
+  /** Lee una página (la indicada o, sin url, la del panel Web a la vista) y responde la pregunta. */
+  | { type: 'read_page'; url?: string; question: string }
+  /** Envía un mensaje a Claude sobre la tarea: en su conversación más reciente o en una nueva (newChat). */
+  | { type: 'send_prompt'; taskId: string; prompt: string; newChat?: boolean }
+/** Acciones que siguen pidiendo confirmación antes de ejecutarse (el resto se ejecuta directamente). */
+export const CONFIRM_ACTIONS: AssistantAction['type'][] = ['launch_env']
+export type PlannedAction = AssistantAction & { label: string }
+export interface AssistantPlan {
+  say: string
+  actions: PlannedAction[]
+}
+
+/** Nota local en Markdown. */
+export interface Note {
+  id: string
+  title: string
+  body: string
+  tags: string[]
+  /** Tarea a la que está vinculada. */
+  taskId?: string
+  pinned?: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+/** Datos para crear (sin `id`) o actualizar una nota; lo omitido se conserva. `taskId: null` quita el vínculo. */
+export interface NoteInput {
+  id?: string
+  title?: string
+  body?: string
+  tags?: string[]
+  taskId?: string | null
+  pinned?: boolean
+}
+
 export type Unsubscribe = () => void
 
 /** API que el preload expone en `window.api`. */
@@ -762,4 +1035,8 @@ export interface Api {
   onQuickAdd(cb: () => void): Unsubscribe
   onGoto(cb: (view: string) => void): Unsubscribe
   onUpdate(cb: (s: UpdateState) => void): Unsubscribe
+  onAuth(cb: (s: AuthStatus) => void): Unsubscribe
+  onFullscreen(cb: (on: boolean) => void): Unsubscribe
+  /** Mensajes sin leer por servicio de mensajería (id de la vista → número). */
+  onBadges(cb: (b: Record<string, number>) => void): Unsubscribe
 }

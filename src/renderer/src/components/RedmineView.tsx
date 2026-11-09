@@ -201,7 +201,15 @@ export function RedmineView(): ReactNode {
             })}
           </div>
         ) : (
-          <div className="meta">{loading ? 'Leyendo Redmine…' : 'Sin datos. Inicia sesión en Redmine y pulsa «Actualizar».'}</div>
+          loading ? (
+            <div className="skel-bars" aria-busy="true" aria-label="Leyendo Redmine">
+              {[40, 65, 30, 80, 55, 70, 45, 60].map((h, i) => (
+                <div key={i} className="skel" style={{ height: `${h}px` }} />
+              ))}
+            </div>
+          ) : (
+            <div className="meta">Sin datos. Inicia sesión en Redmine y pulsa «Actualizar».</div>
+          )
         )}
       </div>
 

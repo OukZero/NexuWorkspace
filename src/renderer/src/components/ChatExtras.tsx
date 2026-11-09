@@ -14,6 +14,22 @@ export function ContextBar({ taskId, kinds, onChange, terminalText }: { taskId: 
   const task = findTask(db, taskId)
   const [preview, setPreview] = useState<ContextPreview | null>(null)
   const [open, setOpen] = useState(false)
+  // plegada por defecto: una línea con lo que va; se despliega para elegir
+  const [expanded, setExpandedState] = useState(() => {
+    try {
+      return localStorage.getItem('shutoki.ctxOpen') === '1'
+    } catch {
+      return false
+    }
+  })
+  const setExpanded = (v: boolean): void => {
+    setExpandedState(v)
+    try {
+      localStorage.setItem('shutoki.ctxOpen', v ? '1' : '0')
+    } catch {
+      /* sin storage */
+    }
+  }
   const notes = task?.sessions?.length ?? 0
 
   const toggle = (k: ContextKind): void => onChange(kinds.includes(k) ? kinds.filter((x) => x !== k) : [...kinds, k])
@@ -41,8 +57,20 @@ export function ContextBar({ taskId, kinds, onChange, terminalText }: { taskId: 
 
   const disabled = (k: ContextKind): string | null => {
     if (k === 'notes' && !notes) return 'Aún no hay notas de sesión en esta tarea'
+    if (k === 'ci' && !task?.branch) return 'La tarea no tiene rama de trabajo'
     if (k === 'terminal' && !terminalText.trim()) return 'La terminal de la tarea está vacía'
     return null
+  }
+
+  if (!expanded) {
+    const on = kinds.filter((k) => !disabled(k))
+    return (
+      <div className="ctxbar folded">
+        <button type="button" className="ctx-sum" title="Elegir qué contexto se anexa a tu próximo mensaje" onClick={() => setExpanded(true)}>
+          Contexto · {on.length ? on.map((k) => CONTEXT_LABEL[k].toLowerCase()).join(', ') : 'ninguno'}
+        </button>
+      </div>
+    )
   }
 
   return (
@@ -66,6 +94,9 @@ export function ContextBar({ taskId, kinds, onChange, terminalText }: { taskId: 
           </button>
           <button type="button" className="ctx-link" onClick={() => onChange([])}>
             Quitar todo
+          </button>
+          <button type="button" className="ctx-link" onClick={() => setExpanded(false)}>
+            Plegar
           </button>
         </>
       )}

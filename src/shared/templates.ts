@@ -17,7 +17,9 @@ export const CONTEXT_LABEL: Record<ContextKind, string> = {
   diff: 'Diff sin confirmar',
   base: 'Diff contra la rama base',
   terminal: 'Salida de la terminal',
-  notes: 'Notas de sesiones anteriores'
+  notes: 'Notas de sesiones anteriores',
+  ci: 'Resultado de CI',
+  web: 'Página web abierta'
 }
 
 export const CONTEXT_HINT: Record<ContextKind, string> = {
@@ -27,10 +29,12 @@ export const CONTEXT_HINT: Record<ContextKind, string> = {
   diff: 'Cambios sin confirmar (preparados y no preparados)',
   base: 'Todo lo que la rama aporta frente a la rama base (lo que verá quien revise el PR)',
   terminal: 'Últimas líneas de la terminal integrada (errores, resultados de tests)',
-  notes: 'Lo hecho, decidido y pendiente en conversaciones anteriores de la tarea'
+  notes: 'Lo hecho, decidido y pendiente en conversaciones anteriores de la tarea',
+  ci: 'Estado de CI de la rama: qué checks fallaron y por qué (GitHub)',
+  web: 'El texto de la página que tienes a la vista en el panel Web (con tu sesión iniciada)'
 }
 
-export const ALL_CONTEXT: ContextKind[] = ['task', 'branch', 'status', 'diff', 'base', 'terminal', 'notes']
+export const ALL_CONTEXT: ContextKind[] = ['task', 'branch', 'status', 'diff', 'base', 'terminal', 'notes', 'ci', 'web']
 
 /** Contexto que se anexa por defecto: lo barato y casi siempre útil. */
 export const DEFAULT_CONTEXT: ContextKind[] = ['task', 'branch', 'notes']

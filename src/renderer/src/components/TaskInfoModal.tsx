@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 import { findTask, useDB, useNow } from '../store'
 import { useUi } from '../ui'
 import { PRIO, STATUS, baseName, fmtH } from '../utils'
+import { LAUNCH_KIND } from './LaunchEditor'
+import { runLaunch } from './LaunchButton'
 import { Markdown } from './Markdown'
 
 /** Ficha de solo lectura de una tarea: todo lo que se sabe de ella sin entrar a «Editar». */
@@ -58,6 +60,22 @@ export function TaskInfoModal({ taskId }: { taskId: string }): ReactNode {
           {t.rmProject && <small title={t.rmProject}>{t.rmProject}</small>}
         </div>
       </div>
+
+      {(t.launch?.length ?? 0) > 0 && (
+        <section>
+          <h4>Entorno</h4>
+          <div className="ti-chips">
+            {t.launch!.map((i) => (
+              <button key={i.id} className="chip issue" title={i.target || LAUNCH_KIND[i.kind]} onClick={() => void runLaunch(ui, t.id, i.id)}>
+                {LAUNCH_KIND[i.kind]} · {i.label?.trim() || i.target.split(/[\/]/).filter(Boolean).pop() || LAUNCH_KIND[i.kind]}
+              </button>
+            ))}
+            <button className="btn sm primary" onClick={() => void runLaunch(ui, t.id)}>
+              Lanzar todo
+            </button>
+          </div>
+        </section>
+      )}
 
       {(t.issue || t.branch || t.pr) && (
         <section>

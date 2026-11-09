@@ -15,7 +15,7 @@ export const hhmm = (ts: number): string => {
 export const toTs = (day: string, hm: string): number => new Date(`${day}T${hm}:00`).getTime()
 export const baseName = (p: string): string => p.split(/[\\/]/).pop() || p
 
-export const STATUS = { next: 'Próximas', today: 'Hoy', doing: 'En curso', done: 'Hecha' } as const
+export const STATUS = { next: 'Próximas', today: 'Hoy', doing: 'En curso', review: 'En revisión', done: 'Hecha' } as const
 export const PRIO = { high: 'Alta', med: 'Media', low: 'Baja' } as const
 export const DOW = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
 

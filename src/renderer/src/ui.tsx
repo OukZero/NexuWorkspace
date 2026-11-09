@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react'
 import type { IpcChannels, Task } from '../../shared/types'
 
-export type View = 'today' | 'board' | 'hours' | 'usage' | 'history' | 'redmine' | 'groups' | 'settings' | 'chat'
+export type View = 'today' | 'workspace' | 'board' | 'hours' | 'usage' | 'history' | 'redmine' | 'groups' | 'music' | 'notes' | 'web' | 'whatsapp' | 'settings' | 'chat'
 
 export interface Ui {
   view: View

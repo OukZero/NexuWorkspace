@@ -19,20 +19,34 @@ import { DesignView } from './components/DesignView'
 import { GitView } from './components/GitView'
 import { FilesView, type FileRequest } from './components/FilesView'
 import { CommandPalette } from './components/CommandPalette'
+import { Assistant } from './components/Assistant'
 import { TerminalDock, type TermRequest } from './components/TerminalDock'
 import { Confetti } from './components/Confetti'
-import { confettiEnabled, getFocus, setFocusMode, useFocusMode } from './theme'
+import { confettiEnabled, getFocus, getName, setFocusMode, useFocusMode } from './theme'
 import { getLayout, setLayout, useLayout } from './layout'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { TaskInfoModal } from './components/TaskInfoModal'
 import type { ConfirmRequest } from './components/ConfirmDialog'
 import { HelpModal } from './components/HelpModal'
 import { TaskModal } from './components/TaskModal'
+import { MiniPlayer } from './components/MiniPlayer'
+import { MusicView } from './components/MusicView'
+import { WhatsAppView } from './components/WhatsAppView'
+import { NotesView } from './components/NotesView'
+import { WebView } from './components/WebView'
+import { addTab } from './webTabs'
+import { WebHost } from './components/webHost'
 import { TimerBar } from './components/TimerBar'
-import { Today } from './components/Today'
+import { G } from './components/glyphs'
+import { PANEL_LABEL } from './components/TabBar'
+import { Panel } from './components/Panel'
+import { ConvPane } from './components/ConvPane'
+import { Workspace } from './components/Workspace'
+import { NotificationBell } from './components/NotificationBell'
+import { toggleFullscreen, useFullscreen } from './fullscreen'
 import { Usage } from './components/Usage'
 import { openConvs } from './conversations'
-import { call, findTask, useDB } from './store'
+import { activeEntry, call, findTask, peek, useDB } from './store'
 import { UiContext, type Ui, type View } from './ui'
 
 type Modal =
@@ -42,6 +56,7 @@ type Modal =
   | { kind: 'entry'; day: string }
   | { kind: 'newtab' }
   | { kind: 'palette' }
+  | { kind: 'assistant' }
   | { kind: 'help' }
   | null
 
@@ -84,6 +99,7 @@ export function App(): ReactNode {
   const [toastState, setToastState] = useState<{ msg: string; err: boolean; action?: { label: string; run: () => void } } | null>(null)
   const [confetti, setConfetti] = useState(0)
   const [quickTick, setQuickTick] = useState(0)
+  const fullscreen = useFullscreen()
   const lay = useLayout() // terminal integrada y anchos de paneles (se guardan como disposición)
   const dockOpen = lay.dockOpen
   const dockH = lay.dockH
@@ -270,6 +286,13 @@ export function App(): ReactNode {
   const gotoRef = useRef<(v: string) => void>(() => {})
   gotoRef.current = (v) => {
     if (v.startsWith('chat:')) return gotoConvRef.current(v.slice(5))
+    if (v.startsWith('web:')) {
+      // el asistente pide abrir una dirección: pestaña nueva en la vista Web
+      addTab(v.slice(4))
+      setView('web')
+      setPanel('web')
+      return
+    }
     if (v === 'daily') {
       // el aviso matutino abre Horas en la pestaña Daily
       try {
@@ -304,6 +327,10 @@ export function App(): ReactNode {
   activeRef.current = active
   const toastRef = useRef(toast)
   toastRef.current = toast
+  const tabsRef = useRef<string[]>([])
+  tabsRef.current = tabs
+  const openChatRef = useRef<(taskId: string) => void>(() => {})
+  openChatRef.current = (id) => void openChat(id)
   useEffect(() => {
     try {
       localStorage.setItem('shutoki.dock', dockOpen ? '1' : '0')
@@ -320,6 +347,9 @@ export function App(): ReactNode {
       else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         setModal((m) => (m?.kind === 'palette' ? null : { kind: 'palette' }))
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault()
+        setModal((m) => (m?.kind === 'assistant' ? null : { kind: 'assistant' }))
       } else if ((e.ctrlKey || e.metaKey) && e.key === '/') {
         e.preventDefault()
         setModal({ kind: 'help' })
@@ -327,6 +357,26 @@ export function App(): ReactNode {
         // Ctrl+Mayús+F : modo foco (sin menú, pestañas ni barra de estado)
         e.preventDefault()
         setFocusMode(!getFocus())
+      } else if (e.key === 'F11') {
+        e.preventDefault()
+        void toggleFullscreen()
+      } else if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === 't') {
+        // Ctrl+Alt+T : iniciar / pausar / reanudar el timer (de la tarea abierta si no hay ninguno en marcha)
+        e.preventDefault()
+        const d = peek()
+        const fail = (err: Error): void => toastRef.current(err.message, true)
+        if (d && activeEntry(d)) void call('timer:pause').catch(fail)
+        else if (d?.paused) void call('timer:resume').catch(fail)
+        else if (activeRef.current) void call('timer:start', activeRef.current).catch(fail)
+        else toastRef.current('Abre una tarea para iniciar su timer', true)
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === 'PageDown' || e.key === 'PageUp')) {
+        // Ctrl+AvPág / Ctrl+RePág : pestaña de tarea siguiente / anterior
+        const list = tabsRef.current
+        if (!list.length) return
+        e.preventDefault()
+        const i = activeRef.current ? list.indexOf(activeRef.current) : -1
+        const step = e.key === 'PageDown' ? 1 : -1
+        openChatRef.current(list[(i + step + list.length) % list.length])
       } else if ((e.ctrlKey || e.metaKey) && e.key === '`') {
         // Ctrl+` : mostrar u ocultar la terminal de la tarea activa (como en VS Code)
         e.preventDefault()
@@ -364,10 +414,37 @@ export function App(): ReactNode {
   const unreadConvs = new Set(convIds.filter((id) => id !== activeConv && (db.chats[id]?.messages.length ?? 0) > (seen[id] ?? Infinity)))
   const unreadTasks = new Set(tabs.filter((t) => openConvs(db, t).some((c) => unreadConvs.has(c.id))))
 
+  const hour = new Date().getHours()
+  const hello = hour < 12 ? 'Buenos días' : hour < 20 ? 'Buenas tardes' : 'Buenas noches'
+  const myName = getName().trim().split(/\s+/)[0]
+  const openTasks = db.tasks.filter((t) => !t.archived && (!t.recurrence || t.recurrence.type === 'none') && (t.status === 'today' || t.status === 'doing')).length
+  const activeTaskObj = findTask(db, active)
+  const SUBS: Record<string, string> = {
+    board: 'Arrastra las tarjetas entre columnas',
+    workspace: 'Divide la pantalla en paneles según lo que necesites ver',
+    hours: 'Revisa el día, corrige y exporta para imputar',
+    history: 'Todas tus conversaciones, abiertas y cerradas',
+    redmine: 'Horas imputadas y pendientes',
+    usage: 'Consumo de la IA y límites de tu plan',
+    whatsapp: 'WhatsApp Web dentro de la app',
+    music: 'Spotify: reproduce, pausa y cambia de pista sin salir de la app',
+    groups: 'Conjuntos de carpetas a los que la IA puede acceder',
+    settings: 'Preferencias de la aplicación'
+  }
+  const heading =
+    view === 'chat' && activeTaskObj
+      ? { title: mode === 'design' ? 'Diseño' : mode === 'git' ? 'Git' : mode === 'files' ? 'Archivos' : 'Chat IA', sub: activeTaskObj.title }
+      : view === 'today' || view === 'chat'
+        ? { title: `${hello}${myName ? ', ' + myName : ''}`, sub: `${new Date().toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })} · ${openTasks} ${openTasks === 1 ? 'tarea activa' : 'tareas activas'}` }
+        : { title: PANEL_LABEL[view] ?? 'Panel', sub: SUBS[view] ?? '' }
+
   let content: ReactNode
   switch (view) {
     case 'board':
       content = <Board />
+      break
+    case 'workspace':
+      content = <Workspace />
       break
     case 'hours':
       content = <Hours />
@@ -381,6 +458,18 @@ export function App(): ReactNode {
     case 'redmine':
       content = <RedmineView />
       break
+    case 'music':
+      content = <MusicView />
+      break
+    case 'notes':
+      content = <NotesView />
+      break
+    case 'web':
+      content = <WebView />
+      break
+    case 'whatsapp':
+      content = <WhatsAppView />
+      break
     case 'groups':
       content = <Groups />
       break
@@ -389,10 +478,17 @@ export function App(): ReactNode {
       break
     case 'chat':
       content =
-        active && mode === 'design' ? <DesignView key={active} taskId={active} /> : active && mode === 'files' ? <FilesView key={active} taskId={active} request={fileReq} /> : active && mode === 'git' ? <GitView key={active} taskId={active} /> : activeConv ? <ChatView key={activeConv} convId={activeConv} /> : <Today />
+        active && mode === 'design' ? <DesignView key={active} taskId={active} /> : active && mode === 'files' ? <FilesView key={active} taskId={active} request={fileReq} /> : active && mode === 'git' ? <GitView key={active} taskId={active} /> : activeConv ? (
+          <div className={`wb${popTask ? ' solo' : ''}`}>
+            {!popTask && active && <ConvPane taskId={active} active={activeConv} unread={unreadConvs} onSelect={(id) => showConv(active, id)} onClose={(id) => void closeConv(id)} onNew={() => void newConversation(active)} onMore={ui.openNewTab} />}
+            <ChatView key={activeConv} convId={activeConv} />
+          </div>
+        ) : (
+          <Panel />
+        )
       break
     default:
-      content = <Today />
+      content = <Panel />
   }
 
   return (
@@ -400,41 +496,66 @@ export function App(): ReactNode {
       {!popTask && <Sidebar />}
       <main>
         <div className="topstack">
-          {!popTask && tabs.length > 0 && (
-            <TaskTabs
-              tasks={tabs}
-              active={active}
-              panel={panel}
-              unread={unreadTasks}
-              onPanel={() => setView(panel)}
-              onSelect={(id) => void openChat(id)}
-              onClose={closeTaskTab}
-              onNew={ui.openNewTab}
-              onMove={moveTab}
-              onPop={(id, atCursor) => void popOut(id, atCursor)}
-            />
+          {!popTask && (
+            <header className="topbar">
+              <div className="tb-title">
+                <h1>{heading.title}</h1>
+                <small>{heading.sub}</small>
+              </div>
+              <button className="search" title="Búsqueda global: tareas, conversaciones, vistas y acciones (Ctrl+K)" onClick={() => setModal({ kind: 'palette' })}>
+                <G n="search" size={15} />
+                <span>Buscar tareas, archivos, comandos…</span>
+                <kbd>Ctrl K</kbd>
+              </button>
+              <MiniPlayer />
+              <TimerBar />
+              <NotificationBell variant="top" />
+              <button className="ib" title={fullscreen ? 'Salir de pantalla completa (F11)' : 'Pantalla completa (F11)'} aria-label={fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'} aria-pressed={fullscreen} onClick={() => void toggleFullscreen()}>
+                <G n={fullscreen ? 'shrink' : 'expand'} size={17} />
+              </button>
+            </header>
           )}
-          {active && (
-            <ConvTabs
-              taskId={active}
-              active={activeConv}
-              mode={mode}
-              onMode={(m) => setModes((s) => ({ ...s, [active]: m }))}
-              unread={unreadConvs}
-              onSelect={(id) => showConv(active, id)}
-              onClose={(id) => void closeConv(id)}
-              onNew={ui.openNewTab}
-              docked={!!popTask}
-              onPop={() => {
-                if (!popTask) return void popOut(active)
-                void run('window:dock', active, activeConv ?? undefined)
-              }}
-            />
-          )}
-          {!popTask && <TimerBar />}
+          {(!popTask && (tabs.length > 0 || active)) || (popTask && active) ? (
+            <div className="subbar">
+              {!popTask && tabs.length > 0 && (
+                <TaskTabs
+                  tasks={tabs}
+                  active={active}
+                  panel={panel}
+                  unread={unreadTasks}
+                  onPanel={() => setView(panel)}
+                  onSelect={(id) => void openChat(id)}
+                  onClose={closeTaskTab}
+                  onNew={ui.openNewTab}
+                  onMove={moveTab}
+                  onPop={(id, atCursor) => void popOut(id, atCursor)}
+                />
+              )}
+              <span className="subbar-sp" />
+              {active && (
+                <ConvTabs
+                  taskId={active}
+                  active={activeConv}
+                  mode={mode}
+                  listMode={!popTask}
+                  onMode={(m) => setModes((s) => ({ ...s, [active]: m }))}
+                  unread={unreadConvs}
+                  onSelect={(id) => showConv(active, id)}
+                  onClose={(id) => void closeConv(id)}
+                  onNew={ui.openNewTab}
+                  docked={!!popTask}
+                  onPop={() => {
+                    if (!popTask) return void popOut(active)
+                    void run('window:dock', active, activeConv ?? undefined)
+                  }}
+                />
+              )}
+            </div>
+          ) : null}
         </div>
         <div className="scroll">
           <section id="view">{content}</section>
+          <WebHost />
         </div>
         {!popTask && active && dockOpen && db.settings.terminalMode !== 'external' && (
           <TerminalDock taskId={active} request={termReq} height={dockH} onHeight={setDockH} onClose={() => setDockOpen(false)} />
@@ -449,6 +570,7 @@ export function App(): ReactNode {
           {modal.kind === 'entry' && <AddEntryModal day={modal.day} />}
           {modal.kind === 'newtab' && <NewTabModal onClose={() => setModal(null)} />}
           {modal.kind === 'palette' && <CommandPalette onClose={() => setModal(null)} />}
+          {modal.kind === 'assistant' && <Assistant onClose={() => setModal(null)} />}
           {modal.kind === 'help' && <HelpModal />}
         </div>
       )}

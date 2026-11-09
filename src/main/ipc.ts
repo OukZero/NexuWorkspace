@@ -1,10 +1,13 @@
-import { dialog, ipcMain, shell } from 'electron'
+import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import fs from 'fs'
 import { dayKey, pad } from '../shared/util'
 import type { DB, IpcChannels, Task } from '../shared/types'
+import * as auth from './auth'
+import { isSignedIn } from './auth'
 import * as attachments from './attachments'
 import * as chat from './chat'
 import * as git from './git'
+import * as ci from './ci'
 import * as forge from './forge'
 import { buildContext, expandVars, repoDirOf, taskById, withContext } from './context'
 import { startReview } from './review'
@@ -15,15 +18,22 @@ import * as checks from './checks'
 import { applyMini, dockPopout, hideMini, openPopout } from './windows'
 import { backupsDir, commit, getDb, replaceDb, uid } from './db'
 import { exportExcel } from './excel'
-import { gitCommits, openClaude, openLogin, openTerminalHere, openVSCode, renderPrompt } from './launch'
+import { gitCommits, launchTask, openClaude, openLogin, openTerminalHere, openVSCode, renderPrompt } from './launch'
 import { createPty, killPty, killPtysOf, resizePty, writePty } from './pty'
 import { applyLoginItem } from './tray'
 import { deleteMockup, exportMockup, listMockups, revealMockups } from './mockups'
 import * as files from './files'
 import { clearAll, markRead } from './notify'
 import * as redmine from './redmine'
+import { registerApi } from './apiRegistry'
+import * as calendar from './calendar'
+import { planAssistant, readAndAnswer } from './assistant'
+import { attachGuest, markActive } from './web'
+import { deleteNote, listNotes, saveNote, unlinkTask } from './notes'
+import { attachWhatsApp, getBadges, openWhatsApp, setWhatsAppVisible, WSP_SLOT } from './whatsapp'
 import { generateRecurring } from './scheduler'
 import * as telegram from './telegram'
+import * as spotify from './spotify'
 import * as skills from './skills'
 import { askClaude, summarizeConversation } from './summary'
 import { activeEntry, startTimer, stopActive } from './timer'
@@ -32,8 +42,11 @@ import { getMain, openSkills, showWin } from './windows'
 type Handler<K extends keyof IpcChannels> = (...args: IpcChannels[K]['args']) => IpcChannels[K]['ret'] | Promise<IpcChannels[K]['ret']>
 
 function api<K extends keyof IpcChannels>(name: K, fn: Handler<K>): void {
+  registerApi(name, fn as never)
   ipcMain.handle(name, async (_e, ...args: unknown[]) => {
     try {
+      // sin sesión válida solo responde la autenticación
+      if (!name.startsWith('auth:') && !isSignedIn()) throw new Error('Inicia sesión para usar la aplicación.')
       return { ok: true, data: await fn(...(args as IpcChannels[K]['args'])) }
     } catch (err) {
       return { ok: false, error: (err as Error).message }
@@ -55,6 +68,14 @@ const stamp = (): string => {
 const summarizing = new Set<string>()
 
 export function registerIpc(): void {
+  // ---------- sesión ----------
+  api('auth:status', () => auth.getStatus())
+  api('auth:signIn', (email, password) => auth.signIn(email, password))
+  api('auth:newPassword', (password) => auth.setNewPassword(password))
+  api('auth:signOut', () => auth.signOut())
+  api('auth:forgot', (email) => auth.forgotPassword(email))
+  api('auth:confirmForgot', (email, code, password) => auth.confirmForgotPassword(email, code, password))
+
   api('state', () => getDb())
 
   // ---------- tareas ----------
@@ -103,8 +124,24 @@ export function registerIpc(): void {
     }
     db.tasks = db.tasks.filter((t) => t.id !== id)
     db.entries = db.entries.filter((e) => e.taskId !== id)
+    calendar.dropFocusBlocksOf(id)
+    unlinkTask(id) // las notas se conservan, solo pierden el vínculo
     commit()
   })
+
+  // ---------- calendario y bloques de enfoque ----------
+  api('calendar:status', () => calendar.getStatus())
+  api('calendar:save', (c) => calendar.saveSettings(c))
+  api('calendar:connect', () => calendar.connect())
+  api('calendar:disconnect', () => calendar.disconnect())
+  api('calendar:events', (force) => calendar.listEvents(!!force))
+  api('focus:save', (b) => calendar.saveFocusBlock(b))
+  api('focus:delete', (id) => calendar.deleteFocusBlock(id))
+
+  // ---------- notas ----------
+  api('notes:list', () => listNotes())
+  api('notes:save', (n) => saveNote(n))
+  api('notes:delete', (id) => deleteNote(id))
 
   api('task:prompt', (id) => renderPrompt(findTask(id)))
 
@@ -148,6 +185,18 @@ export function registerIpc(): void {
     const r = main ? await dialog.showOpenDialog(main, opts) : await dialog.showOpenDialog(opts)
     return r.canceled ? null : r.filePaths[0]
   })
+
+  api('file:pick', async (kind) => {
+    const main = getMain()
+    const opts = { properties: ['openFile' as const], ...(kind === 'app' ? { filters: [{ name: 'Programas', extensions: ['exe', 'lnk', 'bat', 'cmd'] }, { name: 'Todos', extensions: ['*'] }] } : {}) }
+    const r = main ? await dialog.showOpenDialog(main, opts) : await dialog.showOpenDialog(opts)
+    return r.canceled ? null : r.filePaths[0]
+  })
+  api('web:attach', (id, wcId, kind) => (id === WSP_SLOT && kind === 'wsp' ? attachWhatsApp(wcId) : kind === 'web' && id !== WSP_SLOT ? !!attachGuest(id, wcId, 'web') : false))
+  api('web:active', (id) => markActive(id))
+  api('assistant:plan', (text) => planAssistant(text))
+  api('assistant:read', (url, question) => readAndAnswer(url, question))
+  api('launch:run', (taskId, itemId) => launchTask(taskId, itemId))
 
   // ---------- chat ----------
   // las conversaciones se identifican por su propio id (una tarea puede tener varias)
@@ -327,6 +376,30 @@ export function registerIpc(): void {
     return telegram.getStatus()
   })
   api('telegram:test', () => telegram.test())
+  api('spotify:status', () => spotify.getStatus())
+  api('spotify:save', (c) => {
+    const s = getDb().settings
+    const id = c.clientId.trim()
+    const focus = c.focusUri.trim()
+    if (focus && !spotify.toContextUri(focus)) throw new Error('La lista de enfoque debe ser un enlace de open.spotify.com o una URI spotify:playlist:…')
+    if (id !== (s.spotifyClientId ?? '')) spotify.disconnect() // otra app: hay que volver a conectar
+    s.spotifyClientId = id
+    s.spotifyFocusUri = focus
+    s.spotifyAuto = c.auto
+    commit()
+    return spotify.getStatus()
+  })
+  api('spotify:connect', () => spotify.connect())
+  api('spotify:disconnect', () => spotify.disconnect())
+  api('spotify:now', () => spotify.now())
+  api('spotify:control', (a) => spotify.control(a))
+  api('spotify:devices', () => spotify.listDevices())
+  api('spotify:volume', (v) => spotify.setVolume(v))
+  api('spotify:transfer', (id) => spotify.transfer(id))
+  api('spotify:search', (q) => spotify.search(q))
+  api('spotify:playlists', () => spotify.myPlaylists())
+  api('spotify:play', (uri) => spotify.playUri(uri))
+  api('spotify:queue', (uri) => spotify.queueUri(uri))
   api('redmine:lines', (day) => redmine.lines(day))
   api('redmine:login', () => redmine.openLogin())
   api('redmine:days', (from, to) => redmine.days(from, to))
@@ -372,6 +445,15 @@ export function registerIpc(): void {
   api('skills:install', (n) => skills.installSkill(n))
   api('skills:remove', (n) => skills.removeSkill(n))
   api('window:skills', () => openSkills())
+  api('badges:get', () => getBadges())
+  api('whatsapp:open', () => openWhatsApp())
+  api('whatsapp:visible', (v) => setWhatsAppVisible(v))
+  api('window:fullscreen', (on) => {
+    const w = BrowserWindow.getFocusedWindow() ?? getMain()
+    if (!w || w.isDestroyed()) return false
+    w.setFullScreen(on ?? !w.isFullScreen())
+    return w.isFullScreen()
+  })
   api('window:dock', (taskId, convId) => dockPopout(taskId, convId))
   api('url:open', async (url) => {
     if (!/^https?:\/\//i.test(url)) throw new Error('Solo se pueden abrir enlaces http(s).')
@@ -380,6 +462,9 @@ export function registerIpc(): void {
   api('git:remote', (dir) => forge.remoteInfo(dir))
   api('git:push', (dir, taskId) => forge.pushWithPr(dir, taskId))
   api('git:prText', (dir, taskId) => forge.prText(dir, taskId))
+  api('ci:all', () => ci.allCi())
+  api('ci:refresh', (taskId) => ci.refreshCi(taskId))
+  api('ci:failure', (taskId) => ci.failureText(taskId))
   api('issue:list', (dir) => forge.listIssues(dir))
   api('issue:create', (dir, title, body, labels) => forge.createIssue(dir, title, body, labels))
   api('issue:branch', (taskId, dir, n) => forge.branchFromIssue(taskId, dir, n))

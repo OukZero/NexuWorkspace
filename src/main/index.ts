@@ -2,19 +2,24 @@ import { APP_ID } from './appid'
 import { app, globalShortcut, shell } from 'electron'
 import fs from 'fs'
 import path from 'path'
+import * as auth from './auth'
 import * as chat from './chat'
-import { getDb, initDb, save } from './db'
+import { commit, getDb, initDb, save } from './db'
 import { registerIpc } from './ipc'
 import { killPtysOf } from './pty'
 import { lifecycle } from './lifecycle'
 import { registerMockupProtocol, registerMockupScheme } from './mockups'
 import { showSplash } from './splash'
+import { pollCi } from './ci'
+import { checkFocusBlocks, checkMeetings } from './calendar'
 import { checkDaily, checkIdle, checkReminder, generateRecurring } from './scheduler'
 import { restart as startTelegram, stop as stopTelegram } from './telegram'
-import { activeEntry } from './timer'
+import { activeEntry, stopActive } from './timer'
 import { initUpdater } from './updater'
-import { applyLoginItem, initTray } from './tray'
+import { applyLoginItem, destroyTray, initTray } from './tray'
 import { createWindows, emit, showWin } from './windows'
+import { openWhatsApp, registerWhatsAppIpc } from './whatsapp'
+import { initWebviews } from './web'
 
 // La app se llamaba "mis-tareas": se conserva esa carpeta de datos para no perder tareas, horas ni chats al renombrar.
 // SHUTOKI_DATA_DIR permite probar con datos descartables sin tocar los reales.
@@ -54,32 +59,56 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   app.on('second-instance', showWin)
 
-  void app.whenReady().then(() => {
+  void app.whenReady().then(async () => {
     if (!process.argv.includes('--hidden')) showSplash() // primero: lo demás tarda un poco
     ensureStartMenuShortcut()
     initDb()
     registerMockupProtocol()
     registerIpc()
+    registerWhatsAppIpc()
+    initWebviews()
     const db = getDb()
     // los timers abiertos de una sesión anterior se cierran al último latido
     if (db.heartbeat) for (const e of db.entries) if (!e.end) e.end = Math.max(e.start, db.heartbeat)
+    await auth.initAuth() // sin sesión válida el renderer solo muestra el login y el IPC rechaza todo lo demás
     createWindows()
-    startTelegram()
-    initTray()
+    initTray(openWhatsApp)
     applyLoginItem()
-    generateRecurring()
     initUpdater()
     globalShortcut.register('Control+Alt+N', () => {
       showWin()
+      if (!auth.isSignedIn()) return
       emit('quickadd')
     })
+    // los servicios que trabajan con los datos del usuario solo corren con sesión iniciada
+    let servicesOn = false
+    const startServices = (): void => {
+      if (servicesOn) return
+      servicesOn = true
+      startTelegram()
+      generateRecurring()
+    }
+    if (auth.isSignedIn()) startServices()
+    auth.onAuthChange((s) => {
+      if (s.signedIn) return startServices()
+      servicesOn = false
+      stopTelegram()
+      stopActive() // el timer no sigue contando con la sesión cerrada
+      commit()
+    })
     setInterval(() => {
+      if (!auth.isSignedIn()) return
       db.heartbeat = Date.now()
       checkIdle()
       checkReminder()
       checkDaily()
+      void pollCi()
+      checkMeetings()
+      checkFocusBlocks()
     }, 30000)
-    setInterval(generateRecurring, 10 * 60 * 1000)
+    setInterval(() => {
+      if (auth.isSignedIn()) generateRecurring()
+    }, 10 * 60 * 1000)
     setInterval(() => {
       if (activeEntry()) save()
     }, 60000)
@@ -89,6 +118,7 @@ if (!app.requestSingleInstanceLock()) {
     lifecycle.quitting = true
   })
   app.on('will-quit', () => {
+    destroyTray()
     globalShortcut.unregisterAll()
     stopTelegram()
     chat.killAll()
