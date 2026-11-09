@@ -20,6 +20,7 @@ import { applyLoginItem, destroyTray, initTray } from './tray'
 import { createWindows, emit, showWin } from './windows'
 import { openWhatsApp, registerWhatsAppIpc } from './whatsapp'
 import { initWebviews } from './web'
+import { initContextMenu } from './contextMenu'
 
 // La app se llamaba "mis-tareas": se conserva esa carpeta de datos para no perder tareas, horas ni chats al renombrar.
 // SHUTOKI_DATA_DIR permite probar con datos descartables sin tocar los reales.
@@ -67,6 +68,7 @@ if (!app.requestSingleInstanceLock()) {
     registerIpc()
     registerWhatsAppIpc()
     initWebviews()
+    initContextMenu()
     const db = getDb()
     // los timers abiertos de una sesión anterior se cierran al último latido
     if (db.heartbeat) for (const e of db.entries) if (!e.end) e.end = Math.max(e.start, db.heartbeat)
