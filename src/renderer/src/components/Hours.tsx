@@ -6,7 +6,10 @@ import { baseName, dayKey, fmtH, hhmm, isWorkTask, toTs } from '../utils'
 import { useUi } from '../ui'
 import { DailyView } from './DailyView'
 import { DatePicker } from './DatePicker'
+import { DayTimeline } from './DayTimeline'
+import { meetingMs, useCalendar } from '../calendar'
 import { EmptyState } from './EmptyState'
+import { Heatmap } from './Heatmap'
 import { RedminePanel } from './RedminePanel'
 import { WeekView } from './WeekView'
 
@@ -87,7 +90,7 @@ export function Hours(): ReactNode {
   const now = useNow(30000)
   const today = dayKey(new Date())
   const [day, setDay] = useState(today)
-  const [mode, setMode] = useState<'day' | 'week' | 'daily'>(() => {
+  const [mode, setMode] = useState<'day' | 'week' | 'daily' | 'year'>(() => {
     try {
       return localStorage.getItem('shutoki.hoursMode') === 'daily' ? 'daily' : 'day'
     } catch {
@@ -106,6 +109,8 @@ export function Hours(): ReactNode {
   const es = useMemo(() => dayEntries(db, day), [db, day])
   const total = es.reduce((a, e) => a + ((e.end || now) - e.start), 0)
   const missing = db.settings.targetHours - total / 3600000
+  const cal = useCalendar()
+  const meet = cal.status?.connected ? meetingMs(cal.events, day) / 3600000 : 0
   const byTask: Record<string, number> = {}
   es.forEach((e) => {
     byTask[e.taskId] = (byTask[e.taskId] || 0) + ((e.end || now) - e.start)
@@ -160,6 +165,9 @@ export function Hours(): ReactNode {
         <button className={mode === 'week' ? 'on' : ''} onClick={() => setMode('week')}>
           Semana
         </button>
+        <button className={mode === 'year' ? 'on' : ''} onClick={() => setMode('year')}>
+          Año
+        </button>
         <button className={mode === 'daily' ? 'on' : ''} onClick={() => setMode('daily')}>
           Daily
         </button>
@@ -172,6 +180,20 @@ export function Hours(): ReactNode {
       <>
         {header}
         <DailyView />
+      </>
+    )
+  }
+
+  if (mode === 'year') {
+    return (
+      <>
+        {header}
+        <Heatmap
+          onDay={(d) => {
+            setDay(d)
+            setMode('day')
+          }}
+        />
       </>
     )
   }
@@ -196,6 +218,7 @@ export function Hours(): ReactNode {
       <div className="row" style={{ cursor: 'default', display: 'block', borderColor: missing > 0 ? 'var(--warn)' : 'var(--accent2)' }}>
         <b>Borrador del día</b> ·{' '}
         {missing > 0 ? `te faltan ${missing.toFixed(2)} h para llegar a ${db.settings.targetHours} h` : `objetivo cumplido (${fmtH(total)} h)`}
+        {meet > 0 && <div className="meta">Reuniones del día: {meet.toFixed(2)} h · quedan {Math.max(0, db.settings.targetHours - meet).toFixed(2)} h para tareas</div>}
         {pend.length > 0 && <div className="meta">Pendientes hoy: {pend.map((t) => t.title).join(' · ')}</div>}
         <div className="foot" style={{ marginTop: 10 }}>
           <button className="btn sm" onClick={fillNotes}>
@@ -221,6 +244,7 @@ export function Hours(): ReactNode {
           <b>Total: {fmtH(total)} h</b> / {db.settings.targetHours} h
         </div>
       </div>
+      {(es.length > 0 || meet > 0) && <DayTimeline day={day} entries={es} />}
       <table>
         <thead>
           <tr>

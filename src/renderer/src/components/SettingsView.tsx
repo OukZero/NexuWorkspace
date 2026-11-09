@@ -4,6 +4,9 @@ import type { CommandPolicy, MiniFormat, OpenMode, Settings, SummaryMode, Termin
 import { useDB } from '../store'
 import { useUi } from '../ui'
 import { Select } from './Select'
+import { AccountSettings } from './AccountSettings'
+import { SpotifySettings } from './SpotifySettings'
+import { CalendarSettings } from './CalendarSettings'
 import { TelegramSettings } from './TelegramSettings'
 import { TemplatesEditor } from './TemplatesEditor'
 import { ProfilesEditor, TaskTemplatesEditor } from './ListEditors'
@@ -17,7 +20,7 @@ const TABS: { id: Tab; label: string; hint: string }[] = [
   { id: 'general', label: 'General', hint: 'Jornada, avisos y qué pasa al abrir una tarea' },
   { id: 'apariencia', label: 'Apariencia', hint: 'Temas, colores, tipografía, menú y colores por proyecto' },
   { id: 'ia', label: 'Chat e IA', hint: 'Claude, Copilot, permisos de comandos y contexto' },
-  { id: 'integraciones', label: 'Integraciones', hint: 'Redmine, git y Telegram' },
+  { id: 'integraciones', label: 'Integraciones', hint: 'Redmine, git, Telegram, Spotify y calendario' },
   { id: 'sistema', label: 'Sistema', hint: 'Terminal, bandeja e inicio con Windows' },
   { id: 'datos', label: 'Tus datos', hint: 'Exportar, importar y copias de seguridad' }
 ]
@@ -85,6 +88,8 @@ export function SettingsView(): ReactNode {
       closeToTray: s.closeToTray,
       miniEnabled: s.miniEnabled !== false,
       limitAlerts: s.limitAlerts !== false,
+      prAutoReview: s.prAutoReview !== false,
+      claudeWeb: s.claudeWeb !== false,
       cheapAt: s.cheapAt ?? 0,
       profiles: s.profiles,
       taskTemplates: s.taskTemplates,
@@ -175,6 +180,12 @@ export function SettingsView(): ReactNode {
                 </label>
               </div>
               <div style={wide}>
+                <label style={checkRow}>
+                  <input type="checkbox" style={{ width: 'auto' }} checked={s.prAutoReview !== false} onChange={(e) => set('prAutoReview', e.target.checked)} />
+                  Mover la tarea a «En revisión» cuando se abra su PR (y a «Hecha» cuando se fusione)
+                </label>
+              </div>
+              <div style={wide}>
                 <label>Plantilla del prompt inicial de Claude · variables: {'{{title}} {{description}} {{project}} {{client}}'}</label>
                 <textarea style={{ minHeight: 160 }} value={s.promptTemplate} onChange={(e) => set('promptTemplate', e.target.value)} />
               </div>
@@ -219,6 +230,14 @@ export function SettingsView(): ReactNode {
                 <label>Comandos que Claude y Copilot pueden ejecutar sin preguntar (uno por línea)</label>
                 <textarea style={{ minHeight: 90 }} value={s.allowedCommands} placeholder="git status&#10;npm run&#10;dotnet build" onChange={(e) => set('allowedCommands', e.target.value)} />
                 <div className="meta">Se permite el comando y sus argumentos. Siempre se bloquean push forzado, reset --hard, borrados y similares.</div>
+              </div>
+
+              <div style={wide}>
+                <label style={checkRow}>
+                  <input type="checkbox" style={{ width: 'auto' }} checked={s.claudeWeb !== false} onChange={(e) => set('claudeWeb', e.target.checked)} />
+                  Permitir que Claude consulte páginas web (WebFetch y WebSearch) en los chats
+                </label>
+                <div className="meta">Sirve para que lea una página que le envíes o busque documentación. El contenido de una página es externo y podría intentar darle órdenes: desactívalo si trabajas con sitios que no controlas.</div>
               </div>
 
               <h3 style={{ ...wide, margin: '12px 0 0' }}>Plantillas de prompts</h3>
@@ -377,10 +396,14 @@ export function SettingsView(): ReactNode {
                 Redmine y git se guardan con el botón «Guardar» de abajo; Telegram tiene el suyo.
               </div>
               <TelegramSettings />
+              <SpotifySettings />
+              <CalendarSettings />
             </>
           )}
 
           {tab === 'sistema' && (
+            <>
+            <AccountSettings />
             <div className="grid2">
               <div>
                 <label>Dónde se abre la terminal de una tarea</label>
@@ -442,6 +465,7 @@ export function SettingsView(): ReactNode {
                 </label>
               </div>
             </div>
+            </>
           )}
 
           {tab === 'datos' && (

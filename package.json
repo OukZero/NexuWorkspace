@@ -9,6 +9,8 @@
   "scripts": {
     "icon": "electron tools/make-icon.js",
     "dev": "electron-vite dev",
+    "dev:live": "electron-vite dev --watch",
+    "live": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/launch-live.ps1",
     "build": "electron-vite build",
     "start": "electron-vite build && electron-vite preview",
     "pack": "electron-vite build && electron-builder --win --dir",

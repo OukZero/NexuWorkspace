@@ -36,7 +36,7 @@ function load(): Layout {
   }
   const tab = saved.sideTab ?? side.tab
   return {
-    sideOpen: saved.sideOpen ?? side.open ?? true,
+    sideOpen: saved.sideOpen ?? window.innerWidth >= 1380, // el inspector del chat se muestra acoplado en pantallas anchas
     sideTab: tab && ['session', 'files', 'activity'].includes(tab) ? tab : 'session',
     sideW: clamp(saved.sideW ?? 320, LIMITS.sideW),
     sidebarW: clamp(saved.sidebarW ?? 200, LIMITS.sidebarW),

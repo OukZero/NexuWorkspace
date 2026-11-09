@@ -4,8 +4,10 @@ import type { ChatContext, ContextKind, ContextPreview, Task } from '../shared/t
 import { CONTEXT_LABEL, fillTemplate } from '../shared/templates'
 import { clip } from '../shared/util'
 import { getDb } from './db'
+import { failureText } from './ci'
 import * as g from './git'
 import { effectiveTask } from './groups'
+import { pageBlock, readWebPage } from './webread'
 
 /** Carpeta del repositorio de la tarea: la de su rama de trabajo, si no la primera carpeta que sea repositorio. */
 export async function repoDirOf(task: Task): Promise<string> {
@@ -109,6 +111,13 @@ export async function buildContext(task: Task, ctx: ChatContext): Promise<Contex
     } catch {
       /* repositorio no disponible: se sigue con lo demás */
     }
+  }
+
+  if (kinds.includes('ci') && task.branch) add('ci', 'CI de la rama (checks fallidos)', await failureText(task.id).catch(() => ''))
+
+  if (kinds.includes('web')) {
+    const page = await readWebPage().catch(() => null)
+    add('web', 'Página web abierta', page ? pageBlock(page) : '')
   }
 
   if (kinds.includes('terminal') && ctx.terminal?.trim()) add('terminal', 'Salida reciente de la terminal', '```\n' + clip(ctx.terminal.trim(), 6000).replace(/```/g, "'''") + '\n```')

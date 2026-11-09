@@ -1,0 +1,142 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Shutoki AI Workspace - login (Cognito) y sincronizacion de perfil y tareas (API Gateway + Lambda + DynamoDB)
+
+Parameters:
+  AppName:
+    Type: String
+    Default: shutoki
+    Description: Prefijo de los recursos.
+  AllowedOrigin:
+    Type: String
+    Default: '*'
+    Description: CORS. La app de escritorio no usa navegador, asi que no hace falta restringirlo.
+
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Architectures: [arm64]
+    MemorySize: 128
+    Timeout: 10
+    Environment:
+      Variables:
+        TABLE_NAME: !Ref SyncTable
+
+Resources:
+  # ---------- Cognito: solo el administrador crea usuarios ----------
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      UserPoolName: !Sub '${AppName}-users'
+      UsernameAttributes: [email]
+      AutoVerifiedAttributes: [email]
+      MfaConfiguration: 'OFF'
+      DeletionProtection: ACTIVE
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true # registro publico desactivado
+        InviteMessageTemplate:
+          EmailSubject: Acceso a Shutoki AI Workspace
+          EmailMessage: 'Tu usuario es {username} y tu contrasena temporal es {####}. Al entrar por primera vez la app te pedira una nueva.'
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 10
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          TemporaryPasswordValidityDays: 7
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub '${AppName}-desktop'
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false # cliente publico: la app de escritorio no puede guardar secretos
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      PreventUserExistenceErrors: ENABLED
+      EnableTokenRevocation: true
+      AccessTokenValidity: 60
+      IdTokenValidity: 60
+      RefreshTokenValidity: 30
+      TokenValidityUnits:
+        AccessToken: minutes
+        IdToken: minutes
+        RefreshToken: days
+
+  # ---------- DynamoDB: un item por registro, particionado por usuario ----------
+  SyncTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub '${AppName}-sync'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: userId, AttributeType: S }
+        - { AttributeName: recordKey, AttributeType: S }
+        - { AttributeName: updatedAt, AttributeType: N }
+      KeySchema:
+        - { AttributeName: userId, KeyType: HASH }
+        - { AttributeName: recordKey, KeyType: RANGE } # "task#<id>", "entry#<id>", "group#<id>", "settings#profile"
+      LocalSecondaryIndexes:
+        - IndexName: byUpdated
+          KeySchema:
+            - { AttributeName: userId, KeyType: HASH }
+            - { AttributeName: updatedAt, KeyType: RANGE }
+          Projection: { ProjectionType: ALL }
+      SSESpecification:
+        SSEEnabled: true
+
+  # ---------- API HTTP protegida con el authorizer JWT de Cognito ----------
+  Api:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins: [!Ref AllowedOrigin]
+        AllowMethods: [POST, OPTIONS]
+        AllowHeaders: [authorization, content-type]
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 10 # tope de gasto ante un bucle o abuso
+        ThrottlingRateLimit: 5
+      Auth:
+        DefaultAuthorizer: CognitoJwt
+        Authorizers:
+          CognitoJwt:
+            IdentitySource: $request.header.Authorization
+            JwtConfiguration:
+              issuer: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}'
+              audience: [!Ref UserPoolClient]
+
+  SyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AppName}-sync'
+      CodeUri: src/sync/
+      Handler: index.handler
+      Policies:
+        - DynamoDBCrudPolicy: { TableName: !Ref SyncTable }
+      Events:
+        Sync:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref Api
+            Path: /sync
+            Method: POST
+
+Outputs:
+  Region:
+    Value: !Ref AWS::Region
+  UserPoolId:
+    Value: !Ref UserPool
+  ClientId:
+    Value: !Ref UserPoolClient
+  ApiUrl:
+    Value: !Sub 'https://${Api}.execute-api.${AWS::Region}.amazonaws.com'

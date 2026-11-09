@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import type { Priority, RecurrenceType, Status, Subtask, Task, UndoPayload } from '../../../shared/types'
+import type { LaunchItem, Priority, RecurrenceType, Status, Subtask, Task, UndoPayload } from '../../../shared/types'
 import { taskTemplatesOf } from '../../../shared/templates'
 import { useDB } from '../store'
 import { DOW, PRIO, STATUS, baseName } from '../utils'
 import { useUi } from '../ui'
+import { LaunchEditor } from './LaunchEditor'
 import { Select } from './Select'
 
 const REC: Array<[RecurrenceType, string]> = [
@@ -36,6 +37,7 @@ export function TaskModal({ task: t }: { task: Partial<Task> }): ReactNode {
   const [newSub, setNewSub] = useState('')
   const [rmProject, setRmProject] = useState(t.rmProject ?? '')
   const [rmIssue, setRmIssue] = useState(t.rmIssue ?? '')
+  const [launch, setLaunch] = useState<LaunchItem[]>(t.launch ?? [])
   const catalog = db.settings.redmineCatalog ?? {}
   // proyectos y tareas leídos de Redmine; las tareas se filtran por el proyecto elegido. Se suman los valores ya usados en otras tareas.
   const rmOptions = (k: 'rmProject' | 'rmIssue'): Array<{ value: string; label: string }> => {
@@ -98,6 +100,7 @@ export function TaskModal({ task: t }: { task: Partial<Task> }): ReactNode {
       estimateMin: isNaN(hours) ? 0 : Math.round(hours * 60),
       recurrence: { type: recType, days },
       groupIds,
+      launch: launch.filter((i) => i.kind === 'terminal' || i.target.trim()).map((i) => ({ ...i, target: i.target.trim(), label: i.label?.trim() || undefined, args: i.args?.trim() || undefined })),
       notes,
       tags: [...new Set(tags.split(/[,\s]+/).map((x) => x.replace(/^#/, '').trim()).filter(Boolean))],
       subtasks: newSub.trim() ? [...subtasks, { id: Date.now().toString(36), text: newSub.trim(), done: false }] : subtasks,
@@ -227,6 +230,8 @@ export function TaskModal({ task: t }: { task: Partial<Task> }): ReactNode {
           Elegir…
         </button>
       </div>
+      <label>Entorno de la tarea · se abre de un clic con el botón «Lanzar» (carpeta, navegador, Postman, base de datos…)</label>
+      <LaunchEditor items={launch} onChange={setLaunch} />
       <label>Grupos de carpetas con acceso para Claude{!folder.trim() && ' · sin carpeta propia, se trabaja en la primera carpeta con permiso de escritura del grupo'}</label>
       {db.groups.length ? (
         <div className="days" style={{ flexWrap: 'wrap' }}>

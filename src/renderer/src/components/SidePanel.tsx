@@ -6,6 +6,7 @@ import { useDB } from '../store'
 import { Resizer } from './Resizer'
 import { useUi } from '../ui'
 import { SessionPanel } from './SessionPanel'
+import { G } from './glyphs'
 
 const ACT_ICON: Record<ActivityKind, string> = { edit: '✎', read: '👁', run: '⌘', search: '⌕', other: '•' }
 
@@ -69,7 +70,7 @@ function Feed({ activity }: { activity: Activity[] }): ReactNode {
  * Panel lateral del chat: sesión, archivos y actividad. Se pliega a una barra de iconos al costado
  * (igual que el menú de la izquierda); el icono activo vuelve a plegarlo.
  */
-export function SidePanel({ convId }: { convId: string }): ReactNode {
+export function SidePanel({ convId, mode = 'dock' }: { convId: string; mode?: 'dock' | 'drawer' }): ReactNode {
   const db = useDB()
   const lay = useLayout()
   const st = { open: lay.sideOpen, tab: lay.sideTab as Tab }
@@ -78,39 +79,33 @@ export function SidePanel({ convId }: { convId: string }): ReactNode {
 
   const files = new Set(activity.filter((a) => a.kind === 'edit' && a.status !== 'error').map((a) => a.target)).size
   const working = activity.some((a) => a.status === 'running')
-  const tabs: Array<{ id: Tab; icon: string; label: string; badge?: ReactNode }> = [
-    { id: 'session', icon: '◔', label: 'Sesión y contexto' },
-    { id: 'files', icon: '✎', label: 'Archivos modificados', badge: files > 0 ? <em className="badge">{files}</em> : null },
-    { id: 'activity', icon: '⚡', label: 'Actividad en vivo', badge: working ? <em className="badge run" /> : null }
+  const tabs: Array<{ id: Tab; short: string; label: string; badge?: ReactNode }> = [
+    { id: 'session', short: 'Sesión', label: 'Sesión y contexto' },
+    { id: 'files', short: 'Archivos', label: 'Archivos modificados', badge: files > 0 ? <em className="badge">{files}</em> : null },
+    { id: 'activity', short: 'Actividad', label: 'Actividad en vivo', badge: working ? <em className="badge run" /> : null }
   ]
-  const current = tabs.find((t) => t.id === st.tab) ?? tabs[0]
 
+  if (!st.open) return null
   return (
-    <aside className={`side-panel ${st.open ? 'open' : 'closed'}`}>
-      {st.open && <Resizer value={lay.sideW} invert onChange={(w) => setLayout({ sideW: w })} onReset={() => setLayout({ sideW: 320 })} label="Ancho del panel" />}
-      {st.open && (
-        <div className="panel-body">
-          <h4>{current.label}</h4>
-          {st.tab === 'session' && <SessionPanel convId={convId} />}
-          {st.tab === 'files' && <Files activity={activity} />}
-          {st.tab === 'activity' && <Feed activity={activity} />}
+    <aside className={`side-panel ${mode === 'dock' ? 'dockpane' : 'drawer'}`} aria-label="Sesión, archivos y actividad">
+      <Resizer value={lay.sideW} invert onChange={(w) => setLayout({ sideW: w })} onReset={() => setLayout({ sideW: 320 })} label="Ancho del panel" />
+      <div className="drawer-h">
+        <div className="seg drawer-tabs" role="tablist">
+          {tabs.map((t) => (
+            <button key={t.id} role="tab" aria-selected={st.tab === t.id} className={st.tab === t.id ? 'on' : ''} title={t.label} onClick={() => setSt({ open: true, tab: t.id })}>
+              {t.short}
+              {t.badge}
+            </button>
+          ))}
         </div>
-      )}
-      <div className="rail">
-        <button className="rail-btn" title={st.open ? 'Plegar el panel' : 'Mostrar el panel'} onClick={() => setSt({ ...st, open: !st.open })}>
-          {st.open ? '»' : '«'}
+        <button className="ib" title="Cerrar el panel" aria-label="Cerrar el panel" onClick={() => setSt({ ...st, open: false })}>
+          <G n="x" />
         </button>
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            className={`rail-btn ${st.open && st.tab === t.id ? 'on' : ''}`}
-            title={t.label}
-            onClick={() => setSt(st.open && st.tab === t.id ? { ...st, open: false } : { open: true, tab: t.id })}
-          >
-            {t.icon}
-            {t.badge}
-          </button>
-        ))}
+      </div>
+      <div className="panel-body">
+        {st.tab === 'session' && <SessionPanel convId={convId} />}
+        {st.tab === 'files' && <Files activity={activity} />}
+        {st.tab === 'activity' && <Feed activity={activity} />}
       </div>
     </aside>
   )

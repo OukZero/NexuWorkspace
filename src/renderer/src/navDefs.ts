@@ -5,8 +5,9 @@ export const NAV_GROUPS: Array<{ title: string; items: Array<[View, string, stri
   {
     title: 'Trabajo',
     items: [
-      ['today', '☀', 'Hoy'],
+      ['today', '☀', 'Panel'],
       ['board', '▦', 'Tablero'],
+      ['workspace', '▥', 'Espacio'],
       ['groups', '🗂', 'Carpetas'],
       ['history', '☰', 'Historial']
     ]
@@ -17,6 +18,15 @@ export const NAV_GROUPS: Array<{ title: string; items: Array<[View, string, stri
       ['hours', '⏱', 'Horas'],
       ['redmine', '✓', 'Redmine'],
       ['usage', '◔', 'Consumo']
+    ]
+  },
+  {
+    title: 'Extras',
+    items: [
+      ['notes', '✎', 'Notas'],
+      ['web', '🌐', 'Web'],
+      ['music', '♫', 'Música'],
+      ['whatsapp', '💬', 'WhatsApp']
     ]
   }
 ]

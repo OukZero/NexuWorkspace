@@ -272,14 +272,17 @@ export async function test(): Promise<void> {
   await say(r.token, r.chat, '✅ Shutoki AI Workspace está conectado a Telegram.')
 }
 
-const ICON: Record<NotificationKind, string> = { daily: '📋', reminder: '⏰', done: '✅', attention: '⚠️', permission: '🔐', idle: '💤' }
+const ICON: Record<NotificationKind, string> = { daily: '📋', reminder: '⏰', done: '✅', attention: '⚠️', permission: '🔐', idle: '💤', ci: '⚙️', whatsapp: '💬', calendar: '📅' }
 const GENERIC: Record<NotificationKind, string> = {
   daily: 'El resumen del daily está listo.',
   reminder: 'Recordatorio: cierre del día.',
   done: 'Una tarea terminó.',
   attention: 'Una tarea necesita atención.',
   permission: 'Claude pide permiso en una tarea. Ábrelo en Shutoki AI Workspace para responder.',
-  idle: 'Llevas un rato sin actividad.'
+  idle: 'Llevas un rato sin actividad.',
+  ci: 'Cambió el estado de CI o del PR de una tarea.',
+  whatsapp: 'Tienes un mensaje nuevo de WhatsApp.',
+  calendar: 'Tienes una reunión o un bloque de enfoque.'
 }
 
 /** Reenvía un aviso de la campanita a Telegram (si está conectado). */

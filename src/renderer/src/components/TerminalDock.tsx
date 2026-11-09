@@ -12,13 +12,15 @@ export interface TermRequest {
 interface Props {
   taskId: string
   request: TermRequest | null // «abre una terminal (retomando esta sesión)»
-  height: number
-  onHeight(h: number): void
-  onClose(): void
+  height?: number
+  onHeight?(h: number): void
+  onClose?(): void
+  /** Dentro de un panel del espacio de trabajo: ocupa todo el alto y no muestra el asa ni el botón de ocultar. */
+  embedded?: boolean
 }
 
 /** Panel de terminal integrada, como el de VS Code: pestañas por tarea, altura ajustable y shells reales. */
-export function TerminalDock({ taskId, request, height, onHeight, onClose }: Props): ReactNode {
+export function TerminalDock({ taskId, request, height = 260, onHeight, onClose, embedded }: Props): ReactNode {
   const ui = useUi()
   const all = useTerminals()
   const mine = all.filter((t) => t.taskId === taskId)
@@ -64,7 +66,7 @@ export function TerminalDock({ taskId, request, height, onHeight, onClose }: Pro
     e.preventDefault()
     const y0 = e.clientY
     const h0 = height
-    const move = (ev: MouseEvent): void => onHeight(Math.min(window.innerHeight * 0.6, Math.max(120, h0 + (y0 - ev.clientY))))
+    const move = (ev: MouseEvent): void => onHeight?.(Math.min(window.innerHeight * 0.6, Math.max(120, h0 + (y0 - ev.clientY))))
     const up = (): void => {
       removeEventListener('mousemove', move)
       removeEventListener('mouseup', up)
@@ -74,8 +76,8 @@ export function TerminalDock({ taskId, request, height, onHeight, onClose }: Pro
   }
 
   return (
-    <section className="dock" style={{ height }} aria-label="Terminal integrada">
-      <div className="dock-grip" onMouseDown={startDrag} title="Arrastra para cambiar la altura" />
+    <section className={`dock${embedded ? ' embedded' : ''}`} style={embedded ? undefined : { height }} aria-label="Terminal integrada">
+      {!embedded && <div className="dock-grip" onMouseDown={startDrag} title="Arrastra para cambiar la altura" />}
       <div className="dock-head">
         <span className="dock-title">TERMINAL</span>
         <div className="dock-tabs" role="tablist">
@@ -106,9 +108,11 @@ export function TerminalDock({ taskId, request, height, onHeight, onClose }: Pro
         <button className="icon" title="Abrir en una ventana de terminal aparte" aria-label="Terminal externa" onClick={() => void ui.run('terminal:open', taskId)}>
           ↗
         </button>
-        <button className="icon" title="Ocultar el panel (Ctrl+`)" aria-label="Ocultar el panel de terminal" onClick={onClose}>
-          ✕
-        </button>
+        {!embedded && (
+          <button className="icon" title="Ocultar el panel (Ctrl+`)" aria-label="Ocultar el panel de terminal" onClick={onClose}>
+            ✕
+          </button>
+        )}
       </div>
       <div className="dock-body" ref={host} />
     </section>

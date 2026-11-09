@@ -653,7 +653,7 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[], e
     // comandos de shell permitidos (Ajustes); el bloqueo fijo va junto con la denegación de edición de las carpetas de solo lectura
     const allow = claudeAllow(mode === 'agent')
     // Diseño: consultar la web para referencias (marca, colores, estructura). Un solo --allowedTools con todo.
-    if (chat.kind === 'design') allow.push('WebFetch', 'WebSearch')
+    if (chat.kind === 'design' || db.settings.claudeWeb !== false) allow.push('WebFetch', 'WebSearch')
     if (allow.length) args.push('--allowedTools', ...allow.map((r) => `"${r}"`))
     // grupos de carpetas: acceso de lectura/escritura (--add-dir) y solo lectura (regla de denegación de edición)
     // la revisión es de solo lectura: no puede editar ni crear archivos

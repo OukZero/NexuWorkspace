@@ -3,7 +3,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { execFile, execFileSync, spawn } from 'child_process'
-import type { Task } from '../shared/types'
+import type { LaunchItem, Task } from '../shared/types'
 import { getDb } from './db'
 import { effectiveTask, groupAccess } from './groups'
 
@@ -127,4 +127,82 @@ export function gitCommits(folder: string, day: string): Promise<string[]> {
       (err, out) => resolve(err ? [] : out.split('\n').filter(Boolean))
     )
   })
+}
+
+// ---------- lanzador del entorno de la tarea ----------
+
+/** Separa por espacios respetando las comillas dobles. */
+function splitArgs(s: string): string[] {
+  return [...s.matchAll(/"([^"]*)"|(\S+)/g)].map((m) => m[1] ?? m[2])
+}
+
+const APP_EXT = new Set(['.exe', '.lnk', '.bat', '.cmd'])
+
+async function launchOne(item: LaunchItem, task: Task, folder: string): Promise<void> {
+  const sub = (s: string): string => s.replace(/\{folder\}/gi, folder)
+  const target = sub((item.target ?? '').trim())
+  switch (item.kind) {
+    case 'url': {
+      let u: URL
+      try {
+        u = new URL(target)
+      } catch {
+        throw new Error(`Enlace no válido: ${target || '(vacío)'}`)
+      }
+      if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error('Solo se abren enlaces http o https.')
+      await shell.openExternal(u.toString())
+      return
+    }
+    case 'folder':
+    case 'file': {
+      if (!target || !fs.existsSync(target)) throw new Error(`No existe: ${target || '(vacío)'}`)
+      if (item.kind === 'folder' && !fs.statSync(target).isDirectory()) throw new Error(`No es una carpeta: ${target}`)
+      const err = await shell.openPath(target)
+      if (err) throw new Error(err)
+      return
+    }
+    case 'app': {
+      if (!target || !fs.existsSync(target) || !fs.statSync(target).isFile()) throw new Error(`No se encuentra el programa: ${target || '(vacío)'}`)
+      const ext = path.extname(target).toLowerCase()
+      if (!APP_EXT.has(ext)) throw new Error('Solo se pueden lanzar programas .exe, .lnk, .bat o .cmd. Para otros archivos usa «Archivo».')
+      const args = splitArgs(sub(item.args ?? ''))
+      if (ext === '.lnk') {
+        const err = await shell.openPath(target)
+        if (err) throw new Error(err)
+        return
+      }
+      const cwd = folder && fs.existsSync(folder) ? folder : path.dirname(target)
+      const child = ext === '.exe' ? spawn(target, args, { cwd, detached: true, stdio: 'ignore' }) : spawn('cmd.exe', ['/c', target, ...args], { cwd, detached: true, stdio: 'ignore', windowsHide: true })
+      child.on('error', () => undefined) // un fallo al arrancar no debe tumbar la app
+      child.unref()
+      return
+    }
+    case 'vscode':
+      openVSCode(target || folder)
+      return
+    case 'terminal':
+      openTerminalHere(task)
+      return
+    default:
+      throw new Error('Tipo de elemento desconocido.')
+  }
+}
+
+/** Abre el entorno de la tarea (todos sus elementos o solo `itemId`). Devuelve un mensaje por cada elemento que falló. */
+export async function launchTask(taskId: string, itemId?: string): Promise<string[]> {
+  const task = getDb().tasks.find((t) => t.id === taskId)
+  if (!task) throw new Error('La tarea ya no existe.')
+  const items = (task.launch ?? []).filter((i) => !itemId || i.id === itemId)
+  if (!items.length) throw new Error('Esta tarea no tiene elementos para lanzar. Añádelos al editarla.')
+  const folder = effectiveTask(task).folder ?? ''
+  const errors: string[] = []
+  for (const item of items.slice(0, 20)) {
+    try {
+      await launchOne(item, task, folder)
+    } catch (e) {
+      errors.push(`${item.label?.trim() || item.target || item.kind}: ${(e as Error).message}`)
+    }
+    if (items.length > 1) await new Promise((r) => setTimeout(r, 350))
+  }
+  return errors
 }

@@ -7,6 +7,10 @@ import { applyPreset, savedLayouts } from '../layout'
 import { showSettingsTab } from './SettingsView'
 import { isWorkTask } from '../utils'
 import { useUi, type View } from '../ui'
+import { toggleFullscreen } from '../fullscreen'
+import { requestNote, useNotes } from '../notes'
+import { requestWeb } from '../webTabs'
+import { runLaunch } from './LaunchButton'
 
 interface Item {
   id: string
@@ -17,13 +21,17 @@ interface Item {
 }
 
 const VIEWS: Array<[View, string]> = [
-  ['today', 'Hoy'],
+  ['today', 'Panel'],
   ['board', 'Tablero'],
+  ['workspace', 'Espacio de trabajo (paneles divididos)'],
   ['hours', 'Horas'],
   ['history', 'Historial'],
   ['redmine', 'Redmine · horas imputadas'],
   ['usage', 'Consumo'],
   ['groups', 'Carpetas'],
+  ['notes', 'Notas'],
+  ['web', 'Web (pestañas y sitios guardados)'],
+  ['music', 'Música (Spotify)'],
   ['settings', 'Ajustes']
 ]
 
@@ -35,6 +43,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }): ReactNode 
   const [idx, setIdx] = useState(0)
   const list = useRef<HTMLDivElement>(null)
   const current = findTask(db, ui.activeTask)
+  const notes = useNotes()
 
   const items = useMemo<Item[]>(() => {
     const go = (fn: () => void) => (): void => {
@@ -48,7 +57,11 @@ export function CommandPalette({ onClose }: { onClose: () => void }): ReactNode 
       { id: 'a-focus', group: 'Acciones', label: 'Modo foco: ocultar menú y pestañas', hint: 'Ctrl+Mayús+F', run: go(() => setFocusMode(!getFocus())) },
       { id: 'a-look', group: 'Acciones', label: 'Personalizar apariencia…', hint: 'Temas, colores, tipografía, menú', run: go(() => { showSettingsTab('apariencia'); ui.go('settings') }) },
       ...savedLayouts().map((p) => ({ id: 'l-' + p.id, group: 'Acciones', label: `Disposición: ${p.name}`, hint: 'Paneles, terminal y modo foco', run: go(() => applyPreset(p)) })),
+      { id: 'a-full', group: 'Acciones', label: 'Pantalla completa', hint: 'F11', run: go(() => void toggleFullscreen()) },
       { id: 'a-skills', group: 'Acciones', label: 'Abrir catálogo de skills', run: go(() => void window.api.call('window:skills')) },
+      { id: 'a-assist', group: 'Acciones', label: 'Asistente: pídele algo con texto', hint: 'Ctrl+J', run: go(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', ctrlKey: true }))) },
+      { id: 'a-note', group: 'Acciones', label: 'Nueva nota', run: go(() => { requestNote({ newForTask: '' }); ui.go('notes') }) },
+      { id: 'a-wsp', group: 'Acciones', label: 'Abrir WhatsApp', run: go(() => ui.go('whatsapp')) },
       { id: 'a-random', group: 'Acciones', label: 'Probar un tema al azar', run: go(() => { const k = Object.keys(PRESETS); setPreset(k[Math.floor(Math.random() * k.length)]) }) },
       { id: 'a-export', group: 'Acciones', label: 'Exportar datos (.json)', run: go(() => void ui.run('data:export')) }
     ]
@@ -56,6 +69,8 @@ export function CommandPalette({ onClose }: { onClose: () => void }): ReactNode 
       out.push(
         { id: 'a-conv', group: 'Acciones', label: `Nueva conversación en «${current.title}»`, run: go(() => ui.newConversation(current.id)) },
         { id: 'a-term', group: 'Acciones', label: `Abrir terminal en «${current.title}»`, hint: current.folder, run: go(() => ui.openTerminal(current.id)) },
+        { id: 'a-tnote', group: 'Acciones', label: `Nueva nota para «${current.title}»`, run: go(() => { requestNote({ newForTask: current.id, title: current.title }); ui.go('notes') }) },
+        ...(current.launch?.length ? [{ id: 'a-launch', group: 'Acciones', label: `Lanzar el entorno de «${current.title}»`, hint: `${current.launch.length} elementos`, run: go(() => void runLaunch(ui, current.id)) }] : []),
         { id: 'a-code', group: 'Acciones', label: `Abrir «${current.title}» en VS Code`, hint: current.folder, run: go(() => void ui.run('vscode:open', current.folder)) }
       )
     }
@@ -68,9 +83,11 @@ export function CommandPalette({ onClose }: { onClose: () => void }): ReactNode 
         if (c.chat.messages.length) out.push({ id: `c-${c.id}`, group: 'Conversaciones', label: convLabel(c.chat), hint: t.title, run: go(() => ui.openChat(t.id, c.id)) })
       }
     }
+    for (const l of db.settings.webLinks ?? []) out.push({ id: `w-${l.id}`, group: 'Web', label: l.name, hint: l.url, run: go(() => { requestWeb(l.url); ui.go('web') }) })
+    for (const n of notes) out.push({ id: `n-${n.id}`, group: 'Notas', label: n.title, hint: n.tags.map((t) => '#' + t).join(' ') || n.body.replace(/\s+/g, ' ').slice(0, 60), run: go(() => { requestNote({ id: n.id }); ui.go('notes') }) })
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [db, current?.id])
+  }, [db, current?.id, notes])
 
   const shown = useMemo(() => {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean)

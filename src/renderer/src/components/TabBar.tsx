@@ -3,15 +3,19 @@ import { closedConvs, convLabel, designConv, openConvs, taskRunning } from '../c
 import type { CSSProperties } from 'react'
 import { findTask, useDB } from '../store'
 import { taskColor, useAppearance } from '../theme'
+import { G } from './glyphs'
 
-const PANEL_LABEL: Record<string, string> = {
+export const PANEL_LABEL: Record<string, string> = {
   today: 'Hoy',
   board: 'Tablero',
+  workspace: 'Espacio',
   hours: 'Horas',
   redmine: 'Redmine',
   history: 'Historial',
   usage: 'Consumo',
   groups: 'Carpetas',
+  music: 'Música',
+  whatsapp: 'WhatsApp',
   settings: 'Ajustes'
 }
 
@@ -103,7 +107,7 @@ Arrastra para reordenar; suéltala fuera de la ventana para abrirla aparte`}
         )
       })}
       <button className="tab plus" title="Abrir una conversación o una tarea" onClick={onNew}>
-        ＋
+        <G n="plus" size={14} />
       </button>
     </div>
   )
@@ -122,10 +126,12 @@ interface ConvTabsProps {
   onNew(): void
   onPop?(): void
   docked?: boolean // ventana suelta: el botón la devuelve a la principal
+  /** Las conversaciones se listan en el panel de la izquierda: aquí solo van los modos. */
+  listMode?: boolean
 }
 
 /** Nivel 2: Chat / Diseño de la tarea activa y, en Chat, sus conversaciones (cambian al cambiar de tarea). */
-export function ConvTabs({ taskId, active, mode, unread, onMode, onSelect, onClose, onNew, onPop, docked }: ConvTabsProps): ReactNode {
+export function ConvTabs({ taskId, active, mode, unread, onMode, onSelect, onClose, onNew, onPop, docked, listMode }: ConvTabsProps): ReactNode {
   const db = useDB()
   const convs = openConvs(db, taskId)
   const hidden = closedConvs(db, taskId).length
@@ -134,19 +140,19 @@ export function ConvTabs({ taskId, active, mode, unread, onMode, onSelect, onClo
     <div className="tabs sub">
       <div className="seg modeseg">
         <button className={mode === 'chat' ? 'on' : ''} onClick={() => onMode('chat')}>
-          💬 Chat
+          <G n="chat" size={14} /> Chat
         </button>
         <button className={mode === 'design' ? 'on' : ''} onClick={() => onMode('design')} title="Mockups y diseños de esta tarea">
-          🎨 Diseño {designing && <i className="tdot run" />}
+          <G n="design" size={14} /> Diseño {designing && <i className="tdot run" />}
         </button>
         <button className={mode === 'git' ? 'on' : ''} onClick={() => onMode('git')} title="Control de Git del proyecto: cambios, commit, ramas e historial">
-          ⎇ Git
+          <G n="git" size={14} /> Git
         </button>
         <button className={mode === 'files' ? 'on' : ''} onClick={() => onMode('files')} title="Explorar y leer el código de la tarea (solo lectura)">
-          {'</>'} Archivos
+          <G n="code" size={14} /> Archivos
         </button>
       </div>
-      {mode === 'chat' && convs.map(({ id, chat }) => (
+      {mode === 'chat' && !listMode && convs.map(({ id, chat }) => (
         <div
           key={id}
           className={`tab ${active === id ? 'active' : ''}`}
@@ -170,17 +176,17 @@ export function ConvTabs({ taskId, active, mode, unread, onMode, onSelect, onClo
           </button>
         </div>
       ))}
-      {mode === 'chat' && (
+      {mode === 'chat' && !listMode && (
         <button className="tab plus" title="Nueva conversación en esta tarea, u otra tarea" onClick={onNew}>
-          ＋
+          <G n="plus" size={14} />
         </button>
       )}
       {onPop && (
         <button className="tab plus" title={docked ? 'Devolver esta tarea a la ventana principal' : 'Sacar esta tarea a una ventana aparte'} onClick={onPop}>
-          {docked ? '⇱' : '⧉'}
+          <G n="popout" size={14} />
         </button>
       )}
-      {mode === 'chat' && hidden > 0 && <span className="sublabel">{hidden} cerrada{hidden > 1 ? 's' : ''}</span>}
+      {mode === 'chat' && !listMode && hidden > 0 && <span className="sublabel">{hidden} cerrada{hidden > 1 ? 's' : ''}</span>}
     </div>
   )
 }

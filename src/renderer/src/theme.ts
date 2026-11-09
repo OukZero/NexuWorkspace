@@ -124,7 +124,7 @@ export const PRESETS: Record<string, Preset> = {
     swatch: ['#f6f0e4', '#efe6d3', '#b86e00'],
     vars: {
       '--bg': '#f6f0e4', '--panel': '#fffaf0', '--panel2': '#efe6d3', '--line': '#e0d4bb',
-      '--text': '#2b2417', '--muted': '#7a6c52', '--user-bg': '#f0e0b8', '--code-bg': '#f1e8d5', '--over-bg': '#f6ecd2',
+      '--text': '#2b2417', '--muted': '#74664b', '--user-bg': '#f0e0b8', '--code-bg': '#f1e8d5', '--over-bg': '#f6ecd2',
       '--timer-grad': 'linear-gradient(90deg, #f0e0b8, #d9ecd0)'
     },
     deco: 'radial-gradient(900px 500px at 90% -10%, rgba(255,190,90,.22), transparent 70%)'
@@ -384,8 +384,71 @@ export const getAppearance = (): Appearance => A
 export const useAppearance = (): Appearance => useSyncExternalStore(subscribe, () => A)
 export const useFocusMode = (): boolean => useSyncExternalStore(subscribe, () => focus)
 
-/** Imagen de fondo propia (data URL) o ''. Va aparte: es grande y no se guarda en los datos. */
-export const getBgImage = (): string => read('bgImage') ?? ''
+// ---------- fondos ----------
+/** Fondo integrado: tres resplandores de color (r,g,b) sobre el color base del estilo. */
+export interface BuiltinBg {
+  id: string
+  label: string
+  /** Tres colores «r,g,b» para las luces de arriba a la derecha, abajo a la izquierda y abajo al centro. */
+  rgb: [string, string, string]
+}
+export const BG_BUILTIN: BuiltinBg[] = [
+  { id: 'aurora', label: 'Aurora', rgb: ['118,102,255', '45,212,191', '236,72,153'] },
+  { id: 'amanecer', label: 'Amanecer', rgb: ['255,138,76', '255,92,138', '255,200,87'] },
+  { id: 'oceano', label: 'Océano', rgb: ['56,148,255', '30,215,215', '110,90,255'] },
+  { id: 'bosque', label: 'Bosque', rgb: ['60,200,130', '150,210,70', '30,170,170'] },
+  { id: 'ciruela', label: 'Ciruela', rgb: ['190,90,255', '255,95,170', '90,100,255'] },
+  { id: 'ceniza', label: 'Ceniza', rgb: ['150,160,185', '110,120,145', '170,175,195'] },
+  { id: 'plano', label: 'Sin adorno', rgb: ['0,0,0', '0,0,0', '0,0,0'] }
+]
+
+/** Imagen propia guardada en el equipo (data URL): van en localStorage, no en los datos de la app. */
+export interface BgImage {
+  id: string
+  name: string
+  url: string
+}
+export const BG_MAX_IMAGES = 8
+
+function readLib(): BgImage[] {
+  try {
+    const lib = JSON.parse(read('bgLib') ?? '[]') as BgImage[]
+    const out = Array.isArray(lib) ? lib.filter((x) => x && typeof x.id === 'string' && typeof x.url === 'string') : []
+    // migración: el fondo único de versiones anteriores pasa a la biblioteca
+    const old = read('bgImage')
+    if (old) {
+      if (!out.some((x) => x.url === old)) {
+        out.push({ id: 'old', name: 'Mi fondo', url: old })
+        write('bgLib', JSON.stringify(out))
+        if (!read('bgActive')) write('bgActive', 'img:old')
+      }
+      try {
+        localStorage.removeItem('bgImage')
+      } catch {
+        /* sin storage */
+      }
+    }
+    return out
+  } catch {
+    return []
+  }
+}
+let bgLib: BgImage[] | null = null
+let bgVer = 0
+/** Cambia cuando se elige, agrega o quita un fondo (para repintar la galería). */
+export const useBackgrounds = (): number => useSyncExternalStore(subscribe, () => bgVer)
+export const getBgLib = (): BgImage[] => (bgLib ??= readLib())
+/** Fondo activo: 'aurora' (por defecto), el id de uno integrado o «img:<id>» de una imagen propia. */
+export const getBgActive = (): string => {
+  const a = read('bgActive') || 'aurora'
+  if (a.startsWith('img:')) return getBgLib().some((x) => 'img:' + x.id === a) ? a : 'aurora'
+  return BG_BUILTIN.some((b) => b.id === a) ? a : 'aurora'
+}
+/** Imagen de fondo activa (data URL) o ''. */
+export const getBgImage = (): string => {
+  const a = getBgActive()
+  return a.startsWith('img:') ? (getBgLib().find((x) => 'img:' + x.id === a)?.url ?? '') : ''
+}
 
 // ---------- aplicar al documento ----------
 const mq = matchMedia('(prefers-color-scheme: light)')
@@ -424,9 +487,14 @@ function apply(): void {
     if (p && k in p.vars) root.style.setProperty(k, p.vars[k])
     else root.style.removeProperty(k)
   }
-  root.style.setProperty('--bg-deco', p?.deco ?? 'none')
+  root.style.setProperty('--bg-deco', 'none')
 
   const img = getBgImage()
+  const active = getBgActive()
+  const builtin = BG_BUILTIN.find((b) => b.id === active) ?? BG_BUILTIN[0]
+  const alpha = theme === 'light' ? [0.16, 0.14, 0.09] : [0.2, 0.12, 0.1]
+  builtin.rgb.forEach((c, i) => root.style.setProperty('--g' + (i + 1), builtin.id === 'plano' ? 'transparent' : 'rgba(' + c + ',' + alpha[i] + ')'))
+  root.dataset.bgKind = img ? 'image' : builtin.id
   if (img) {
     root.dataset.bg = 'image'
     root.style.setProperty('--bg-image', `url("${img}")`)
@@ -535,28 +603,49 @@ export const setFontScale = (n: number): void => update({ fontScale: n })
 export const setPreset = (k: string): void => update({ preset: k })
 export const setBgDim = (n: number): void => update({ bgDim: n })
 export const setBgGlass = (n: number): void => update({ bgGlass: n })
-export function clearBgImage(): void {
-  try {
-    localStorage.removeItem('bgImage')
-  } catch {
-    /* sin storage */
-  }
+/** Elige el fondo: 'aurora' u otro integrado, o «img:<id>» de una imagen propia. */
+export function setBgActive(id: string): void {
+  write('bgActive', id)
+  bgVer++
   apply()
   emit()
 }
-/** Reduce la imagen (máx. 1920 px, JPEG) para que quepa en localStorage y la guarda como fondo. */
-export async function setBgImageFile(file: File): Promise<void> {
+export function clearBgImage(): void {
+  setBgActive('aurora')
+}
+/** Agrega una imagen propia a la biblioteca (máx. 1600 px, JPEG) y la deja activa. Lanza si no cabe o ya hay demasiadas. */
+export async function addBgImageFile(file: File): Promise<void> {
+  const lib = getBgLib()
+  if (lib.length >= BG_MAX_IMAGES) throw new Error('Ya tienes ' + BG_MAX_IMAGES + ' fondos propios: quita alguno para agregar otro.')
   const bmp = await createImageBitmap(file)
-  const scale = Math.min(1, 1920 / Math.max(bmp.width, bmp.height))
+  const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height))
   const c = document.createElement('canvas')
   c.width = Math.round(bmp.width * scale)
   c.height = Math.round(bmp.height * scale)
   c.getContext('2d')?.drawImage(bmp, 0, 0, c.width, c.height)
-  const url = c.toDataURL('image/jpeg', 0.82)
-  localStorage.setItem('bgImage', url) // lanza si no cabe: lo captura quien llama
+  const url = c.toDataURL('image/jpeg', 0.78)
+  const item: BgImage = { id: Math.random().toString(36).slice(2, 9), name: file.name.replace(/\.[^.]+$/, '').slice(0, 24) || 'Mi fondo', url }
+  const next = [...lib, item]
+  try {
+    localStorage.setItem('bgLib', JSON.stringify(next))
+  } catch {
+    throw new Error('La imagen no cabe en el almacenamiento local: prueba con una más pequeña o quita otros fondos.')
+  }
+  bgLib = next
+  bgVer++
+  setBgActive('img:' + item.id)
+}
+export function removeBgImage(id: string): void {
+  const next = getBgLib().filter((x) => x.id !== id)
+  write('bgLib', JSON.stringify(next))
+  bgLib = next
+  if (read('bgActive') === 'img:' + id) write('bgActive', 'aurora')
+  bgVer++
   apply()
   emit()
 }
+/** Compatibilidad con el nombre anterior. */
+export const setBgImageFile = addBgImageFile
 
 export const getName = (): string => read('userName') ?? ''
 export const setName = (n: string): void => write('userName', n)

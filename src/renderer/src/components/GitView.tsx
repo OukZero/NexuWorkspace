@@ -4,6 +4,9 @@ import type { GitBranches, GitCommit, GitFile, GitRepo, GitStatus, IssueRef, Rem
 import { baseName } from '../utils'
 import { findTask, useDB } from '../store'
 import { useUi } from '../ui'
+import { CiPanel } from './CiBadges'
+import { DiffView } from './DiffView'
+import { pruneReviewed, reviewKey, toggleReviewed, useReviewed } from '../reviewed'
 import { EmptyState } from './EmptyState'
 import { Select, type SelectOption } from './Select'
 
@@ -20,36 +23,20 @@ const LETTER: Record<string, [string, string]> = {
 }
 const letterOf = (f: GitFile, side: 'index' | 'work'): [string, string] => (f.untracked ? ['U', 'sin seguimiento'] : f.conflicted ? LETTER.U : (LETTER[f[side]] ?? [f[side], '']))
 
-function DiffText({ text }: { text: string }): ReactNode {
-  const lines = text.split(/\r?\n/)
-  const shown = lines.slice(0, 3000)
-  return (
-    <div className="diff gdiff">
-      {shown.map((l, i) => {
-        const cls = l.startsWith('+++') || l.startsWith('---') || l.startsWith('diff ') || l.startsWith('index ') ? 'sep' : l.startsWith('+') ? 'add' : l.startsWith('-') ? 'del' : l.startsWith('@@') ? 'sep' : 'ctx'
-        const sign = cls === 'add' ? '+' : cls === 'del' ? '−' : ' '
-        return (
-          <div key={i} className={`dl ${cls}`}>
-            <i>{sign}</i>
-            <span>{cls === 'add' || cls === 'del' ? l.slice(1) || ' ' : l || ' '}</span>
-          </div>
-        )
-      })}
-      {lines.length > shown.length && <div className="meta" style={{ padding: 8 }}>… {lines.length - shown.length} líneas más (abre el archivo en VS Code para verlo completo).</div>}
-    </div>
-  )
-}
-
-function Row({ f, side, selected, onSelect, actions }: { f: GitFile; side: 'index' | 'work'; selected: boolean; onSelect: () => void; actions: ReactNode }): ReactNode {
+function Row({ f, dir, side, selected, onSelect, actions }: { f: GitFile; dir: string; side: 'index' | 'work'; selected: boolean; onSelect: () => void; actions: ReactNode }): ReactNode {
   const [l, label] = letterOf(f, side)
+  const seen = !!useReviewed()[reviewKey(dir, f.path)]
   return (
-    <div className={`gfile ${selected ? 'on' : ''}`} onClick={onSelect} title={`${f.path} · ${label}`}>
+    <div className={`gfile ${selected ? 'on' : ''}${seen ? ' seen' : ''}`} onClick={onSelect} title={`${f.path} · ${label}${seen ? ' · revisado' : ''}`}>
       <span className={`gl g-${l}`}>{l}</span>
       <span className="gname">
         <b>{baseName(f.path)}</b>
         <small>{f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : ''}</small>
       </span>
       <span className="gact" onClick={(e) => e.stopPropagation()}>
+        <button className={`icon gseen${seen ? ' on' : ''}`} title={seen ? 'Quitar la marca de revisado' : 'Marcar como revisado'} aria-label={seen ? 'Quitar la marca de revisado' : 'Marcar como revisado'} aria-pressed={seen} onClick={() => toggleReviewed(reviewKey(dir, f.path))}>
+          ✓
+        </button>
         {actions}
       </span>
     </div>
@@ -112,6 +99,7 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
     try {
       const [s, b, l] = await Promise.all([window.api.call('git:status', dir), window.api.call('git:branches', dir), window.api.call('git:log', dir, 40)])
       setSt(s)
+      pruneReviewed(dir, s.files.map((f) => f.path))
       setBr(b)
       setCommits(l)
       setError('')
@@ -487,6 +475,7 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
             </div>
           )
         )}
+        {st && task.branch === st.branch && <CiPanel taskId={taskId} />}
       </div>
 
       <div className="gcols">
@@ -537,7 +526,7 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
             <section>
               <h4 className="gh err">Conflictos · {conflicts.length}</h4>
               {conflicts.map((f) => (
-                <Row key={f.path} f={f} side="work" selected={isSel(f.path, 'work')} onSelect={() => setSel({ path: f.path, kind: 'work' })} actions={null} />
+                <Row key={f.path} dir={dir} f={f} side="work" selected={isSel(f.path, 'work')} onSelect={() => setSel({ path: f.path, kind: 'work' })} actions={null} />
               ))}
             </section>
           )}
@@ -554,6 +543,7 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
             {staged.map((f) => (
               <Row
                 key={'s' + f.path}
+                dir={dir}
                 f={f}
                 side="index"
                 selected={isSel(f.path, 'staged')}
@@ -580,6 +570,7 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
             {changes.map((f) => (
               <Row
                 key={'w' + f.path}
+                dir={dir}
                 f={f}
                 side="work"
                 selected={isSel(f.path, f.untracked ? 'untracked' : 'work')}
@@ -597,6 +588,13 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
               />
             ))}
             {!changes.length && !staged.length && !conflicts.length && st && <div className="meta gempty">Todo limpio: no hay cambios.</div>}
+            {!st && !error && current?.isRepo && (
+              <div className="skel-list" aria-busy="true" aria-label="Cargando cambios">
+                {[70, 55, 82, 48].map((w) => (
+                  <div key={w} className="skel" style={{ width: `${w}%` }} />
+                ))}
+              </div>
+            )}
           </section>
 
           <section>
@@ -628,7 +626,7 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
                   </button>
                 )}
               </div>
-              <DiffText text={diff} />
+              <DiffView text={diff} />
             </>
           ) : (
             <EmptyState kind="chart" title="Elige un archivo o un commit" text="Verás aquí qué cambió, línea por línea." />
