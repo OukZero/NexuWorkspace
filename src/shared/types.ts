@@ -554,6 +554,14 @@ export interface Settings {
   openModeChat?: boolean
   summaryMode: SummaryMode
   claudeCmd: string
+  /** Reuniones: ruta del ejecutable de whisper.cpp (whisper-cli) con el que se transcribe la voz en local. */
+  whisperCmd: string
+  /** Reuniones: ruta del modelo de whisper.cpp (archivo ggml-*.bin). */
+  whisperModel: string
+  /** Reuniones: idioma hablado («es», «en»…) o «auto» para detectarlo. */
+  whisperLang: string
+  /** Reuniones: conservar el audio grabado tras transcribirlo (por defecto se borra). */
+  meetingKeepAudio: boolean
   /** Comando del CLI de GitHub Copilot. */
   copilotCmd: string
   /** Modelos de Copilot que se ofrecen en el selector, uno por línea. */
@@ -795,6 +803,14 @@ export interface IpcChannels {
   'notes:list': { args: []; ret: Note[] }
   'notes:save': { args: [NoteInput]; ret: Note }
   'notes:delete': { args: [string]; ret: void }
+  'meetings:list': { args: []; ret: Meeting[] }
+  'meetings:start': { args: [string, string?]; ret: string } // título y tarea opcional; devuelve el id de la grabación
+  'meetings:chunk': { args: [string, ArrayBuffer]; ret: void } // audio PCM 16-bit, 16 kHz, mono
+  'meetings:stop': { args: [string, number]; ret: Meeting } // id y duración en ms; cierra el WAV y lanza la transcripción y el resumen
+  'meetings:update': { args: [string, MeetingPatch]; ret: Meeting }
+  'meetings:summarize': { args: [string]; ret: Meeting } // rehace solo el resumen a partir de la transcripción
+  'meetings:retry': { args: [string]; ret: Meeting } // repite la transcripción (si aún está el audio) y el resumen
+  'meetings:delete': { args: [string]; ret: void }
   'badges:get': { args: []; ret: Record<string, number> } // sin leer actuales (para pintar al abrir o recargar la ventana)
   'whatsapp:open': { args: []; ret: void } // lleva a la vista de WhatsApp dentro de la app
   'window:fullscreen': { args: [boolean?]; ret: boolean } // pantalla completa de la ventana actual (sin argumento alterna); devuelve el estado nuevo
@@ -1021,6 +1037,33 @@ export interface NoteInput {
   tags?: string[]
   taskId?: string | null
   pinned?: boolean
+}
+
+/** Fases de una reunión grabada: grabando → transcribiendo → resumiendo → lista. */
+export type MeetingStatus = 'recording' | 'transcribing' | 'summarizing' | 'done' | 'error'
+
+/** Reunión grabada: su audio se transcribe en local y Claude redacta el resumen. */
+export interface Meeting {
+  id: string
+  title: string
+  taskId?: string
+  createdAt: number
+  durationMs: number
+  status: MeetingStatus
+  transcript: string
+  /** Resumen en Markdown. */
+  summary: string
+  error?: string
+  /** Si el archivo de audio sigue en disco. */
+  hasAudio: boolean
+}
+
+export interface MeetingPatch {
+  title?: string
+  /** `null` quita el vínculo con la tarea. */
+  taskId?: string | null
+  summary?: string
+  transcript?: string
 }
 
 export type Unsubscribe = () => void

@@ -65,6 +65,10 @@ export function SettingsView(): ReactNode {
       openMode: s.openMode,
       summaryMode: s.summaryMode,
       claudeCmd: s.claudeCmd.trim() || 'claude',
+      whisperCmd: (s.whisperCmd || '').trim(),
+      whisperModel: (s.whisperModel || '').trim(),
+      whisperLang: (s.whisperLang || '').trim() || 'es',
+      meetingKeepAudio: !!s.meetingKeepAudio,
       copilotCmd: s.copilotCmd.trim() || 'copilot',
       copilotQuota: Math.max(0, Math.round(Number(s.copilotQuota) || 0)),
       copilotModels: s.copilotModels,
@@ -209,6 +213,38 @@ export function SettingsView(): ReactNode {
               <div>
                 <label>Modelos de Copilot en el selector (uno por línea)</label>
                 <textarea style={{ minHeight: 90 }} value={s.copilotModels} onChange={(e) => set('copilotModels', e.target.value)} />
+              </div>
+
+              <h3 style={{ ...wide, margin: '12px 0 0' }}>Reuniones (transcripción en tu equipo)</h3>
+              <div style={wide} className="meta">
+                La voz se transcribe localmente con whisper.cpp: el audio no sale de tu equipo. Solo el texto se envía a Claude para redactar el resumen. Descarga whisper-cli (whisper.cpp) y un modelo ggml, por ejemplo ggml-small.bin.
+              </div>
+              <div>
+                <label>Ejecutable de whisper.cpp (whisper-cli.exe)</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input style={{ flex: 1, minWidth: 0 }} value={s.whisperCmd} onChange={(e) => set('whisperCmd', e.target.value)} />
+                  <button className="btn sm" onClick={() => void ui.run('file:pick', 'app').then((p) => p && set('whisperCmd', p))}>
+                    Elegir…
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label>Modelo (ggml-*.bin)</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input style={{ flex: 1, minWidth: 0 }} value={s.whisperModel} onChange={(e) => set('whisperModel', e.target.value)} />
+                  <button className="btn sm" onClick={() => void ui.run('file:pick', 'file').then((p) => p && set('whisperModel', p))}>
+                    Elegir…
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label>Idioma hablado («es», «en»… o «auto»)</label>
+                <input value={s.whisperLang} onChange={(e) => set('whisperLang', e.target.value)} />
+              </div>
+              <div>
+                <label className="check">
+                  <input type="checkbox" checked={!!s.meetingKeepAudio} onChange={(e) => set('meetingKeepAudio', e.target.checked)} /> Conservar el audio tras transcribir (por defecto se borra)
+                </label>
               </div>
 
               <h3 style={{ ...wide, margin: '12px 0 0' }}>Permisos de comandos</h3>

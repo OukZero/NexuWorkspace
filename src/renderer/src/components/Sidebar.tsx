@@ -222,7 +222,7 @@ function Profile({ wide }: { wide?: boolean }): ReactNode {
   )
 }
 
-const NAV_ICON: Record<string, GlyphName> = { today: 'panelhome', workspace: 'workspace', board: 'board', groups: 'folders', history: 'history', chat: 'chats', hours: 'hours', redmine: 'redmine', usage: 'usage', music: 'music', notes: 'files', web: 'popout', whatsapp: 'chat' }
+const NAV_ICON: Record<string, GlyphName> = { today: 'panelhome', workspace: 'workspace', board: 'board', groups: 'folders', history: 'history', chat: 'chats', hours: 'hours', redmine: 'redmine', usage: 'usage', music: 'music', notes: 'files', meetings: 'volume', web: 'popout', whatsapp: 'chat' }
 
 /** Avance del día como anillo, bajo el logo: horas registradas frente al objetivo. */
 function DayRing(): ReactNode {
