@@ -994,3 +994,9 @@ button.hc:hover { outline: 2px solid var(--accent); outline-offset: 1px; }
 .lc-target { flex: 1 1 220px; min-width: 160px; }
 .lc-args { flex: 1 1 140px; min-width: 120px; }
 .lc-add { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Mensajes largos del usuario (texto pegado): caja de alto limitado con flecha para ver todo */
+.user-long-text { max-height: 9em; overflow: hidden; }
+.user-long.open .user-long-text { max-height: none; }
+.user-long-toggle { display: flex; align-items: center; justify-content: center; width: 100%; margin-top: 6px; padding: 1px 0; background: rgba(255,255,255,.06); border: 0; border-radius: 6px; color: inherit; font-size: 14px; line-height: 1.2; cursor: pointer; opacity: .75; }
+.user-long-toggle:hover { opacity: 1; background: rgba(255,255,255,.12); }
