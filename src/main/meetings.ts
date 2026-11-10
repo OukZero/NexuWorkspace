@@ -1,0 +1,336 @@
+import { desktopCapturer, session } from 'electron'
+import { spawn } from 'child_process'
+import fs from 'fs'
+import path from 'path'
+import type { Meeting, MeetingPatch, MeetingStatus } from '../shared/types'
+import { clip } from '../shared/util'
+import { isSignedIn } from './auth'
+import { commit, dataPath, getDb, uid } from './db'
+import { askClaude } from './summary'
+
+/**
+ * Reuniones: el renderer captura el audio (micrófono + audio del sistema) y lo manda en trozos PCM 16-bit / 16 kHz / mono.
+ * Aquí se guarda en disco, se envuelve en un WAV, se transcribe en local con whisper.cpp y Claude redacta el resumen.
+ * Por privacidad el audio se borra tras transcribirlo, salvo que se pida conservarlo en Ajustes.
+ */
+
+const RATE = 16000
+const BYTES_PER_SEC = RATE * 2
+const ID = /^[A-Za-z0-9_-]{1,64}$/
+
+interface Stored {
+  id: string
+  title: string
+  taskId?: string
+  createdAt: number
+  durationMs: number
+  status: MeetingStatus
+  transcript: string
+  summary: string
+  error?: string
+}
+
+const dir = (): string => path.join(path.dirname(dataPath()), 'meetings')
+const metaFile = (id: string): string => path.join(dir(), `${id}.json`)
+const pcmFile = (id: string): string => path.join(dir(), `${id}.pcm`)
+const wavFile = (id: string): string => path.join(dir(), `${id}.wav`)
+
+const live = new Set<string>() // grabaciones en curso en esta sesión
+const busy = new Set<string>() // reuniones que se están transcribiendo o resumiendo
+let cache: Map<string, Stored> | null = null
+
+function checkId(id: string): void {
+  if (!ID.test(id)) throw new Error('Identificador de reunión no válido.')
+}
+
+function persist(m: Stored): void {
+  fs.mkdirSync(dir(), { recursive: true })
+  const tmp = metaFile(m.id) + '.tmp'
+  fs.writeFileSync(tmp, JSON.stringify(m, null, 2), 'utf8')
+  fs.renameSync(tmp, metaFile(m.id))
+}
+
+/** Cierra una grabación: envuelve el PCM acumulado en un WAV (sin cargarlo entero en memoria). */
+function finalizeWav(id: string): number {
+  const src = pcmFile(id)
+  if (!fs.existsSync(src)) return 0
+  const size = fs.statSync(src).size
+  const header = Buffer.alloc(44)
+  header.write('RIFF', 0)
+  header.writeUInt32LE(36 + size, 4)
+  header.write('WAVEfmt ', 8)
+  header.writeUInt32LE(16, 16)
+  header.writeUInt16LE(1, 20) // PCM
+  header.writeUInt16LE(1, 22) // mono
+  header.writeUInt32LE(RATE, 24)
+  header.writeUInt32LE(BYTES_PER_SEC, 28)
+  header.writeUInt16LE(2, 32)
+  header.writeUInt16LE(16, 34)
+  header.write('data', 36)
+  header.writeUInt32LE(size, 40)
+  const out = fs.openSync(wavFile(id), 'w')
+  const inp = fs.openSync(src, 'r')
+  try {
+    fs.writeSync(out, header)
+    const buf = Buffer.alloc(1 << 20)
+    for (;;) {
+      const n = fs.readSync(inp, buf, 0, buf.length, null)
+      if (!n) break
+      fs.writeSync(out, buf, 0, n)
+    }
+  } finally {
+    fs.closeSync(inp)
+    fs.closeSync(out)
+  }
+  fs.rmSync(src, { force: true })
+  return Math.round((size / BYTES_PER_SEC) * 1000)
+}
+
+function load(): Map<string, Stored> {
+  if (cache) return cache
+  const map = new Map<string, Stored>()
+  let files: string[] = []
+  try {
+    files = fs.readdirSync(dir())
+  } catch {
+    /* la carpeta aún no existe */
+  }
+  for (const f of files) {
+    const id = f.replace(/\.json$/, '')
+    if (!f.endsWith('.json') || !ID.test(id)) continue
+    try {
+      const m = JSON.parse(fs.readFileSync(path.join(dir(), f), 'utf8')) as Stored
+      m.id = id
+      // la app se cerró a mitad: la grabación se rescata y lo que estaba en proceso queda para reintentar
+      if (m.status === 'recording') {
+        m.durationMs = finalizeWav(id) || m.durationMs
+        m.status = 'error'
+        m.error = 'La aplicación se cerró durante la grabación. El audio se recuperó: pulsa «Reintentar» para transcribirlo.'
+        persist(m)
+      } else if (m.status === 'transcribing' || m.status === 'summarizing') {
+        m.status = 'error'
+        m.error = 'El proceso se interrumpió al cerrar la aplicación.'
+        persist(m)
+      }
+      map.set(id, m)
+    } catch {
+      /* archivo ilegible: se ignora */
+    }
+  }
+  cache = map
+  return map
+}
+
+const get = (id: string): Stored => {
+  checkId(id)
+  const m = load().get(id)
+  if (!m) throw new Error('Reunión no encontrada.')
+  return m
+}
+
+const view = (m: Stored): Meeting => ({ ...m, hasAudio: fs.existsSync(wavFile(m.id)) })
+
+function patch(m: Stored, p: Partial<Stored>): void {
+  Object.assign(m, p)
+  persist(m)
+}
+
+export const listMeetings = (): Meeting[] => [...load().values()].sort((a, b) => b.createdAt - a.createdAt).map(view)
+
+export function startMeeting(title: string, taskId?: string): string {
+  const m: Stored = {
+    id: uid(),
+    title: title.replace(/[\r\n]+/g, ' ').trim().slice(0, 120) || 'Reunión',
+    taskId: taskId || undefined,
+    createdAt: Date.now(),
+    durationMs: 0,
+    status: 'recording',
+    transcript: '',
+    summary: ''
+  }
+  persist(m)
+  fs.writeFileSync(pcmFile(m.id), Buffer.alloc(0))
+  load().set(m.id, m)
+  live.add(m.id)
+  return m.id
+}
+
+export function appendChunk(id: string, data: ArrayBuffer): void {
+  checkId(id)
+  if (!live.has(id)) throw new Error('Esta grabación ya no está en curso.')
+  fs.appendFileSync(pcmFile(id), Buffer.from(data))
+}
+
+export function stopMeeting(id: string, durationMs: number): Meeting {
+  const m = get(id)
+  live.delete(id)
+  const real = finalizeWav(id)
+  patch(m, { durationMs: real || Math.max(0, Math.round(durationMs)), status: 'transcribing', error: undefined })
+  void run(id, 'full')
+  return view(m)
+}
+
+export function updateMeeting(id: string, p: MeetingPatch): Meeting {
+  const m = get(id)
+  const next: Partial<Stored> = {}
+  if (p.title !== undefined) next.title = p.title.replace(/[\r\n]+/g, ' ').trim().slice(0, 120) || 'Reunión'
+  if (p.taskId !== undefined) next.taskId = p.taskId || undefined
+  if (p.summary !== undefined) next.summary = p.summary
+  if (p.transcript !== undefined) next.transcript = p.transcript
+  patch(m, next)
+  return view(m)
+}
+
+export function deleteMeeting(id: string): void {
+  const m = get(id)
+  if (live.has(id) || busy.has(id)) throw new Error('La reunión está en curso; espera a que termine.')
+  for (const f of [metaFile(id), pcmFile(id), wavFile(id)]) fs.rmSync(f, { force: true })
+  load().delete(m.id)
+}
+
+/** `auto` repite la transcripción si el audio sigue en disco y, si no, solo el resumen. */
+export function retryMeeting(id: string, want: 'auto' | 'summary'): Meeting {
+  const m = get(id)
+  if (live.has(id) || busy.has(id)) throw new Error('La reunión ya se está procesando.')
+  const mode = want === 'auto' && fs.existsSync(wavFile(id)) ? 'full' : 'summary'
+  if (mode === 'summary' && !m.transcript.trim()) throw new Error('No hay transcripción de la que resumir.')
+  patch(m, { status: mode === 'summary' ? 'summarizing' : 'transcribing', error: undefined })
+  void run(id, mode)
+  return view(m)
+}
+
+// ---------- transcripción (whisper.cpp) ----------
+
+function transcribe(wav: string): Promise<string> {
+  const s = getDb().settings
+  const exe = s.whisperCmd.trim()
+  const model = s.whisperModel.trim()
+  if (!exe || !model) return Promise.reject(new Error('Falta configurar la transcripción: indica el ejecutable de whisper.cpp y su modelo en Ajustes → IA.'))
+  if (!fs.existsSync(exe)) return Promise.reject(new Error(`No se encuentra el ejecutable de whisper: ${exe}`))
+  if (!fs.existsSync(model)) return Promise.reject(new Error(`No se encuentra el modelo de whisper: ${model}`))
+  const base = wav.replace(/\.wav$/, '')
+  const args = ['-m', model, '-f', wav, '-l', s.whisperLang.trim() || 'auto', '-nt', '-np', '-otxt', '-of', base]
+  return new Promise((resolve, reject) => {
+    const child = spawn(exe, args, { windowsHide: true })
+    let err = ''
+    child.stderr.on('data', (b: Buffer) => (err = (err + b).slice(-2000)))
+    child.on('error', (e) => reject(new Error(`No se pudo ejecutar whisper: ${e.message}`)))
+    child.on('close', (code) => {
+      const txt = base + '.txt'
+      try {
+        if (code !== 0) throw new Error(clip(err.trim(), 400) || `whisper terminó con el código ${code}`)
+        const text = fs.readFileSync(txt, 'utf8')
+        resolve(
+          text
+            .split(/\r?\n/)
+            .map((l) => l.trim())
+            .filter(Boolean)
+            .join('\n')
+        )
+      } catch (e) {
+        reject(e as Error)
+      } finally {
+        fs.rmSync(txt, { force: true })
+      }
+    })
+  })
+}
+
+// ---------- resumen (Claude) ----------
+
+const CHUNK = 30000
+const MAX_DIRECT = 40000
+
+function splitText(t: string): string[] {
+  const parts: string[] = []
+  let cur = ''
+  for (const line of t.split('\n')) {
+    if (cur.length + line.length > CHUNK && cur) {
+      parts.push(cur)
+      cur = ''
+    }
+    cur += (cur ? '\n' : '') + line
+  }
+  if (cur) parts.push(cur)
+  return parts
+}
+
+const FORMAT =
+  'Redacta el resumen en español y en Markdown con estas secciones (omite las que no apliquen):\n' +
+  '## Resumen\n(3 a 5 frases con lo esencial)\n## Temas tratados\n(viñetas)\n## Acuerdos y decisiones\n(viñetas)\n' +
+  '## Tareas pendientes\n(viñetas con responsable y plazo si se mencionaron)\n## Preguntas abiertas\n(viñetas)\n' +
+  'La transcripción es automática y puede tener errores de reconocimiento: no inventes datos, nombres ni cifras que no estén en ella. ' +
+  'Responde SOLO con el resumen, sin introducción.'
+
+async function summarizeTranscript(title: string, transcript: string, cmd: string): Promise<string> {
+  let source = transcript
+  if (transcript.length > MAX_DIRECT) {
+    // reunión larga: primero se condensa cada tramo y luego se resume el conjunto
+    const notes: string[] = []
+    for (const part of splitText(transcript)) {
+      notes.push(
+        await askClaude(
+          'Estas son notas de un tramo de la reunión «' + title + '». Extrae en viñetas todo lo relevante: temas, decisiones, acuerdos, tareas con responsable y dudas. ' +
+            'Es una transcripción automática con posibles errores; no inventes nada. Responde SOLO con las viñetas.\n\n' +
+            part,
+          cmd,
+          300000
+        )
+      )
+    }
+    source = notes.join('\n\n')
+  }
+  const out = await askClaude(`Resume la reunión «${title}» a partir de ${source === transcript ? 'su transcripción' : 'las notas de sus tramos'}.\n${FORMAT}\n\n${source}`, cmd, 300000)
+  return out.replace(/\r/g, '').trim()
+}
+
+async function run(id: string, mode: 'full' | 'summary'): Promise<void> {
+  const m = load().get(id)
+  if (!m || busy.has(id)) return
+  busy.add(id)
+  try {
+    if (mode === 'full') {
+      if (!fs.existsSync(wavFile(id))) throw new Error('No hay audio que transcribir.')
+      patch(m, { status: 'transcribing', error: undefined })
+      const text = await transcribe(wavFile(id))
+      patch(m, { transcript: text })
+      if (!getDb().settings.meetingKeepAudio) fs.rmSync(wavFile(id), { force: true })
+    }
+    if (!m.transcript.trim()) throw new Error('No se detectó voz en la grabación.')
+    patch(m, { status: 'summarizing', error: undefined })
+    const summary = await summarizeTranscript(m.title, m.transcript, getDb().settings.claudeCmd)
+    patch(m, { summary, status: 'done', error: undefined })
+  } catch (e) {
+    patch(m, { status: 'error', error: (e as Error).message })
+  } finally {
+    busy.delete(id)
+  }
+}
+
+/** Si whisper.cpp está en la carpeta de instalación habitual y los ajustes están vacíos, los rellena. */
+function autoConfigureWhisper(): void {
+  const s = getDb().settings
+  if (s.whisperCmd.trim() && s.whisperModel.trim()) return
+  const root = path.join(process.env['LOCALAPPDATA'] || '', 'Shutoki', 'whisper')
+  const exe = path.join(root, 'bin', 'Release', 'whisper-cli.exe')
+  const model = path.join(root, 'models', 'ggml-small.bin')
+  if (!process.env['LOCALAPPDATA'] || !fs.existsSync(exe) || !fs.existsSync(model)) return
+  if (!s.whisperCmd.trim()) s.whisperCmd = exe
+  if (!s.whisperModel.trim()) s.whisperModel = model
+  commit()
+}
+
+/** Permite capturar el audio del sistema (la voz del cliente en Teams, Meet, Zoom…) con getDisplayMedia, sin selector de pantalla. */
+export function initMeetings(): void {
+  autoConfigureWhisper()
+  session.defaultSession.setDisplayMediaRequestHandler(
+    (_req, cb) => {
+      if (!isSignedIn()) return cb({})
+      desktopCapturer
+        .getSources({ types: ['screen'] })
+        .then((sources) => cb(sources[0] ? { video: sources[0], audio: 'loopback' } : {}))
+        .catch(() => cb({}))
+    },
+    { useSystemPicker: false }
+  )
+}

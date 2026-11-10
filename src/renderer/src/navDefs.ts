@@ -24,6 +24,7 @@ export const NAV_GROUPS: Array<{ title: string; items: Array<[View, string, stri
     title: 'Herramientas',
     items: [
       ['notes', '✎', 'Notas'],
+      ['meetings', '●', 'Reuniones'],
       ['web', '🌐', 'Navegador'],
       ['music', '♫', 'Música'],
       ['groups', '🗂', 'Carpetas'],

@@ -7,6 +7,10 @@ export const DEFAULT_SETTINGS: Settings = {
   openMode: 'chat', // 'chat' = chat de la app, 'desktop' = Claude Desktop (claude://code/new), 'terminal' = PowerShell + claude
   summaryMode: 'ai', // resumen automático al pausar/detener: 'ai' (claude -p), 'local' (sin IA) u 'off'
   claudeCmd: 'claude',
+  whisperCmd: '', // whisper-cli.exe de whisper.cpp; vacío = transcripción de reuniones sin configurar
+  whisperModel: '',
+  whisperLang: 'es',
+  meetingKeepAudio: false,
   copilotCmd: 'copilot',
   copilotModels: [
     'auto',
