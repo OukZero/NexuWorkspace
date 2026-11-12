@@ -1,6 +1,9 @@
-import { BrowserWindow } from 'electron'
+import { app, BrowserWindow } from 'electron'
+import fs from 'fs'
+import path from 'path'
 import { dayKey } from '../shared/util'
-import type { RedmineCatalog, RedmineDay, RedmineLine, RedmineResult } from '../shared/types'
+import type { RedmineCatalog, RedmineDay, RedmineDraft, RedmineLine, RedmineResult } from '../shared/types'
+import { summarizeNotes } from './summary'
 import { commit, getDb } from './db'
 
 /**
@@ -32,11 +35,40 @@ function getWin(): BrowserWindow {
   return win
 }
 
+/** Largo máximo del comentario de una línea de Redmine (texto corto, para que todo el trabajo quepa). */
+export const COMMENT_MAX = 240
+
+/**
+ * Resume las notas de una línea en un solo comentario corto: quita repetidas, recorta cada una para que quepan todas
+ * y, si no caben, indica cuántas faltan («+N más»). No usa IA: es determinista y no gasta tokens.
+ */
+export function shortComment(notes: string[]): string {
+  const clean = [...new Set(notes.map((n) => n.replace(/\s+/g, ' ').trim()).filter(Boolean))]
+  if (!clean.length) return ''
+  const full = clean.join(' · ')
+  if (full.length <= COMMENT_MAX) return full
+  const per = Math.max(20, Math.floor(COMMENT_MAX / clean.length) - 3)
+  const cut = (s: string): string => (s.length <= per ? s : s.slice(0, per - 3).replace(/\s+\S*$/, '') + '...')
+  const RESERVE = 14 // espacio para « · +N más»
+  let out = ''
+  let shown = 0
+  for (const c of clean) {
+    const part = cut(c)
+    const next = out ? `${out} · ${part}` : part
+    if (shown > 0 && next.length + RESERVE > COMMENT_MAX) break
+    out = next
+    shown++
+  }
+  const rest = clean.length - shown
+  return rest > 0 ? `${out} · +${rest} más` : out
+}
+
 /** Horas del día agrupadas por proyecto + tarea de Redmine + actividad (solo registros terminados y aún no imputados). */
-export function lines(day: string): RedmineLine[] {
+function buildLines(day: string): { lines: RedmineLine[]; notes: Map<string, string[]> } {
   const db = getDb()
   const from = new Date(`${day}T00:00:00`).getTime()
   const out = new Map<string, RedmineLine & { ms: number }>()
+  const notes = new Map<string, string[]>()
   for (const e of db.entries) {
     if (e.end === null || e.rmSent || e.start < from || e.start >= from + 86400000) continue
     const t = db.tasks.find((x) => x.id === e.taskId)
@@ -49,10 +81,57 @@ export function lines(day: string): RedmineLine[] {
     l.ms += e.end - e.start
     l.entryIds.push(e.id)
     const note = e.note.trim() || (t?.title ?? '')
-    if (note && !l.comment.split('; ').includes(note)) l.comment = l.comment ? `${l.comment}; ${note}` : note
+    const list = notes.get(key) ?? []
+    if (note) list.push(note)
+    notes.set(key, list)
     out.set(key, l)
   }
-  return [...out.values()].map(({ ms, ...l }) => ({ ...l, hours: Math.max(0.01, Math.round((ms / 3600000) * 100) / 100) }))
+  const drafts = db.rmDrafts?.[day] ?? {}
+  const rows = [...out.values()].map(({ ms, ...l }) => {
+    const auto ={ activity: l.activity, hours: Math.max(0.01, Math.round((ms / 3600000) * 100) / 100), comment: shortComment(notes.get(l.key) ?? []) }
+    const draft = drafts[l.key]
+    return {
+      ...l,
+      activity: draft?.activity || auto.activity,
+      hours: draft?.hours ?? auto.hours,
+      comment: draft?.comment ?? auto.comment,
+      auto,
+      draft,
+      drafted: !!draft
+    }
+  })
+  return { lines: rows, notes }
+}
+
+/** Horas del día agrupadas por proyecto + tarea de Redmine + actividad (solo registros terminados y aún no imputados). */
+export function lines(day: string): RedmineLine[] {
+  return buildLines(day).lines
+}
+
+/** Pide a Claude un comentario corto para una línea, a partir de las notas de todas sus tareas ese día. */
+export async function aiComment(day: string, key: string): Promise<string> {
+  const notes = buildLines(day).notes.get(key) ?? []
+  if (!notes.length) throw new Error('Esta línea no tiene notas que resumir.')
+  return summarizeNotes(notes, getDb().settings.claudeCmd)
+}
+
+/** Guarda (o quita, con null) lo que el usuario cambió a mano en una línea de la previsualización del día. */
+export function saveDraft(day: string, key: string, draft: RedmineDraft | null): void {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !key) throw new Error('Línea no válida.')
+  const db = getDb()
+  db.rmDrafts ??= {}
+  const byDay = (db.rmDrafts[day] ??= {})
+  if (!draft) delete byDay[key]
+  else {
+    const h = draft.hours === undefined ? NaN : Number(draft.hours)
+    byDay[key] = {
+      ...(Number.isFinite(h) && h > 0 && h <= 24 ? { hours: r2(h) } : {}),
+      ...(draft.activity?.trim() ? { activity: draft.activity.trim().slice(0, 120) } : {}),
+      ...(draft.comment !== undefined ? { comment: draft.comment.trim().slice(0, 1000) } : {})
+    }
+  }
+  if (!Object.keys(byDay).length) delete db.rmDrafts[day]
+  commit()
 }
 
 export async function openLogin(): Promise<void> {
@@ -100,7 +179,17 @@ const gqlFor =
     try {
       json = JSON.parse(r.text)
     } catch {
-      throw new Error(`Redmine respondió ${r.status} (no es JSON; ¿sesión caducada?)`)
+      // se muestra qué devolvió realmente Redmine (página de login, error 500, límite de peticiones…) en vez de un genérico
+      const plain = r.text.replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160)
+      const login = /login|sign.?in|password|contraseña/i.test(plain) || r.status === 401
+      const waf = r.status === 403 && /gateway|firewall|forbidden/i.test(r.text)
+      throw new Error(
+        login
+          ? 'La sesión de Redmine caducó. Pulsa «Iniciar sesión» en Redmine, entra de nuevo y vuelve a imputar.'
+          : waf
+            ? 'La red bloqueó la petición (firewall de Azure delante de Redmine, error 403). Suele pasar con ciertos textos del comentario; revisa el comentario de esta línea o pide a TI que revisen la regla.'
+            : `Redmine respondió ${r.status} y no devolvió JSON: «${plain || 'respuesta vacía'}»`
+      )
     }
     if (json.errors?.length) throw new Error(json.errors.map((e) => e.message).join('; '))
     if (!json.data) throw new Error(`Redmine respondió ${r.status} sin datos`)
@@ -114,14 +203,29 @@ const Q_ISSUES = `query ($term: String, $collection: IssueAutocompleteCollection
   autocomplete(term: $term) { issues(collection: $collection, collectionArgs: $collectionArgs) { value: id label } }
 }`
 const Q_ENUMS = `{ p: __type(name: "ProjectAutocompleteCollections") { enumValues { name } } i: __type(name: "IssueAutocompleteCollections") { enumValues { name } } }`
+// argumentos que acepta el autocompletado de tareas (para encontrar un filtro de «solo abiertas» si Redmine lo ofrece)
+const Q_INPUT = `{ t: __type(name: "IssueAutocompleteCollectionArguments") { inputFields { name type { name kind ofType { name kind ofType { name } } } } } }`
 
 type Opt = { value: string; label: string }
 
 /** Lee de Redmine los proyectos y sus tareas (las colecciones que ofrece el autocompletado) y los guarda en Ajustes. */
-export async function loadCatalog(): Promise<{ projects: number; issues: number }> {
+export async function loadCatalog(): Promise<{ projects: number; issues: number; openFilter?: string; dump?: string; closed?: number }> {
   const s = await session()
   if (!s) throw new Error('Inicia sesión en la ventana de Redmine y vuelve a pulsar el botón.')
-  const gql = gqlFor(s.w)
+  // cada respuesta de Redmine se guarda tal cual, para revisar qué campos trae (se escribe al terminar la carga)
+  const raw: Array<{ query: string; variables: unknown; data?: unknown; error?: string }> = []
+  const base = gqlFor(s.w)
+  const gql = (async <T>(query: string, variables: Record<string, unknown>): Promise<T> => {
+    const name = query.trim().split('\n')[0].slice(0, 120)
+    try {
+      const data = await base<T>(query, variables)
+      raw.push({ query: name, variables, data })
+      return data
+    } catch (e) {
+      raw.push({ query: name, variables, error: (e as Error).message })
+      throw e
+    }
+  }) as Gql
   const args = { userId: s.userId }
 
   // colecciones disponibles (si la introspección está bloqueada, se usa la que vimos en el modal)
@@ -135,6 +239,22 @@ export async function loadCatalog(): Promise<{ projects: number; issues: number 
     /* se mantienen las colecciones por defecto */
   }
 
+  // filtro de «solo abiertas»: si el autocompletado de Redmine tiene un argumento booleano de abiertas, se pide con valor true
+  let openFilter = ''
+  let openArg: Record<string, boolean> = {}
+  try {
+    type Field = { name: string; type: { name: string | null; kind: string; ofType?: { name: string | null; kind?: string; ofType?: { name: string | null } | null } | null } }
+    const t = await gql<{ t?: { inputFields: Field[] } }>(Q_INPUT, {})
+    const isBool = (f: Field): boolean => f.type.name === 'Boolean' || f.type.ofType?.name === 'Boolean' || f.type.ofType?.ofType?.name === 'Boolean'
+    const f = (t.t?.inputFields ?? []).find((x) => /open/i.test(x.name) && isBool(x))
+    if (f) {
+      openFilter = f.name
+      openArg = { [f.name]: true }
+    }
+  } catch {
+    /* sin introspección: se traen todas, como antes */
+  }
+
   const projects = new Map<string, Opt>()
   for (const collection of pCols) {
     try {
@@ -146,6 +266,37 @@ export async function loadCatalog(): Promise<{ projects: number; issues: number 
   }
   if (!projects.size) throw new Error('Redmine no devolvió proyectos. Imputa una hora a mano en algún proyecto y repite.')
 
+  // Validación del filtro de abiertas (mismo criterio que el filtro de proyectos, con datos reales): se piden las tareas de cada
+  // proyecto con y sin el filtro. Se acepta solo si el filtrado nunca trae algo que no estaba, y reduce la lista en algún proyecto.
+  if (openFilter && iCols.length) {
+    const col = iCols[0]
+    const fetchIssues = async (p: Opt, extra: Record<string, boolean>): Promise<Opt[] | undefined> => {
+      try {
+        const r = await gql<{ autocomplete: { issues: Opt[] } }>(Q_ISSUES, { term: '', collection: col, collectionArgs: { projectId: p.value, ...args, ...extra } })
+        return r.autocomplete.issues
+      } catch {
+        return undefined
+      }
+    }
+    let valid = true
+    let reduces = false
+    for (const p of projects.values()) {
+      const all = await fetchIssues(p, {})
+      const open = await fetchIssues(p, openArg)
+      if (!all || !open) continue
+      const allIds = new Set(all.map((i) => i.value))
+      if (open.some((i) => !allIds.has(i.value))) {
+        valid = false
+        break
+      }
+      if (open.length < all.length) reduces = true
+    }
+    if (!valid || !reduces) {
+      openFilter = ''
+      openArg = {}
+    }
+  }
+
   // Algunas colecciones ignoran el proyecto y devuelven todas tus tareas en cada uno: se detectan (mismo resultado en todos los
   // proyectos) y se descartan, para que cada proyecto solo tenga las suyas.
   const byCol = new Map<string, Map<string, Opt[]>>()
@@ -153,7 +304,7 @@ export async function loadCatalog(): Promise<{ projects: number; issues: number 
     const perProject = new Map<string, Opt[]>()
     for (const p of projects.values()) {
       try {
-        const r = await gql<{ autocomplete: { issues: Opt[] } }>(Q_ISSUES, { term: '', collection, collectionArgs: { projectId: p.value, ...args } })
+        const r = await gql<{ autocomplete: { issues: Opt[] } }>(Q_ISSUES, { term: '', collection, collectionArgs: { projectId: p.value, ...args, ...openArg } })
         perProject.set(p.value, r.autocomplete.issues)
       } catch {
         /* colección no aplicable */
@@ -176,9 +327,52 @@ export async function loadCatalog(): Promise<{ projects: number; issues: number 
     catalog[p.label] = { id: p.value, issues: [...found.values()].map((i) => ({ id: i.value, label: i.label })) }
     issues += found.size
   }
+  // Quitar las tareas cerradas: Redmine informa el estado con status.isClosed (confirmado en el volcado). Se piden en lotes;
+  // si un lote falla, se piden una por una, y una tarea que no se puede consultar se queda (no se quita por error).
+  const closedIds = async (all: string[]): Promise<Set<string>> => {
+    const out = new Set<string>()
+    const ask = async (group: string[]): Promise<void> => {
+      const q = `# estado de tareas\nquery { ${group.map((id, j) => `i${j}: issue(id: "${id}") { id status { isClosed } }`).join(' ')} }`
+      const r = await gql<Record<string, { id: string; status?: { isClosed?: boolean } } | null>>(q, {})
+      for (const v of Object.values(r)) if (v?.status?.isClosed) out.add(v.id)
+    }
+    const numeric = all.filter((id) => /^\d+$/.test(id))
+    for (let k = 0; k < numeric.length; k += 40) {
+      const group = numeric.slice(k, k + 40)
+      try {
+        await ask(group)
+      } catch {
+        for (const id of group) {
+          try {
+            await ask([id])
+          } catch {
+            /* sin estado: se queda */
+          }
+        }
+      }
+    }
+    return out
+  }
+  const closed = await closedIds([...new Set(Object.values(catalog).flatMap((p) => p.issues.map((i) => i.id)))])
+  let removed = 0
+  for (const p of Object.values(catalog)) {
+    const before = p.issues.length
+    p.issues = p.issues.filter((i) => !closed.has(i.id))
+    removed += before - p.issues.length
+  }
+  issues -= removed
   getDb().settings.redmineCatalog = catalog
   commit()
-  return { projects: projects.size, issues }
+
+  const dir = path.join(app.getPath('userData'), 'redmine-debug')
+  fs.mkdirSync(dir, { recursive: true })
+  const dump = path.join(dir, 'catalogo-ultimo.json')
+  fs.writeFileSync(
+    dump,
+    JSON.stringify({ cuando: new Date().toISOString(), filtroAbiertas: openFilter || null, proyectos: [...projects.values()], colecciones: { proyectos: pCols, tareas: iCols }, respuestas: raw }, null, 2),
+    'utf8'
+  )
+  return { projects: projects.size, issues, openFilter, dump, closed: removed }
 }
 
 /** Horas imputadas en Redmine y horas laborables de cada día entre dos fechas (YYYY-MM-DD, ambas incluidas). */
@@ -259,13 +453,22 @@ export async function send(day: string, keys: string[], hours: Record<string, nu
         }
       })
       const errs = r.createTimeEntry.errors ?? []
-      if (errs.length) throw new Error(errs.map((e) => `${e.attribute}: ${e.messages.join(', ')}`).join(' · '))
+      if (errs.length) {
+        // Redmine solo admite horas en tareas abiertas: el mensaje técnico se traduce a algo accionable
+        const closed = errs.some((e) => e.attribute === 'issue_id' && /invalid|open task/i.test(e.messages.join(' ')))
+        throw new Error(
+          closed
+            ? `La tarea #${issueId} de Redmine no admite horas (probablemente está cerrada). Reábrela en Redmine o cambia la tarea de Redmine de esta tarea en Shutoki.`
+            : errs.map((e) => `${e.attribute}: ${e.messages.join(', ')}`).join(' · ')
+        )
+      }
 
       const db = getDb()
       for (const id of l.entryIds) {
         const e = db.entries.find((x) => x.id === id)
         if (e) e.rmSent = Date.now()
       }
+      if (db.rmDrafts?.[day]) delete db.rmDrafts[day][l.key] // ya imputada: su borrador ya no hace falta
       commit()
       remaining -= hours
       result.sent++

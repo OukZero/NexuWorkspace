@@ -994,3 +994,48 @@ button.hc:hover { outline: 2px solid var(--accent); outline-offset: 1px; }
 .lc-target { flex: 1 1 220px; min-width: 160px; }
 .lc-args { flex: 1 1 140px; min-width: 120px; }
 .lc-add { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Mensajes largos del usuario (texto pegado): caja de alto limitado con flecha para ver todo */
+.user-long-text { max-height: 9em; overflow: hidden; }
+.user-long.open .user-long-text { max-height: none; }
+.user-long-toggle { display: flex; align-items: center; justify-content: center; width: 100%; margin-top: 6px; padding: 1px 0; background: rgba(255,255,255,.06); border: 0; border-radius: 6px; color: inherit; font-size: 14px; line-height: 1.2; cursor: pointer; opacity: .75; }
+.user-long-toggle:hover { opacity: 1; background: rgba(255,255,255,.12); }
+
+/* Imágenes pegadas en las notas y en el Markdown */
+.md-img { display: block; max-width: 100%; height: auto; border-radius: 8px; margin: 6px 0; }
+
+/* Imputar en Redmine: día y resumen visibles por línea */
+.imp-past { color: var(--warn); text-transform: none; letter-spacing: 0; }
+.imp-note { font-size: 12px; color: var(--muted); margin-top: 2px; line-height: 1.35; overflow-wrap: anywhere; }
+
+/* Imputar en Redmine: cada línea editable */
+.imp-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.imp-tag { font-size: 10px; padding: 1px 7px; border-radius: 6px; background: var(--panel2); color: var(--accent2, #a78bfa); text-transform: uppercase; letter-spacing: .5px; }
+.imp-fields { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+.imp-f { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--muted); min-width: 0; }
+.imp-wide { width: 100%; margin-top: 8px; }
+.imp-f textarea { width: 100%; min-height: 52px; font-size: 12px; resize: vertical; }
+.imp-auto { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.imp-auto .link { font-size: 11px; }
+/* Pestaña Inicio: botón de nueva tarea justo debajo del título de la lista */
+.tl-newrow { margin: 0 0 8px; display: flex; justify-content: flex-start; }
+.imp-cbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.imp-cbar .link { font-size: 11px; }
+
+/* Notas: selector de vista visible y vista dividida (editor + vista previa con las imágenes) */
+.ed-view { display: inline-flex; background: var(--panel2); border-radius: 8px; padding: 2px; gap: 2px; margin-right: 6px; }
+.ed-view button { background: none; border: 0; border-radius: 6px; padding: 4px 9px; font-size: 12px; color: var(--muted); cursor: pointer; }
+.ed-view button.on { background: var(--panel, #1b1530); color: var(--text); font-weight: 600; }
+.ed-views { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.ed-views.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.ed-views.split .nt-body, .ed-views.split .nt-prev { min-height: 0; overflow: auto; }
+.ed-views .nt-prev { overflow: auto; }
+@media (max-width: 900px) { .ed-views.split { grid-template-columns: minmax(0, 1fr); } }
+
+/* Notas: texto editable con las imágenes pegadas como miniaturas en su lugar */
+.ed-blocks { display: flex; flex-direction: column; gap: 6px; min-height: 0; overflow: auto; }
+.ed-blocks .nt-seg { resize: vertical; min-height: 0; }
+.ed-img { position: relative; margin: 8px 0; max-width: 100%; align-self: flex-start; }
+.ed-img img { display: block; max-width: 100%; max-height: 380px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0, 0, 0, .35); }
+.ed-img-x { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 12px; border: 0; background: rgba(0, 0, 0, .65); color: #fff; font-size: 16px; line-height: 1; cursor: pointer; opacity: 0; transition: opacity .15s; }
+.ed-img:hover .ed-img-x, .ed-img-x:focus { opacity: 1; }

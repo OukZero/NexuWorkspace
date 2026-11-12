@@ -75,6 +75,26 @@ export function AttachmentList({ items, onRemove }: { items: Attachment[]; onRem
   )
 }
 
+/** Mensaje del usuario: si es muy largo (p. ej. texto pegado) se limita su alto y una flecha permite verlo entero. */
+const LONG_CHARS = 700
+const LONG_LINES = 10
+function UserText({ text }: { text: string }): ReactNode {
+  const [open, setOpen] = useState(false)
+  const lines = text.split(/\r?\n/).length
+  const long = text.length > LONG_CHARS || lines > LONG_LINES
+  if (!long) return <span style={{ whiteSpace: 'pre-wrap' }}>{text}</span>
+  return (
+    <div className={'user-long' + (open ? ' open' : '')}>
+      <div className="user-long-text" style={{ whiteSpace: 'pre-wrap' }}>
+        {text}
+      </div>
+      <button className="user-long-toggle" title={open ? 'Contraer mensaje' : 'Ver mensaje completo'} aria-label={open ? 'Contraer mensaje' : 'Ver mensaje completo'} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        {open ? '▴' : '▾'}
+      </button>
+    </div>
+  )
+}
+
 /** Una conversación con Claude. Cada una tiene su propio contexto, aunque comparta tarea con otras. */
 /** `slot`: en un panel del Espacio, el lugar de su cabecera donde van los controles del chat; `extraMenu`: opciones que el panel suma al menú «⋯». */
 export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string; embedded?: boolean; slot?: HTMLElement | null; extraMenu?: MenuItem[] }): ReactNode {
@@ -467,7 +487,7 @@ export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string
                   </div>
                 )}
                 {m.attachments?.length ? <AttachmentList items={m.attachments} /> : null}
-                {m.role === 'user' ? <span style={{ whiteSpace: 'pre-wrap' }}>{m.text}</span> : <Markdown text={m.text} />}
+                {m.role === 'user' ? <UserText text={m.text} /> : <Markdown text={m.text} />}
                 {m.context?.length ? (
                   <div className="msg-ctx" title="Datos que se anexaron automáticamente a este mensaje">
                     📎 {m.context.join(' · ')}

@@ -22,7 +22,7 @@ function CodeBlock({ code }: { code: string }): ReactNode {
   )
 }
 
-const INLINE = /(`[^`\n]+`|\*\*[^*\n]+\*\*|\[[^\]\n]+\]\(https?:\/\/[^)\s]+\))/g
+const INLINE = /(`[^`\n]+`|\*\*[^*\n]+\*\*|!\[[^\]\n]*\]\(shutoki-note:\/\/[^)\s]+\)|\[[^\]\n]+\]\(https?:\/\/[^)\s]+\))/g
 
 function Inline({ text }: { text: string }): ReactNode {
   return (
@@ -30,6 +30,8 @@ function Inline({ text }: { text: string }): ReactNode {
       {text.split(INLINE).map((p, i) => {
         if (p.startsWith('`') && p.endsWith('`') && p.length > 2) return <code key={i}>{p.slice(1, -1)}</code>
         if (p.startsWith('**') && p.endsWith('**') && p.length > 4) return <b key={i}>{p.slice(2, -2)}</b>
+        const im = /^!\[([^\]]*)\]\((\S+)\)$/.exec(p)
+        if (im) return <img key={i} className="md-img" src={im[2]} alt={im[1]} />
         const a = /^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/.exec(p)
         if (a)
           return (

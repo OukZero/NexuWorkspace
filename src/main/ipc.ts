@@ -29,7 +29,7 @@ import { registerApi } from './apiRegistry'
 import * as calendar from './calendar'
 import { planAssistant, readAndAnswer } from './assistant'
 import { attachGuest, markActive } from './web'
-import { deleteNote, listNotes, saveNote, unlinkTask } from './notes'
+import { deleteNote, listNotes, saveNote, saveNoteImage, unlinkTask } from './notes'
 import { appendChunk, deleteMeeting, listMeetings, retryMeeting, startMeeting, stopMeeting, updateMeeting } from './meetings'
 import { attachWhatsApp, getBadges, openWhatsApp, setWhatsAppVisible, WSP_SLOT } from './whatsapp'
 import { generateRecurring } from './scheduler'
@@ -143,6 +143,7 @@ export function registerIpc(): void {
   api('notes:list', () => listNotes())
   api('notes:save', (n) => saveNote(n))
   api('notes:delete', (id) => deleteNote(id))
+  api('notes:image', (id, mime, data) => saveNoteImage(id, mime, data))
   api('meetings:list', () => listMeetings())
   api('meetings:start', (title, taskId) => startMeeting(title, taskId))
   api('meetings:chunk', (id, data) => appendChunk(id, data))
@@ -410,6 +411,8 @@ export function registerIpc(): void {
   api('spotify:play', (uri) => spotify.playUri(uri))
   api('spotify:queue', (uri) => spotify.queueUri(uri))
   api('redmine:lines', (day) => redmine.lines(day))
+  api('redmine:draft', (day, key, draft) => redmine.saveDraft(day, key, draft))
+  api('redmine:aiComment', (day, key) => redmine.aiComment(day, key))
   api('redmine:login', () => redmine.openLogin())
   api('redmine:days', (from, to) => redmine.days(from, to))
   api('redmine:send', (day, keys, hours, acts) => redmine.send(day, keys, hours, acts))

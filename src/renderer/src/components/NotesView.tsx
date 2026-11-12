@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { ClipboardEvent, ReactNode } from 'react'
 import type { Note } from '../../../shared/types'
 import { NOTE_TEMPLATES, deleteNote, saveNote, takeNoteRequest, useNotes } from '../notes'
 import { useDB } from '../store'
@@ -18,7 +18,12 @@ const when = (ts: number): string => {
   return d.toDateString() === new Date().toDateString() ? `Hoy · ${hm}` : `${day} · ${hm}`
 }
 
-const preview = (n: Note): string => n.body.replace(/[#>*`\-\n]+/g, ' ').trim().slice(0, 90)
+const preview = (n: Note): string => n.body.replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').replace(/[#>*`\-\n]+/g, ' ').trim().slice(0, 90)
+
+/** Trozos de la nota: en posición par va el texto y en posición impar, una imagen pegada (sintaxis Markdown). */
+const IMG_MD = /(!\[[^\]\n]*\]\(shutoki-note:\/\/[^)\s]+\))/
+const splitBody = (s: string): string[] => s.split(IMG_MD)
+const urlOf = (md: string): string => /\((shutoki-note:[^)\s]+)\)/.exec(md)?.[1] ?? ''
 
 /** Editor de una nota: se guarda solo poco después de dejar de escribir y al cambiar de nota. */
 function Editor({ note, onDeleted }: { note: Note; onDeleted: () => void }): ReactNode {
@@ -29,12 +34,18 @@ function Editor({ note, onDeleted }: { note: Note; onDeleted: () => void }): Rea
   const [tags, setTags] = useState(note.tags.join(', '))
   const [taskId, setTaskId] = useState(note.taskId ?? '')
   const [pinned, setPinned] = useState(!!note.pinned)
-  const [reading, setReading] = useState(false)
+  // escribir (texto con las imágenes como miniaturas), dividido (editor + vista previa) o solo vista previa
+  const [view, setView] = useState<'write' | 'split' | 'read'>('write')
   const [saved, setSaved] = useState(true)
   const draft = useRef({ title, body, tags, taskId, pinned })
   const dirty = useRef(false)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const area = useRef<HTMLTextAreaElement>(null)
+  const area = useRef<HTMLTextAreaElement | null>(null) // el trozo de texto que tiene el foco (para el formato)
+  const taRefs = useRef<Array<HTMLTextAreaElement | null>>([])
+  const pendingCaret = useRef<{ idx: number; pos: number } | null>(null)
+  const bodyRef = useRef(body)
+  bodyRef.current = body
+  const parts = splitBody(body)
 
   const flush = (): void => {
     clearTimeout(timer.current)
@@ -68,13 +79,71 @@ function Editor({ note, onDeleted }: { note: Note; onDeleted: () => void }): Rea
     change({ pinned: !pinned })
   }
 
+  const commitBody = (next: string): void => {
+    setBody(next)
+    change({ body: next })
+  }
+  const setPart = (i: number, v: string): void => {
+    const next = splitBody(bodyRef.current)
+    next[i] = v
+    commitBody(next.join(''))
+  }
+  const removePart = (i: number): void => {
+    const next = splitBody(bodyRef.current)
+    next.splice(i - 1, 3, next[i - 1] + next[i + 1]) // une el texto de antes y el de después de la imagen
+    commitBody(next.join(''))
+  }
+  // tras pegar una imagen, el cursor queda en el texto que va después de ella
+  useEffect(() => {
+    const c = pendingCaret.current
+    if (!c) return
+    pendingCaret.current = null
+    const el = taRefs.current[c.idx]
+    if (el) {
+      el.focus()
+      el.setSelectionRange(c.pos, c.pos)
+    }
+  }, [body])
+
+  // pegar una imagen del portapapeles: se guarda con la nota y aparece como miniatura en ese punto del texto
+  const pasteImage = async (e: ClipboardEvent<HTMLTextAreaElement>, i: number): Promise<void> => {
+    const item = Array.from(e.clipboardData.items).find((x) => x.kind === 'file' && x.type.startsWith('image/'))
+    const file = item?.getAsFile()
+    if (!file) return // texto normal: lo pega el navegador
+    e.preventDefault()
+    const el = e.currentTarget
+    const start = el.selectionStart
+    const end = el.selectionEnd
+    const before = el.value
+    try {
+      const data = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader()
+        r.onload = () => resolve(String(r.result).split(',')[1] ?? '')
+        r.onerror = () => reject(r.error)
+        r.readAsDataURL(file)
+      })
+      const url = await window.api.call('notes:image', note.id, file.type, data)
+      const ins = '\n![imagen](' + url + ')\n'
+      const next = splitBody(bodyRef.current)
+      // si mientras se guardaba la imagen se escribió en ese trozo, la imagen va al final de lo que haya
+      next[i] = next[i] === before ? before.slice(0, start) + ins + before.slice(end) : next[i] + ins
+      pendingCaret.current = { idx: i + 2, pos: 0 }
+      commitBody(next.join(''))
+    } catch (err) {
+      ui.toast('No se pudo pegar la imagen: ' + (err as Error).message, true)
+    }
+  }
+
   // formato: inserta la sintaxis Markdown en la selección del cuadro de texto
   const edit = (fn: (v: string, s: number, e: number) => { text: string; start: number; end: number }): void => {
     const el = area.current
     if (!el) return
     const r = fn(el.value, el.selectionStart, el.selectionEnd)
-    setBody(r.text)
-    change({ body: r.text })
+    const idx = taRefs.current.indexOf(el)
+    if (idx < 0 || idx % 2 !== 0) return
+    const next = splitBody(bodyRef.current)
+    next[idx] = r.text
+    commitBody(next.join(''))
     requestAnimationFrame(() => {
       el.focus()
       el.setSelectionRange(r.start, r.end)
@@ -111,11 +180,24 @@ function Editor({ note, onDeleted }: { note: Note; onDeleted: () => void }): Rea
     <div className="editor">
       <div className="ed-tools">
         {tools.map(([label, icon, run]) => (
-          <button key={label} title={label} aria-label={label} disabled={reading} onClick={run}>
+          <button key={label} title={label} aria-label={label} disabled={view === 'read'} onClick={run}>
             <G n={icon} size={15} />
           </button>
         ))}
         <span className="sp" />
+        <div className="ed-view" role="group" aria-label="Modo de vista">
+          {(
+            [
+              ['write', 'Escribir'],
+              ['split', 'Dividido'],
+              ['read', 'Vista previa']
+            ] as const
+          ).map(([v, label]) => (
+            <button key={v} className={view === v ? 'on' : ''} aria-pressed={view === v} onClick={() => setView(v)}>
+              {label}
+            </button>
+          ))}
+        </div>
         <span className="chip">Markdown</span>
         <span className={`chip ${saved ? 'ok' : 'prio'}`} role="status">
           {saved ? 'Guardado' : 'Guardando…'}
@@ -125,7 +207,6 @@ function Editor({ note, onDeleted }: { note: Note; onDeleted: () => void }): Rea
           className="ed-more"
           title="Más acciones"
           items={[
-            { label: reading ? 'Seguir editando' : 'Vista previa', icon: reading ? '✎' : '👁', onSelect: () => setReading(!reading) },
             { label: pinned ? 'Quitar de las ancladas' : 'Anclar arriba', icon: '★', onSelect: togglePin },
             { kind: 'sep' },
             { label: 'Eliminar nota', icon: '✕', danger: true, onSelect: () => void remove() }
@@ -167,23 +248,42 @@ function Editor({ note, onDeleted }: { note: Note; onDeleted: () => void }): Rea
             }}
           />
         </div>
-        {reading ? (
-          <div className="nt-prev">{body.trim() ? <Markdown text={body} /> : <div className="meta">Nota vacía.</div>}</div>
-        ) : (
-          <textarea
-            ref={area}
-            className="nt-body"
-            value={body}
-            placeholder="Escribe en Markdown: # títulos, - listas, **negrita**, `código`…"
-            aria-label="Contenido de la nota"
-            spellCheck
-            onChange={(e) => {
-              setBody(e.target.value)
-              change({ body: e.target.value })
-            }}
-            onBlur={flush}
-          />
-        )}
+        <div className={`ed-views ${view}`}>
+          {view !== 'read' && (
+            <div className="ed-blocks">
+              {parts.map((p, i) =>
+                i % 2 === 1 ? (
+                  <figure key={'i' + i} className="ed-img">
+                    <img src={urlOf(p)} alt="Imagen de la nota" />
+                    <button type="button" className="ed-img-x" title="Quitar imagen" aria-label="Quitar imagen" onClick={() => removePart(i)}>
+                      ×
+                    </button>
+                  </figure>
+                ) : (
+                  <textarea
+                    key={'t' + i}
+                    ref={(el) => {
+                      taRefs.current[i] = el
+                    }}
+                    className="nt-body nt-seg"
+                    value={p}
+                    rows={Math.min(20, Math.max(1, p.split('\n').length))}
+                    placeholder={parts.length === 1 ? 'Escribe en Markdown: # títulos, - listas, **negrita**, `código`…  Pega una imagen con Ctrl+V' : undefined}
+                    aria-label="Contenido de la nota"
+                    spellCheck
+                    onFocus={(e) => {
+                      area.current = e.currentTarget
+                    }}
+                    onChange={(e) => setPart(i, e.target.value)}
+                    onPaste={(e) => void pasteImage(e, i)}
+                    onBlur={flush}
+                  />
+                )
+              )}
+            </div>
+          )}
+          {view !== 'write' && <div className="nt-prev">{body.trim() ? <Markdown text={body} /> : <div className="meta">Nota vacía.</div>}</div>}
+        </div>
       </div>
     </div>
   )

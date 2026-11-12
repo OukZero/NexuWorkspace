@@ -71,6 +71,8 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
   const [issues, setIssues] = useState<IssueRef[] | null>(null)
   const [issueNum, setIssueNum] = useState('')
   const [draftIssue, setDraftIssue] = useState({ title: '', body: '' })
+  // al crear la issue desde la tarea: también crear su rama (por defecto) o solo la issue vinculada a la tarea
+  const [issueBranch, setIssueBranch] = useState(true)
   const [prDraft, setPrDraft] = useState<{ title: string; body: string } | null>(null)
   const busyRef = useRef('')
   busyRef.current = busy
@@ -100,10 +102,14 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
 
   const current = repos.find((r) => r.dir === dir)
 
+  // Solo cuenta la respuesta del último refresco: una lectura lanzada antes de cambiar de rama (el sondeo de 5 s) no debe pisar la rama nueva con datos viejos.
+  const refreshSeq = useRef(0)
   const refresh = useCallback(async () => {
     if (!dir || !current?.isRepo) return
+    const seq = ++refreshSeq.current
     try {
       const [s, b, l] = await Promise.all([window.api.call('git:status', dir), window.api.call('git:branches', dir), window.api.call('git:log', dir, 40)])
+      if (seq !== refreshSeq.current) return
       setSt(s)
       pruneReviewed(dir, s.files.map((f) => f.path))
       setBr(b)
@@ -246,9 +252,10 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
       'issue',
       async () => {
         const i = await window.api.call('issue:create', dir, draftIssue.title, draftIssue.body)
-        await window.api.call('issue:branch', taskId, dir, i.number)
+        if (issueBranch) await window.api.call('issue:branch', taskId, dir, i.number)
+        else await window.api.call('issue:link', taskId, i)
       },
-      'Issue creada y rama lista'
+      issueBranch ? 'Issue creada y rama lista' : 'Issue creada y vinculada a la tarea'
     )
     if (ok) setPanel(null)
   }
@@ -402,7 +409,7 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
             </button>
           </>
         )}
-        {st && !st.upstream && remote?.kind === 'github' && (
+        {st && remote?.kind === 'github' && (
           <>
             <button className="btn sm" disabled={!!busy} onClick={() => (panel === 'pick' ? setPanel(null) : void openPick())} title="Elige una issue abierta: se crea su rama desde la base actualizada y queda vinculada a la tarea">
               ⎇ Rama desde una issue…
@@ -500,12 +507,16 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
             </div>
             <input value={draftIssue.title} placeholder="Título" aria-label="Título de la issue" onChange={(e) => setDraftIssue((d) => ({ ...d, title: e.target.value }))} />
             <textarea rows={4} value={draftIssue.body} placeholder="Descripción (Markdown)" aria-label="Descripción de la issue" onChange={(e) => setDraftIssue((d) => ({ ...d, body: e.target.value }))} />
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text)', marginTop: 6 }}>
+              <input type="checkbox" style={{ width: 'auto' }} checked={issueBranch} onChange={(e) => setIssueBranch(e.target.checked)} />
+              Crear también la rama (la issue queda vinculada a la tarea)
+            </label>
             <div className="foot" style={{ marginTop: 6 }}>
               <button className="btn sm" onClick={() => setPanel(null)}>
                 Cancelar
               </button>
               <button className="btn sm primary" disabled={!draftIssue.title.trim() || !!busy} onClick={() => void createIssue()}>
-                Crear issue y su rama
+                {issueBranch ? 'Crear issue y su rama' : 'Crear solo la issue'}
               </button>
             </div>
           </div>

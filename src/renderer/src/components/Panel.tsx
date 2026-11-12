@@ -212,28 +212,6 @@ export function Panel({ compact }: { compact?: boolean }): ReactNode {
       </section>
 
       <section className="bc s4">
-        <div className="card-h">
-          <span className="eyebrow">Uso de la IA</span>
-          <span className="upd">{db.limits ? `actualizado ${new Date(db.limits.updatedAt).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}` : ''}</span>
-        </div>
-        <Bar label="Sesión · 5 h" w={db.limits?.fiveHour} />
-        <Bar label="Semana · 7 días" w={db.limits?.sevenDay} />
-        {!db.limits && <div className="meta">Aparece tras la primera respuesta de Claude. Copilot no informa estos límites.</div>}
-        <div className="hr" />
-        <button className="link" onClick={() => ui.go('usage')}>
-          Ver el consumo completo →
-        </button>
-      </section>
-
-      <section className="bc s12">
-        <div className="card-h">
-          <span className="eyebrow">Línea del día</span>
-          <span className="upd">{longDay} · hoy</span>
-        </div>
-        {db.entries.some((e) => dayKey(new Date(e.start)) === todayKey) || meet > 0 || (db.focusBlocks ?? []).length > 0 ? <DayTimeline day={todayKey} entries={db.entries.filter((e) => dayKey(new Date(e.start)) === todayKey).sort((a, b) => a.start - b.start)} /> : <div className="cempty slim">Aún no registras tiempo hoy. Inicia el timer en una tarea.</div>}
-      </section>
-
-      <section className="bc s4">
         <div className="gauge">
           <Ring value={ms / target} size={104} stroke={8} color="var(--ok)">
             <b style={{ fontSize: 19 }}>{pctOf(ms / target)} %</b>
@@ -256,6 +234,65 @@ export function Panel({ compact }: { compact?: boolean }): ReactNode {
             </button>
           </div>
         </div>
+      </section>
+
+      <section className="bc s7">
+        <div className="card-h">
+          <div className="ch-l">
+            <span className="eyebrow">Tareas de hoy</span>
+            <span className="upd">
+              {doneN} de {todays.length}
+            </span>
+          </div>
+          <div className="seg" role="tablist">
+            {([['all', 'Todas'], ['open', 'Pendientes'], ['done', 'Hechas']] as const).map(([k, l]) => (
+              <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
+                {l}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="tl-newrow">
+          <button className="btn sm p" onClick={() => input.current?.focus()} title="Escribe el nombre y pulsa Enter">
+            <G n="plus" size={13} /> Nueva tarea
+          </button>
+        </div>
+        <div className="tl-list">
+          {shown.map((t) => (
+            <TaskRow key={t.id} task={t} />
+          ))}
+          {!shown.length && <div className="cempty slim">{tab === 'done' ? 'Aún no completas nada hoy.' : 'Nada pendiente para hoy.'}</div>}
+        </div>
+        <label className="addin">
+          <G n="plus" size={16} />
+          <input ref={input} value={title} placeholder="Escribe la tarea y pulsa Enter: queda en «Para hoy»" aria-label="Nueva tarea para hoy" onChange={(e) => setTitle(e.target.value)} onKeyDown={quickAdd} />
+          <button type="button" className="btn sm" title="Tarea detallada: descripción, carpeta, estimación…" aria-label="Crear tarea detallada" onClick={() => ui.editTask({ title })}>
+            <G n="edit" size={13} /> Con detalles
+          </button>
+          <kbd>Enter</kbd>
+        </label>
+      </section>
+
+      <section className="bc s5">
+        <div className="card-h">
+          <span className="eyebrow">Uso de la IA</span>
+          <span className="upd">{db.limits ? `actualizado ${new Date(db.limits.updatedAt).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}` : ''}</span>
+        </div>
+        <Bar label="Sesión · 5 h" w={db.limits?.fiveHour} />
+        <Bar label="Semana · 7 días" w={db.limits?.sevenDay} />
+        {!db.limits && <div className="meta">Aparece tras la primera respuesta de Claude. Copilot no informa estos límites.</div>}
+        <div className="hr" />
+        <button className="link" onClick={() => ui.go('usage')}>
+          Ver el consumo completo →
+        </button>
+      </section>
+
+      <section className="bc s12">
+        <div className="card-h">
+          <span className="eyebrow">Línea del día</span>
+          <span className="upd">{longDay} · hoy</span>
+        </div>
+        {db.entries.some((e) => dayKey(new Date(e.start)) === todayKey) || meet > 0 || (db.focusBlocks ?? []).length > 0 ? <DayTimeline day={todayKey} entries={db.entries.filter((e) => dayKey(new Date(e.start)) === todayKey).sort((a, b) => a.start - b.start)} /> : <div className="cempty slim">Aún no registras tiempo hoy. Inicia el timer en una tarea.</div>}
       </section>
 
       <section className="bc s8">
@@ -285,39 +322,7 @@ export function Panel({ compact }: { compact?: boolean }): ReactNode {
         </div>
       </section>
 
-      <section className="bc s7">
-        <div className="card-h">
-          <div className="ch-l">
-            <span className="eyebrow">Tareas de hoy</span>
-            <span className="upd">
-              {doneN} de {todays.length}
-            </span>
-          </div>
-          <div className="seg" role="tablist">
-            {([['all', 'Todas'], ['open', 'Pendientes'], ['done', 'Hechas']] as const).map(([k, l]) => (
-              <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
-                {l}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="tl-list">
-          {shown.map((t) => (
-            <TaskRow key={t.id} task={t} />
-          ))}
-          {!shown.length && <div className="cempty slim">{tab === 'done' ? 'Aún no completas nada hoy.' : 'Nada pendiente para hoy.'}</div>}
-        </div>
-        <label className="addin">
-          <G n="plus" size={16} />
-          <input ref={input} value={title} placeholder="Nueva tarea para hoy…" aria-label="Nueva tarea para hoy" onChange={(e) => setTitle(e.target.value)} onKeyDown={quickAdd} />
-          <button type="button" className="ib sm" title="Tarea detallada: descripción, carpeta, estimación…" aria-label="Crear tarea detallada" onClick={() => ui.editTask({ title })}>
-            <G n="edit" size={15} />
-          </button>
-          <kbd>Enter</kbd>
-        </label>
-      </section>
-
-      <section className="bc s5">
+      <section className="bc s4">
         <div className="card-h">
           <span className="eyebrow">Git{commits ? ` · ${commits.branch}` : ''}</span>
           {focus && commits && (

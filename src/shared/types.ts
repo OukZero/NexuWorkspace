@@ -161,6 +161,18 @@ export interface RedmineLine {
   hours: number
   comment: string
   entryIds: string[]
+  /** Valores calculados solo con los registros del timer (sin lo que el usuario cambió a mano). */
+  auto?: { activity: string; hours: number; comment: string }
+  /** Cambios guardados a mano para esta línea y ese día. */
+  draft?: RedmineDraft
+  drafted?: boolean
+}
+
+/** Lo que el usuario corrige en una línea de la previsualización de Redmine; los campos que faltan usan el valor automático. */
+export interface RedmineDraft {
+  hours?: number
+  activity?: string
+  comment?: string
 }
 
 /** Un día en Redmine: horas imputadas y horas laborables que le corresponden. */
@@ -755,6 +767,8 @@ export interface DB {
   usage: UsageRecord[]
   /** Comandos / disponibles, informados por Claude Code en cada respuesta. */
   commands?: string[]
+  /** Cambios a mano en la imputación de Redmine, por día y por línea (se quitan al imputar). */
+  rmDrafts?: Record<string, Record<string, RedmineDraft>>
   limits?: RateLimits
   heartbeat?: number
   lastDailyDay?: string
@@ -803,6 +817,7 @@ export interface IpcChannels {
   'notes:list': { args: []; ret: Note[] }
   'notes:save': { args: [NoteInput]; ret: Note }
   'notes:delete': { args: [string]; ret: void }
+  'notes:image': { args: [string, string, string]; ret: string } // nota, tipo MIME y contenido en base64 -> dirección de la imagen
   'meetings:list': { args: []; ret: Meeting[] }
   'meetings:start': { args: [string, string?]; ret: string } // título y tarea opcional; devuelve el id de la grabación
   'meetings:chunk': { args: [string, ArrayBuffer]; ret: void } // audio PCM 16-bit, 16 kHz, mono
@@ -888,6 +903,8 @@ export interface IpcChannels {
   'group:save': { args: [FolderGroup]; ret: void }
   'group:delete': { args: [string]; ret: void }
   'redmine:lines': { args: [string]; ret: RedmineLine[] }
+  'redmine:aiComment': { args: [string, string]; ret: string } // día y línea -> comentario resumido por Claude
+  'redmine:draft': { args: [string, string, RedmineDraft | null]; ret: void } // día, línea y cambios (null = volver a lo automático)
   'files:roots': { args: [string]; ret: FileRoot[] }
   'files:list': { args: [string, string, string]; ret: FileEntry[] }
   'files:read': { args: [string, string, string]; ret: FileContent }
@@ -920,7 +937,7 @@ export interface IpcChannels {
   'redmine:login': { args: []; ret: void }
   'redmine:days': { args: [string, string]; ret: RedmineDay[] }
   'redmine:send': { args: [string, string[], Record<string, number>, Record<string, string>?]; ret: RedmineResult }
-  'redmine:catalog': { args: []; ret: { projects: number; issues: number } }
+  'redmine:catalog': { args: []; ret: { projects: number; issues: number; openFilter?: string; dump?: string; closed?: number } }
   'entry:update': { args: [EntryPatch]; ret: void }
   'entry:delete': { args: [string]; ret: void }
   'entry:add': { args: [{ taskId: string; start: number; end: number }]; ret: void }

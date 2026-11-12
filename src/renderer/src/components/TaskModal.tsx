@@ -48,7 +48,8 @@ export function TaskModal({ task: t }: { task: Partial<Task> }): ReactNode {
   const loadCatalog = async (): Promise<void> => {
     ui.toast('Leyendo proyectos y tareas de Redmine… puede tardar un poco')
     const r = await ui.run('redmine:catalog')
-    if (r) ui.toast(`Cargados ${r.projects} proyectos y ${r.issues} tareas`)
+    if (r) ui.toast(`Cargados ${r.projects} proyectos y ${r.issues} tareas abiertas${r.closed ? ` (${r.closed} cerradas quitadas)` : ''}${r.openFilter ? ' (solo abiertas, verificado con Redmine)' : '. No hay un filtro de abiertas que Redmine pueda verificar: pueden venir cerradas'}`, !r.openFilter)
+    if (r?.dump) ui.toast(`Respuestas de Redmine guardadas en: ${r.dump}`)
   }
 
   // tarea tipo: rellena lo que aún está vacío y suma sus subtareas
