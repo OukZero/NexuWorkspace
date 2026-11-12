@@ -1,3 +1,4 @@
+import { protocol } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import type { Note, NoteInput } from '../shared/types'
@@ -107,9 +108,50 @@ export function deleteNote(id: string): void {
     /* ya no existía */
   }
   load().delete(id)
+  fs.rmSync(path.join(dir(), 'assets', id), { recursive: true, force: true })
 }
 
 /** Quita el vínculo de las notas de una tarea que se elimina. */
 export function unlinkTask(taskId: string): void {
   for (const n of load().values()) if (n.taskId === taskId) saveNote({ id: n.id, taskId: null })
+}
+
+/* Imágenes pegadas en una nota: se guardan en una carpeta por nota y se muestran con el esquema shutoki-note (sin red). */
+export const NOTE_SCHEME = 'shutoki-note'
+const IMG_EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' }
+const IMG_TYPE: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }
+const IMG_MAX = 15 * 1024 * 1024
+const IMG_NAME = /^[A-Za-z0-9_-]{1,64}\.(png|jpg|gif|webp)$/
+
+/** Debe llamarse antes de que la app esté lista. */
+export function registerNoteScheme(): void {
+  protocol.registerSchemesAsPrivileged([{ scheme: NOTE_SCHEME, privileges: { standard: true, secure: true } }])
+}
+
+/** shutoki-note://img/<nota>/<archivo>: solo sirve las imágenes de las notas, sin acceso a nada más. */
+export function registerNoteProtocol(): void {
+  protocol.handle(NOTE_SCHEME, (req) => {
+    const parts = new URL(req.url).pathname.split('/').filter(Boolean).map(decodeURIComponent)
+    const [noteId, name] = parts
+    if (parts.length !== 2 || !ID.test(noteId) || !IMG_NAME.test(name)) return new Response('No encontrado', { status: 404 })
+    const img = path.join(dir(), 'assets', noteId, name)
+    if (!fs.existsSync(img)) return new Response('No encontrado', { status: 404 })
+    const headers = { 'content-type': IMG_TYPE[path.extname(name).slice(1)] ?? 'application/octet-stream', 'content-security-policy': "default-src 'none'", 'cache-control': 'no-store' }
+    return new Response(fs.readFileSync(img), { headers })
+  })
+}
+
+/** Guarda una imagen pegada (en base64) dentro de la carpeta de su nota y devuelve la dirección para el Markdown. */
+export function saveNoteImage(noteId: string, mime: string, data: string): string {
+  if (!ID.test(noteId) || !load().has(noteId)) throw new Error('La nota ya no existe.')
+  const ext = IMG_EXT[mime]
+  if (!ext) throw new Error('Formato no compatible (usa PNG, JPG, GIF o WebP).')
+  const buf = Buffer.from(data, 'base64')
+  if (!buf.length) throw new Error('La imagen está vacía.')
+  if (buf.length > IMG_MAX) throw new Error('La imagen supera 15 MB.')
+  const folder = path.join(dir(), 'assets', noteId)
+  fs.mkdirSync(folder, { recursive: true })
+  const name = `${uid()}.${ext}`
+  fs.writeFileSync(path.join(folder, name), buf)
+  return `${NOTE_SCHEME}://img/${noteId}/${name}`
 }

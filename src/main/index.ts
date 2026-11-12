@@ -9,6 +9,7 @@ import { registerIpc } from './ipc'
 import { killPtysOf } from './pty'
 import { lifecycle } from './lifecycle'
 import { registerMockupProtocol, registerMockupScheme } from './mockups'
+import { registerNoteProtocol, registerNoteScheme } from './notes'
 import { showSplash } from './splash'
 import { pollCi } from './ci'
 import { checkFocusBlocks, checkMeetings } from './calendar'
@@ -27,6 +28,7 @@ import { initContextMenu } from './contextMenu'
 app.setPath('userData', process.env['SHUTOKI_DATA_DIR'] || path.join(app.getPath('appData'), 'mis-tareas'))
 app.setAppUserModelId(APP_ID) // agrupa la app en la barra de tareas de Windows con su propio icono
 registerMockupScheme() // debe registrarse antes de que la app esté lista
+registerNoteScheme()
 
 /**
  * Windows toma el nombre y el icono de las notificaciones del acceso directo del menú Inicio que tenga este AppUserModelId.
@@ -65,6 +67,7 @@ if (!app.requestSingleInstanceLock()) {
     ensureStartMenuShortcut()
     initDb()
     registerMockupProtocol()
+    registerNoteProtocol()
     registerIpc()
     registerWhatsAppIpc()
     initWebviews()

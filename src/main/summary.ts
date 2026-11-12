@@ -126,6 +126,16 @@ function aiSummary(text: string, cmd: string): Promise<string> {
   return askClaude(prompt, cmd).then((out) => clip(out.replace(/\s+/g, ' '), 400))
 }
 
+/** Un comentario corto para Redmine a partir de las notas de una línea (una frase, en pasado). */
+export async function summarizeNotes(notes: string[], claudeCmd: string): Promise<string> {
+  const list = [...new Set(notes.map((n) => n.replace(/\s+/g, ' ').trim()).filter(Boolean))]
+  const prompt =
+    'Escribe en español UNA sola frase corta (máx. 200 caracteres) que resuma el trabajo realizado según estas notas de tiempo de una misma tarea. ' +
+    'Tono neutro, apto para un comentario de imputación de horas. Responde SOLO con la frase, sin comillas ni viñetas.\n\n' +
+    list.map((n) => '- ' + clip(n, 300)).join('\n')
+  return clip((await askClaude(prompt, claudeCmd)).replace(/\s+/g, ' ').trim(), 240)
+}
+
 export interface SummaryResult {
   text: string
   mode: 'ai' | 'local'
