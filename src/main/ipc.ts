@@ -30,6 +30,7 @@ import * as calendar from './calendar'
 import { planAssistant, readAndAnswer } from './assistant'
 import { attachGuest, markActive } from './web'
 import { deleteNote, listNotes, saveNote, saveNoteImage, unlinkTask } from './notes'
+import { appendChunk, deleteMeeting, listMeetings, retryMeeting, startMeeting, stopMeeting, updateMeeting } from './meetings'
 import { attachWhatsApp, getBadges, openWhatsApp, setWhatsAppVisible, WSP_SLOT } from './whatsapp'
 import { generateRecurring } from './scheduler'
 import * as telegram from './telegram'
@@ -143,6 +144,14 @@ export function registerIpc(): void {
   api('notes:save', (n) => saveNote(n))
   api('notes:delete', (id) => deleteNote(id))
   api('notes:image', (id, mime, data) => saveNoteImage(id, mime, data))
+  api('meetings:list', () => listMeetings())
+  api('meetings:start', (title, taskId) => startMeeting(title, taskId))
+  api('meetings:chunk', (id, data) => appendChunk(id, data))
+  api('meetings:stop', (id, ms) => stopMeeting(id, ms))
+  api('meetings:update', (id, p) => updateMeeting(id, p))
+  api('meetings:summarize', (id) => retryMeeting(id, 'summary'))
+  api('meetings:retry', (id) => retryMeeting(id, 'auto'))
+  api('meetings:delete', (id) => deleteMeeting(id))
 
   api('task:prompt', (id) => renderPrompt(findTask(id)))
 

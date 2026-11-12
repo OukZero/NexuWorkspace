@@ -1583,3 +1583,27 @@ html .side.rail-side.wide { width: 236px; padding: 14px 10px 10px; align-items: 
 .web-addr { padding: 7px 11px; border-radius: 11px; background: var(--panel); border: 1px solid var(--line2); }
 .notes .nt-top, .notes .ed-tools { box-sizing: border-box; min-height: 52px; padding-top: 0; padding-bottom: 0; background: color-mix(in srgb, var(--bg) 55%, var(--panel)); }
 @media (max-width: 1100px) { .kz-row, .kz-limits { grid-template-columns: minmax(0, 1fr); } .bc.kz-periods { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- Reuniones ---------- */
+.mt-rec { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-bottom: 1px solid var(--line); flex: none; }
+.mt-rec.on { background: color-mix(in srgb, var(--danger, #e5484d) 8%, transparent); }
+.mt-rec-top { display: flex; align-items: center; gap: 8px; }
+.mt-time { font-size: 22px; font-variant-numeric: tabular-nums; }
+.mt-rec-title { font-weight: 600; font-size: 13.5px; }
+.mt-rec-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.mt-check { display: flex; align-items: flex-start; gap: 7px; font-size: 12px; color: var(--muted); cursor: pointer; }
+.mt-check input { margin-top: 2px; }
+.mt-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--danger, #e5484d); flex: none; }
+.mt-rec.on .mt-dot { animation: mt-pulse 1.2s ease-in-out infinite; }
+.mt-dot.paused { animation: none !important; opacity: .45; }
+@keyframes mt-pulse { 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .mt-rec.on .mt-dot { animation: none; } }
+.mt-tabs { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); flex: none; }
+.mt-tabs > button:not(.btn) { padding: 6px 12px; border-radius: 9px; border: 1px solid transparent; background: none; color: var(--muted); font-size: 13px; cursor: pointer; }
+.mt-tabs > button:not(.btn).on { color: var(--text); background: var(--panel2); border-color: var(--line2); }
+.mt-tabs .sp { flex: 1; }
+.mt-err, .mt-wait { display: flex; align-items: center; gap: 10px; justify-content: space-between; margin: 10px 12px 0; padding: 9px 12px; border-radius: 10px; font-size: 12.5px; flex: none; }
+.mt-err { background: color-mix(in srgb, var(--danger, #e5484d) 12%, transparent); border: 1px solid color-mix(in srgb, var(--danger, #e5484d) 40%, transparent); }
+.mt-wait { background: var(--panel2); border: 1px solid var(--line2); color: var(--muted); }
+.mt-transcript { white-space: pre-wrap; font-size: 13px; line-height: 1.65; }
+.meetings .nt-list { min-width: 0; }

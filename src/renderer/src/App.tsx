@@ -34,6 +34,7 @@ import { MiniPlayer } from './components/MiniPlayer'
 import { MusicView } from './components/MusicView'
 import { WhatsAppView } from './components/WhatsAppView'
 import { NotesView } from './components/NotesView'
+import { MeetingsView } from './components/MeetingsView'
 import { WebView } from './components/WebView'
 import { addTab } from './webTabs'
 import { WebHost } from './components/webHost'
@@ -464,6 +465,7 @@ export function App(): ReactNode {
     whatsapp: 'WhatsApp Web dentro de la app',
     web: 'Pestañas integradas para webs de trabajo',
     notes: 'Se guardan como archivos Markdown en tu equipo',
+    meetings: 'Graba la voz, transcribe en tu equipo y obtén el resumen',
     music: 'Spotify: reproduce, pausa y cambia de pista sin salir de la app',
     groups: 'Conjuntos de carpetas a los que la IA puede acceder',
     settings: 'Preferencias de la aplicación'
@@ -502,6 +504,9 @@ export function App(): ReactNode {
       break
     case 'notes':
       content = <NotesView />
+      break
+    case 'meetings':
+      content = <MeetingsView />
       break
     case 'web':
       content = <WebView />
