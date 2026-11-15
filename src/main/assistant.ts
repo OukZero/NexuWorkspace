@@ -12,7 +12,7 @@ import { fetchPageText, pageBlock, readWebPage } from './webread'
  * No hay comandos libres ni acceso a archivos: únicamente estas acciones.
  */
 
-const VIEWS = ['today', 'board', 'workspace', 'hours', 'history', 'redmine', 'usage', 'groups', 'music', 'notes', 'web', 'whatsapp', 'settings']
+const VIEWS = ['today', 'board', 'workspace', 'hours', 'history', 'redmine', 'usage', 'dashboard', 'groups', 'music', 'notes', 'web', 'whatsapp', 'settings']
 const VIEW_NAME: Record<string, string> = { today: 'Panel', board: 'Tablero', workspace: 'Espacio', hours: 'Horas', history: 'Historial', redmine: 'Redmine', usage: 'Consumo', groups: 'Carpetas', music: 'Música', notes: 'Notas', web: 'Web', whatsapp: 'WhatsApp', settings: 'Ajustes' }
 const STATUSES: Status[] = ['next', 'today', 'doing', 'review', 'done']
 const STATUS_NAME: Record<Status, string> = { next: 'Próximas', today: 'Hoy', doing: 'En curso', review: 'En revisión', done: 'Hecha' }
@@ -34,7 +34,7 @@ function buildPrompt(request: string): string {
   const tasks = visibleTasks()
   const sites = (db.settings.webLinks ?? []).map((l) => `${l.name}: ${l.url}`).slice(0, 20)
   return [
-    'Eres el asistente de una aplicación de productividad para desarrolladores (Shutoki AI Workspace). Conviertes la instrucción del usuario en acciones de la app.',
+    'Eres el asistente de una aplicación de productividad para desarrolladores (Nexo Workspace). Conviertes la instrucción del usuario en acciones de la app.',
     'Responde SOLO con un objeto JSON, sin texto antes ni después ni bloques de código, con esta forma:',
     '{"say": "respuesta breve en español", "actions": [ ... ]}',
     'Acciones permitidas (type y campos):',

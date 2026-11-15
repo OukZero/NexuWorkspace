@@ -65,7 +65,7 @@ function onControl(convId: string, child: ChildProcess, ev: ControlEvent): void 
     return
   }
   const r = ev.request
-  if (r?.subtype !== 'can_use_tool' || !r.tool_name) return reply(child, id, {}, 'Solicitud no soportada por Shutoki AI Workspace')
+  if (r?.subtype !== 'can_use_tool' || !r.tool_name) return reply(child, id, {}, 'Solicitud no soportada por Nexo Workspace')
   const tool = r.tool_name
   const input = r.input ?? {}
   // preguntas al usuario y planes necesitan una interfaz propia que el chat no tiene: Claude debe preguntar en texto
@@ -160,7 +160,8 @@ export function createConversation(taskId: string, kind?: 'design' | 'review'): 
   if (!db.tasks.some((t) => t.id === taskId)) throw new Error('Tarea no encontrada')
   const n = Object.values(db.chats).filter((c) => c.taskId === taskId && (!c.kind || c.kind === 'review')).length + 1
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
-  db.chats[id] = { ...newChat(taskId, kind === 'design' ? 'Diseño' : kind === 'review' ? 'Revisión' : `Conversación ${n}`), ...(kind ? { kind } : {}) }
+  const model = db.settings.defaultChatModel?.trim()
+  db.chats[id] = { ...newChat(taskId, kind === 'design' ? 'Diseño' : kind === 'review' ? 'Revisión' : `Conversación ${n}`), ...(kind ? { kind } : {}), ...(model && kind !== 'review' ? { model } : {}) }
   commit()
   return id
 }
@@ -223,7 +224,7 @@ interface ModelUsage {
   contextWindow?: number
 }
 
-interface StreamEvent {
+export interface StreamEvent {
   type?: string
   subtype?: string
   session_id?: string
@@ -280,6 +281,19 @@ const newUsage = (): ChatUsage => ({
 
 const toWindow = (w?: { utilization?: number; resetsAt?: number; status?: string }): LimitWindow | undefined =>
   w && typeof w.utilization === 'number' && typeof w.resetsAt === 'number' ? { utilization: w.utilization, resetsAt: w.resetsAt, status: w.status } : undefined
+
+/** Guarda los límites de la cuenta que informa Claude Code (ventana de 5 h y semana). Devuelve false si el evento no los traía. */
+export function applyRateLimitEvent(ev: StreamEvent): boolean {
+  const w = ev.rate_limit_info?.unifiedWindows
+  const five = toWindow(w?.['five_hour'])
+  const seven = toWindow(w?.['seven_day'])
+  if (!five && !seven) return false
+  const db = getDb()
+  db.limits = { fiveHour: five ?? db.limits?.fiveHour, sevenDay: seven ?? db.limits?.sevenDay, updatedAt: Date.now() }
+  limitAlerts()
+  push()
+  return true
+}
 
 /** Tamaño del contexto del último turno + consumo acumulado de la sesión y del panel de consumo. */
 function trackResult(taskId: string, chat: Chat, ev: StreamEvent): void {
@@ -350,15 +364,7 @@ function handle(convId: string, folder: string, ev: StreamEvent): void {
     return
   }
   if (ev.type === 'rate_limit_event') {
-    const w = ev.rate_limit_info?.unifiedWindows
-    const five = toWindow(w?.['five_hour'])
-    const seven = toWindow(w?.['seven_day'])
-    if (five || seven) {
-      const db = getDb()
-      db.limits = { fiveHour: five ?? db.limits?.fiveHour, sevenDay: seven ?? db.limits?.sevenDay, updatedAt: Date.now() }
-      limitAlerts()
-      push()
-    }
+    applyRateLimitEvent(ev)
     return
   }
   if (ev.type === 'assistant') {

@@ -1,4 +1,4 @@
-# Compila los últimos cambios (como `npm start`) y abre Shutoki AI Workspace.
+# Compila los últimos cambios (como `npm start`) y abre Nexo Workspace.
 # Uso:  launch.ps1            -> abre la ventana
 #       launch.ps1 -Hidden    -> arranque con Windows: empieza en la bandeja
 param([switch]$Hidden)
@@ -26,7 +26,7 @@ if (-not $running -and $needBuild) {
   & $builder build *> $log
   if ($LASTEXITCODE -ne 0 -and -not (Test-Path (Join-Path $root 'out\main\index.js'))) {
     Add-Type -AssemblyName PresentationFramework
-    [System.Windows.MessageBox]::Show("No se pudo compilar Shutoki AI Workspace. Detalle en:`n$log", 'Shutoki AI Workspace', 'OK', 'Error') | Out-Null
+    [System.Windows.MessageBox]::Show("No se pudo compilar Nexo Workspace. Detalle en:`n$log", 'Nexo Workspace', 'OK', 'Error') | Out-Null
     exit 1
   }
   # Si la compilación falla pero hay una anterior, se abre esa.

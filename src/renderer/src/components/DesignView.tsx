@@ -5,6 +5,7 @@ import { designConv } from '../conversations'
 import { findTask, useDB, useNow } from '../store'
 import { useUi } from '../ui'
 import { AttachmentList } from './Chat'
+import { G } from './glyphs'
 import { IconStop } from './icons'
 import { Markdown } from './Markdown'
 
@@ -239,7 +240,7 @@ export function DesignView({ taskId }: { taskId: string }): ReactNode {
             </div>
           )}
           <div
-            className={`composer ${dragging ? 'drag' : ''}`}
+            className={`composer cbox ${dragging ? 'drag' : ''}`}
             onDragOver={(e) => {
               e.preventDefault()
               setDragging(true)
@@ -251,9 +252,6 @@ export function DesignView({ taskId }: { taskId: string }): ReactNode {
               void addBlobs([...e.dataTransfer.files])
             }}
           >
-            <button className="btn clip" title="Adjuntar logo, capturas o fotos de referencia (también puedes pegar o arrastrar)" disabled={running} onClick={() => void pickFiles()}>
-              📎
-            </button>
             <textarea
               rows={1}
               value={prompt}
@@ -273,15 +271,32 @@ export function DesignView({ taskId }: { taskId: string }): ReactNode {
                 }
               }}
             />
-            <button className="btn primary" disabled={running || (!prompt.trim() && !attached.length)} onClick={() => void send()}>
-              {running ? 'Diseñando…' : selected && iterate ? 'Nueva versión' : 'Crear mockup'}
-            </button>
+            <div className="cfoot">
+              <button className="ib clip" title="Adjuntar logo, capturas o fotos de referencia (también puedes pegar o arrastrar)" aria-label="Adjuntar" disabled={running} onClick={() => void pickFiles()}>
+                <G n="files" size={16} />
+              </button>
+              {selected && (
+                <label className="cfg-btn design-iter-chip" title="Se guarda como versión nueva del mockup seleccionado">
+                  <input type="checkbox" checked={iterate} onChange={(e) => setIterate(e.target.checked)} /> Partir de «{selected}»
+                </label>
+              )}
+              <span className="cfoot-sp" />
+              <button className="btn primary send design-send"disabled={running || (!prompt.trim() && !attached.length)} onClick={() => void send()}>
+                <G n="send" size={14} stroke={2.2} /> {running ? 'Diseñando…' : selected && iterate ? 'Nueva versión' : 'Crear mockup'}
+              </button>
+            </div>
           </div>
-          {selected && (
-            <label className="design-iter">
-              <input type="checkbox" checked={iterate} onChange={(e) => setIterate(e.target.checked)} /> Partir del mockup seleccionado (se guarda como versión nueva)
-            </label>
-          )}
+          <div className="composer-hint">
+            <span>
+              <kbd>↵</kbd> enviar
+            </span>
+            <span>
+              <kbd>⇧ ↵</kbd> nueva línea
+            </span>
+            <span>
+              <kbd>Ctrl V</kbd> pegar imagen
+            </span>
+          </div>
         </div>
       </section>
     </div>

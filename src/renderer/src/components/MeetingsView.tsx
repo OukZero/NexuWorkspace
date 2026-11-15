@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Meeting } from '../../../shared/types'
-import { deleteMeeting, pauseRecording, resummarizeMeeting, retryMeeting, startRecording, stopRecording, updateMeeting, useMeetings, useRecording } from '../meetings'
+import { createTasks, deleteMeeting, extractTasks, pauseRecording, resummarizeMeeting, retryMeeting, startRecording, stopRecording, updateMeeting, useMeetings, useRecording } from '../meetings'
 import { requestNote, saveNote } from '../notes'
 import { useDB } from '../store'
 import { useUi } from '../ui'
@@ -139,6 +139,74 @@ function Recorder({ onStopped }: { onStopped: (m: Meeting) => void }): ReactNode
   )
 }
 
+/** Tareas que Claude propone de la reunión: se revisan, se edita el título y se crean solo las marcadas. */
+function Proposals({ m }: { m: Meeting }): ReactNode {
+  const ui = useUi()
+  const list = m.proposals ?? []
+  const [items, setItems] = useState(list.map((t) => ({ ...t, on: t.mine })))
+  useEffect(() => setItems((m.proposals ?? []).map((t) => ({ ...t, on: t.mine }))), [m.id, m.proposals])
+  const [open, setOpen] = useState(true)
+  const finding = !!m.extracting
+  const chosen = items.filter((t) => t.on)
+  const edit = (i: number, p: Partial<(typeof items)[number]>): void => setItems((a) => a.map((t, j) => (j === i ? { ...t, ...p } : t)))
+  const create = async (): Promise<void> => {
+    try {
+      const n = await createTasks(m.id, chosen)
+      ui.toast(n === 1 ? 'Tarea creada en «Próximas»' : `${n} tareas creadas en «Próximas»`)
+    } catch (e) {
+      ui.toast(`No se pudieron crear las tareas: ${(e as Error).message}`, true)
+    }
+  }
+  const find = (): void => void extractTasks(m.id).catch((e: Error) => ui.toast(e.message, true))
+
+  if (!finding && !m.proposals) {
+    return m.status === 'done' && m.summary ? (
+      <div className="mt-props">
+        <button className="btn sm" onClick={find}>
+          Buscar tareas en la reunión
+        </button>
+        {m.error && <span className="meta"> {m.error}</span>}
+      </div>
+    ) : null
+  }
+  return (
+    <div className="mt-props">
+      <button className="mt-props-h" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span>{open ? '▾' : '▸'}</span> Tareas de la reunión {finding ? '(buscando…)' : `(${items.length})`}
+      </button>
+      {open && !finding && (
+        <>
+          {!items.length && <div className="meta">No se encontraron tareas.</div>}
+          {items.map((t, i) => (
+            <div key={i} className="mt-prop">
+              <input type="checkbox" checked={t.on} aria-label="Crear esta tarea" onChange={(e) => edit(i, { on: e.target.checked })} />
+              <div className="mt-prop-b">
+                <input value={t.title} maxLength={160} aria-label="Título de la tarea" onChange={(e) => edit(i, { title: e.target.value })} />
+                <div className="meta">
+                  {t.owner ? `Responsable: ${t.owner}` : 'Sin responsable'}
+                  {t.mine && ' · es tuya'}
+                  {t.description && ` · ${t.description}`}
+                </div>
+              </div>
+            </div>
+          ))}
+          <div className="mt-prop-act">
+            <button className="btn sm p" disabled={!chosen.length} onClick={() => void create()}>
+              Crear {chosen.length || ''} {chosen.length === 1 ? 'tarea' : 'tareas'}
+            </button>
+            <button className="btn sm" onClick={find}>
+              Volver a buscar
+            </button>
+            <button className="btn sm" onClick={() => void updateMeeting(m.id, { proposals: null })}>
+              Descartar
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 function Detail({ m, onGone }: { m: Meeting; onGone: () => void }): ReactNode {
   const db = useDB()
   const ui = useUi()
@@ -230,6 +298,8 @@ function Detail({ m, onGone }: { m: Meeting; onGone: () => void }): ReactNode {
           {m.status === 'transcribing' ? 'Transcribiendo el audio en tu equipo. Puedes seguir usando la app; puede tardar unos minutos.' : 'Claude está redactando el resumen…'}
         </div>
       )}
+
+      <Proposals m={m} />
 
       <div className="mt-tabs" role="tablist">
         <button role="tab" aria-selected={tab === 'summary'} className={tab === 'summary' ? 'on' : ''} onClick={() => setTab('summary')}>

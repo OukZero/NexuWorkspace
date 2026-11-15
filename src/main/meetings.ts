@@ -2,10 +2,11 @@ import { desktopCapturer, session } from 'electron'
 import { spawn } from 'child_process'
 import fs from 'fs'
 import path from 'path'
-import type { Meeting, MeetingPatch, MeetingStatus } from '../shared/types'
+import type { Meeting, MeetingPatch, MeetingStatus, MeetingTask, Priority } from '../shared/types'
 import { clip } from '../shared/util'
-import { isSignedIn } from './auth'
+import { getStatus, isSignedIn } from './auth'
 import { commit, dataPath, getDb, uid } from './db'
+import { trackChild } from './lifecycle'
 import { askClaude } from './summary'
 
 /**
@@ -28,6 +29,7 @@ interface Stored {
   transcript: string
   summary: string
   error?: string
+  proposals?: MeetingTask[]
 }
 
 const dir = (): string => path.join(path.dirname(dataPath()), 'meetings')
@@ -37,6 +39,7 @@ const wavFile = (id: string): string => path.join(dir(), `${id}.wav`)
 
 const live = new Set<string>() // grabaciones en curso en esta sesión
 const busy = new Set<string>() // reuniones que se están transcribiendo o resumiendo
+const extracting = new Set<string>() // reuniones de las que se buscan tareas
 let cache: Map<string, Stored> | null = null
 
 function checkId(id: string): void {
@@ -128,7 +131,7 @@ const get = (id: string): Stored => {
   return m
 }
 
-const view = (m: Stored): Meeting => ({ ...m, hasAudio: fs.existsSync(wavFile(m.id)) })
+const view = (m: Stored): Meeting => ({ ...m, hasAudio: fs.existsSync(wavFile(m.id)), extracting: extracting.has(m.id) })
 
 function patch(m: Stored, p: Partial<Stored>): void {
   Object.assign(m, p)
@@ -177,6 +180,7 @@ export function updateMeeting(id: string, p: MeetingPatch): Meeting {
   if (p.taskId !== undefined) next.taskId = p.taskId || undefined
   if (p.summary !== undefined) next.summary = p.summary
   if (p.transcript !== undefined) next.transcript = p.transcript
+  if (p.proposals === null) next.proposals = undefined
   patch(m, next)
   return view(m)
 }
@@ -212,6 +216,7 @@ function transcribe(wav: string): Promise<string> {
   const args = ['-m', model, '-f', wav, '-l', s.whisperLang.trim() || 'auto', '-nt', '-np', '-otxt', '-of', base]
   return new Promise((resolve, reject) => {
     const child = spawn(exe, args, { windowsHide: true })
+    trackChild(child)
     let err = ''
     child.stderr.on('data', (b: Buffer) => (err = (err + b).slice(-2000)))
     child.on('error', (e) => reject(new Error(`No se pudo ejecutar whisper: ${e.message}`)))
@@ -274,14 +279,118 @@ async function summarizeTranscript(title: string, transcript: string, cmd: strin
             'Es una transcripción automática con posibles errores; no inventes nada. Responde SOLO con las viñetas.\n\n' +
             part,
           cmd,
-          300000
+          300000,
+          'sonnet'
         )
       )
     }
     source = notes.join('\n\n')
   }
-  const out = await askClaude(`Resume la reunión «${title}» a partir de ${source === transcript ? 'su transcripción' : 'las notas de sus tramos'}.\n${FORMAT}\n\n${source}`, cmd, 300000)
+  const out = await askClaude(`Resume la reunión «${title}» a partir de ${source === transcript ? 'su transcripción' : 'las notas de sus tramos'}.\n${FORMAT}\n\n${source}`, cmd, 300000, 'sonnet')
   return out.replace(/\r/g, '').trim()
+}
+
+// ---------- tareas propuestas ----------
+
+const plain = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+
+/** Nombres con los que te nombran: los de Ajustes o, si están vacíos, las partes del correo de la sesión (martin.escobedo@… → martin, escobedo). */
+function myNames(): string[] {
+  const set = getDb().settings.myNames.split(/[,;\n]/).map(plain).filter(Boolean)
+  if (set.length) return set
+  const local = (getStatus().email || '').split('@')[0]
+  return local.split(/[._\-+\d]+/).map(plain).filter((p) => p.length > 2)
+}
+
+const isMine = (owner: string, names: string[]): boolean => {
+  const o = plain(owner)
+  return !!o && names.some((n) => o.includes(n) || (o.length > 2 && n.includes(o)))
+}
+
+const PRIORITIES = new Set(['high', 'med', 'low'])
+
+function parseTasks(raw: string, names: string[]): MeetingTask[] {
+  const start = raw.indexOf('[')
+  const end = raw.lastIndexOf(']')
+  if (start < 0 || end <= start) return []
+  let arr: unknown
+  try {
+    arr = JSON.parse(raw.slice(start, end + 1))
+  } catch {
+    return []
+  }
+  if (!Array.isArray(arr)) return []
+  const out: MeetingTask[] = []
+  for (const x of arr as Record<string, unknown>[]) {
+    const title = typeof x?.title === 'string' ? x.title.replace(/\s+/g, ' ').trim().slice(0, 160) : ''
+    if (!title) continue
+    const owner = typeof x.owner === 'string' ? x.owner.trim().slice(0, 80) : ''
+    const prio = typeof x.priority === 'string' && PRIORITIES.has(x.priority) ? (x.priority as Priority) : 'med'
+    out.push({ title, description: typeof x.description === 'string' ? x.description.trim().slice(0, 1000) : '', priority: prio, owner, mine: isMine(owner, names) })
+  }
+  return out.slice(0, 30)
+}
+
+/** Pide a Claude las tareas que salieron en la reunión. Solo las propone: crearlas es decisión del usuario. */
+async function extractTasks(m: Stored): Promise<void> {
+  const names = myNames()
+  const source = m.transcript.length <= MAX_DIRECT && m.transcript.trim() ? m.transcript : m.summary
+  if (!source.trim()) throw new Error('No hay nada de lo que extraer tareas.')
+  const who = names.length ? `El usuario aparece en la reunión como: ${names.join(', ')}. ` : ''
+  const raw = await askClaude(
+    `De la reunión «${m.title}» extrae las tareas de trabajo concretas que quedaron pendientes (acuerdos con una acción a realizar). ${who}` +
+      'Para cada una indica quién es el responsable tal como se le nombra ("" si nadie fue asignado). ' +
+      'La transcripción es automática y puede escribir mal los nombres: no inventes tareas ni responsables que no se mencionaron.\n' +
+      'Responde SOLO con un arreglo JSON, sin texto alrededor ni bloques de código, con objetos {"title": "verbo en infinitivo + qué (máx. 100 caracteres)", ' +
+      '"description": "contexto breve", "priority": "high|med|low", "owner": "nombre o vacío"}. Si no hay tareas, responde [].\n\n' +
+      source,
+    getDb().settings.claudeCmd,
+    180000,
+    'sonnet' // los nombres mal transcritos y los responsables piden más criterio
+  )
+  patch(m, { proposals: parseTasks(raw, names) })
+}
+
+export function extractMeeting(id: string): Meeting {
+  const m = get(id)
+  if (live.has(id) || busy.has(id)) throw new Error('La reunión ya se está procesando.')
+  busy.add(id)
+  extracting.add(id)
+  void extractTasks(m)
+    .catch((e) => patch(m, { error: `No se pudieron extraer las tareas: ${(e as Error).message}` }))
+    .finally(() => {
+      busy.delete(id)
+      extracting.delete(id)
+    })
+  return view(m)
+}
+
+export function createMeetingTasks(id: string, tasks: MeetingTask[]): number {
+  const m = get(id)
+  const db = getDb()
+  let n = 0
+  for (const t of tasks) {
+    const title = String(t.title ?? '').replace(/\s+/g, ' ').trim().slice(0, 160)
+    if (!title) continue
+    db.tasks.push({
+      id: uid(),
+      title,
+      description: [String(t.description ?? '').trim(), `Origen: reunión «${m.title}»${t.owner ? ` · responsable: ${t.owner}` : ''}`].filter(Boolean).join('\n\n'),
+      project: '',
+      client: '',
+      folder: '',
+      priority: PRIORITIES.has(t.priority) ? t.priority : 'med',
+      estimateMin: 0,
+      status: 'next',
+      recurrence: { type: 'none' },
+      createdAt: Date.now(),
+      doneAt: null
+    })
+    n++
+  }
+  if (n) commit()
+  patch(m, { proposals: undefined })
+  return n
 }
 
 async function run(id: string, mode: 'full' | 'summary'): Promise<void> {
@@ -300,6 +409,17 @@ async function run(id: string, mode: 'full' | 'summary'): Promise<void> {
     patch(m, { status: 'summarizing', error: undefined })
     const summary = await summarizeTranscript(m.title, m.transcript, getDb().settings.claudeCmd)
     patch(m, { summary, status: 'done', error: undefined })
+    if (getDb().settings.meetingAutoTasks) {
+      // las propuestas son un extra: si fallan, el resumen ya está listo
+      extracting.add(id)
+      try {
+        await extractTasks(m)
+      } catch {
+        /* se puede pedir a mano con «Buscar tareas» */
+      } finally {
+        extracting.delete(id)
+      }
+    }
   } catch (e) {
     patch(m, { status: 'error', error: (e as Error).message })
   } finally {

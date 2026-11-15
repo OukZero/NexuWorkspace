@@ -60,18 +60,23 @@ export function TaskRow({ task: t }: { task: Task }): ReactNode {
           <CiBadges task={t} />
           {(t.project || t.client) && <span>{[t.project, t.client].filter(Boolean).join(' · ')}</span>}
           {subtasks.length > 0 && (
-            <span title="Subtareas completadas">
+            <span className="xtra" title="Subtareas completadas">
               {subtasks.filter((s) => s.done).length}/{subtasks.length} subtareas
             </span>
           )}
           {recurring && <span>↻ recurrente</span>}
           {t.fromTemplate && <span className={t.carried ? 'hi' : ''}>↻ rutina{t.carried ? ` · ${t.carried} d pendiente` : ''}</span>}
           {(t.tags ?? []).map((tag) => (
-            <span key={tag} className="tag">
+            <span key={tag} className="tag xtra">
               #{tag}
             </span>
           ))}
-          {folder ? <span title={folder}>{baseName(folder)}</span> : <span className="dim">sin carpeta</span>}
+          {/* la carpeta solo se muestra si aporta algo distinto del proyecto; el resto aparece al pasar el ratón */}
+          {folder ? (
+            baseName(folder) !== t.project && <span className="xtra" title={folder}>{baseName(folder)}</span>
+          ) : (
+            <span className="dim xtra">sin carpeta</span>
+          )}
         </div>
       </div>
       <div className="actions hv">

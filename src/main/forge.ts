@@ -336,7 +336,7 @@ export async function prText(dir: string, taskId?: string): Promise<{ title: str
     (task?.issue ? ` Termina con la línea «Closes #${task.issue.number}».` : '') +
     (task ? `\n\nTAREA: ${task.title}\n${clip(task.description, 800)}` : '') +
     `\n\nCOMMITS:\n${commits.map((c) => `- ${c.subject}`).join('\n')}\n\nARCHIVOS:\n${diff.stat}\n\nCAMBIOS:\n${diff.patch}`
-  const out = (await askClaude(prompt, getDb().settings.claudeCmd, 150000)).replace(/\r/g, '').trim()
+  const out = (await askClaude(prompt, getDb().settings.claudeCmd, 150000, 'sonnet')).replace(/\r/g, '').trim()
   const [first, ...rest] = out.replace(/^```\w*\n?/, '').replace(/\n?```$/, '').split('\n')
   return { title: clip(first.replace(/^#+\s*/, '').trim(), 100), body: rest.join('\n').trim() }
 }

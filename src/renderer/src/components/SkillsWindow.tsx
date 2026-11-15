@@ -37,8 +37,22 @@ export function SkillsWindow(): ReactNode {
 
   const shown = useMemo(() => {
     const t = q.trim().toLowerCase()
-    return (skills ?? []).filter((s) => !t || s.name.toLowerCase().includes(t) || s.description.toLowerCase().includes(t))
+    const list = (skills ?? []).filter((s) => !t || s.name.toLowerCase().includes(t) || s.description.toLowerCase().includes(t))
+    return list.sort((a, b) => Number(!!b.recommended) - Number(!!a.recommended)) // recomendadas primero
   }, [skills, q])
+  const pending = (skills ?? []).filter((s) => s.recommended && !s.installed).length
+
+  const installRec = async (): Promise<void> => {
+    setBusy('*')
+    setNote('')
+    try {
+      setNote(await window.api.call('skills:installRecommended'))
+      await load()
+    } catch (e) {
+      setErr((e as Error).message)
+    }
+    setBusy(null)
+  }
 
   return (
     <div className="skills-win">
@@ -49,6 +63,11 @@ export function SkillsWindow(): ReactNode {
         </p>
         <div className="skills-bar">
           <input className="input" placeholder="Buscar skill…" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+          {pending > 0 && (
+            <button className="btn primary" onClick={() => void installRec()} disabled={busy !== null}>
+              Instalar recomendadas ({pending})
+            </button>
+          )}
           <button className="btn" onClick={() => void load()} disabled={skills === null}>
             Actualizar
           </button>
@@ -65,7 +84,7 @@ export function SkillsWindow(): ReactNode {
         {shown.map((s) => (
           <div key={s.name} className="skill-card">
             <div className="skill-main">
-              <b>{s.name}</b> {s.installed && <span className="chip">instalada</span>} {s.custom && <span className="chip">propia</span>}
+              <b>{s.name}</b> {s.installed && <span className="chip">instalada</span>} {s.custom && <span className="chip">propia</span>} {s.recommended && <span className="chip">recomendada</span>}
               <div className="meta">{s.description || 'Sin descripción'}</div>
             </div>
             {s.installed ? (

@@ -2,7 +2,7 @@ import { APP_ID } from './appid'
 import { app, BrowserWindow, screen } from 'electron'
 import fs from 'fs'
 import path from 'path'
-import { getDb, registerWindow } from './db'
+import { commit, getDb, registerWindow } from './db'
 import { lifecycle } from './lifecycle'
 import { isSignedIn } from './auth'
 import { closeSplash } from './splash'
@@ -13,7 +13,7 @@ let mini: BrowserWindow | null = null
 const preload = (): string => path.join(__dirname, '../preload/index.js')
 
 // Icono de la ventana y de la barra de tareas; se genera con `npm run icon`. Sin el archivo, se usa el de Electron.
-const iconPath = path.join(__dirname, '../../resources/shutoki-ai.ico')
+const iconPath = path.join(__dirname, '../../resources/nexo.ico')
 const icon = (): { icon?: string } => (fs.existsSync(iconPath) ? { icon: iconPath } : {})
 
 function loadPage(w: BrowserWindow, page: 'index' | 'mini', query?: Record<string, string>): void {
@@ -38,7 +38,17 @@ export function showWin(): void {
 
 // tamaño de la ventana flotante según el formato elegido en Ajustes
 const MINI_SIZE = { full: [360, 108], compact: [360, 60], timer: [210, 50] } as const
-const miniSize = (): readonly [number, number] => MINI_SIZE[getDb().settings.miniFormat ?? 'full'] ?? MINI_SIZE.full
+// en formato «full» el renderer pide su tamaño (píldora o vista expandida, que crece con la respuesta, adjuntos y permisos)
+let miniWant: [number, number] | null = null
+const miniSize = (): readonly [number, number] => {
+  const f = getDb().settings.miniFormat ?? 'full'
+  return f === 'full' && miniWant ? miniWant : (MINI_SIZE[f] ?? MINI_SIZE.full)
+}
+
+export function resizeMini(w: number, h: number): void {
+  miniWant = [Math.min(520, Math.max(300, Math.round(w))), Math.min(560, Math.max(44, Math.round(h)))]
+  applyMini()
+}
 
 /** Muestra la ventana flotante (si no está desactivada en Ajustes). */
 function showMini(): void {
@@ -59,6 +69,7 @@ export function applyMini(): void {
   // el formato cambia el tamaño sin mover la esquina inferior derecha
   if (b.width !== w || b.height !== h) mini.setBounds({ x: b.x + b.width - w, y: b.y + b.height - h, width: w, height: h })
   mini.setAlwaysOnTop(s.miniOnTop !== false, 'screen-saver')
+  mini.setOpacity(Math.min(1, Math.max(0.4, (s.miniOpacity ?? 100) / 100)))
   if (s.miniEnabled === false) mini.hide()
   else if (win && !win.isDestroyed() && (win.isMinimized() || !win.isVisible()) && !mini.isVisible()) mini.showInactive()
 }
@@ -66,11 +77,14 @@ export function applyMini(): void {
 function createMini(): void {
   const wa = screen.getPrimaryDisplay().workArea
   const [w, h] = miniSize()
+  // posición recordada, si sigue dentro de alguna pantalla; si no, esquina inferior derecha
+  const saved = getDb().settings.miniPos
+  const onScreen = saved && screen.getAllDisplays().some((d) => saved.x >= d.bounds.x && saved.y >= d.bounds.y && saved.x + w <= d.bounds.x + d.bounds.width && saved.y + h <= d.bounds.y + d.bounds.height)
   mini = new BrowserWindow({
     width: w,
     height: h,
-    x: wa.x + wa.width - w - 16,
-    y: wa.y + wa.height - h - 16,
+    x: onScreen ? saved.x : wa.x + wa.width - w - 16,
+    y: onScreen ? saved.y : wa.y + wa.height - h - 16,
     frame: false,
     alwaysOnTop: true,
     skipTaskbar: true,
@@ -83,6 +97,18 @@ function createMini(): void {
     webPreferences: { preload: preload(), contextIsolation: true, nodeIntegration: false }
   })
   mini.setAlwaysOnTop(getDb().settings.miniOnTop !== false, 'screen-saver')
+  mini.setOpacity(Math.min(1, Math.max(0.4, (getDb().settings.miniOpacity ?? 100) / 100)))
+  // recordar dónde la deja el usuario (con retardo: 'moved' se dispara al soltar, pero en Windows puede repetirse)
+  let t: NodeJS.Timeout | undefined
+  mini.on('moved', () => {
+    clearTimeout(t)
+    t = setTimeout(() => {
+      if (!mini || mini.isDestroyed()) return
+      const [x, y] = mini.getPosition()
+      getDb().settings.miniPos = { x, y }
+      commit()
+    }, 400)
+  })
   registerWindow(mini)
   loadPage(mini, 'mini')
 }
@@ -107,7 +133,7 @@ export function openPopout(taskId: string, convId?: string, atCursor = false): v
     minHeight: 400,
     ...(pos ? { x: Math.max(0, pos.x - 460), y: Math.max(0, pos.y - 24) } : {}),
     backgroundColor: '#0f1115',
-    title: 'Shutoki AI Workspace',
+    title: 'Nexo Workspace',
     ...icon(),
     autoHideMenuBar: true,
     webPreferences: { preload: preload(), contextIsolation: true, nodeIntegration: false }
@@ -133,7 +159,7 @@ export function openSkills(): void {
     minWidth: 520,
     minHeight: 400,
     backgroundColor: '#0f1115',
-    title: 'Skills · Shutoki AI Workspace',
+    title: 'Skills · Nexo Workspace',
     ...icon(),
     autoHideMenuBar: true,
     webPreferences: { preload: preload(), contextIsolation: true, nodeIntegration: false }
@@ -161,7 +187,7 @@ export function createWindows(): void {
     minWidth: 900,
     minHeight: 560,
     backgroundColor: '#0f1115',
-    title: 'Shutoki AI Workspace',
+    title: 'Nexo Workspace',
     ...icon(),
     autoHideMenuBar: true,
     webPreferences: { preload: preload(), contextIsolation: true, nodeIntegration: false, webviewTag: true }
@@ -175,7 +201,7 @@ export function createWindows(): void {
       appId: APP_ID,
       appIconPath: iconPath,
       appIconIndex: 0,
-      relaunchDisplayName: 'Shutoki AI Workspace',
+      relaunchDisplayName: 'Nexo Workspace',
       // en desarrollo, fijarla en la barra la reabre compilando los últimos cambios
       ...(!app.isPackaged && fs.existsSync(launcher)
         ? { relaunchCommand: `powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${launcher}"` }

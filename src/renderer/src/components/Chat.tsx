@@ -5,7 +5,7 @@ import type { Attachment, ChatMode, ContextKind, Provider, PromptTemplate } from
 import { contextAdvice, fmtTokens } from '../../../shared/advice'
 import { DEFAULT_CONTEXT, templatesOf } from '../../../shared/templates'
 import { workFolder } from '../../../shared/util'
-import { convLabel } from '../conversations'
+import { convLabel, openConvs } from '../conversations'
 import { findTask, useDB } from '../store'
 import { readTerminal } from '../terminals'
 import { baseName, hhmm } from '../utils'
@@ -27,6 +27,14 @@ import { SidePanel } from './SidePanel'
 
 // atajos fijos que no son plantillas: comandos / de Claude Code
 const COMMAND_CHIPS = ['/compact', '/context']
+
+// arranques rápidos del chat vacío: rellenan el cuadro de texto, no envían nada
+const QUICK_STARTS: Array<[string, string]> = [
+  ['Revisar la rama', 'Revisa los cambios de la rama actual frente a la rama base y dime qué riesgos o errores ves.'],
+  ['Explicar el código', 'Explícame cómo funciona el código relacionado con esta tarea antes de tocar nada.'],
+  ['Plan breve', 'Antes de editar, revisa el código relevante y propón un plan breve.'],
+  ['Escribir pruebas', 'Propón y escribe pruebas para lo que cambia esta tarea.']
+]
 
 const norm = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
@@ -103,6 +111,7 @@ export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string
   const lay = useLayout()
   const taskSlot = useTaskSlot()
   const convs = useConvsPane()
+  const [cfgOpen, setCfgOpen] = useState(false)
   const chat = db.chats[convId]
   const taskId = chat?.taskId ?? ''
   const task = findTask(db, taskId)
@@ -433,11 +442,15 @@ export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string
       <section className="chatpane">
       {!embedded && (
         <div className="chat-head">
-          {!convs.open && (
+          {!(convs.open ?? openConvs(db, taskId).length > 1) && (
             <button className="ib" title="Mostrar la lista de conversaciones" aria-label="Mostrar la lista de conversaciones" onClick={() => setConvsOpen(true)}>
               <G n="list" />
             </button>
           )}
+          <button className="ib" title="Historial: todas tus conversaciones, abiertas y cerradas" aria-label="Abrir el historial" onClick={() => ui.go('history')}>
+            <G n="history" />
+          </button>
+
           <div className="ch-title">
             <b title={task?.title}>{task?.title}</b>
             {folder && (
@@ -467,7 +480,18 @@ export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string
             }}
           >
             {messages.length === 0 && !running && (
-              <div className="empty">Conversación nueva para esta tarea. {ai} trabajará en la carpeta del proyecto y puede editar archivos.</div>
+              <div className="empty">
+                <div>Conversación nueva para esta tarea. {ai} trabajará en la carpeta del proyecto y puede editar archivos.</div>
+                {chat?.kind !== 'design' && chat?.kind !== 'review' && (
+                  <div className="quick-acts">
+                    {QUICK_STARTS.map(([label, text]) => (
+                      <button key={label} className="btn sm" onClick={() => (setInput(text), area.current?.focus())}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
             {messages.map((m, i) => (
               <div key={i} className={`msg ${m.role}`} data-ai={m.role === 'assistant' ? provider : undefined}>
@@ -618,41 +642,53 @@ export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string
               onKeyDown={onKey}
               onPaste={onPaste}
             />
+            {cfgOpen && (
+              <div className="cfg-row">
+                {chat?.kind !== 'design' && (
+                  <Select
+                    className="mini-sel"
+                    ariaLabel="Proveedor"
+                    title={chat?.sessionId ? 'El proveedor no se puede cambiar una vez iniciada la conversación (reiníciala para cambiarlo)' : 'Con qué se ejecuta esta conversación'}
+                    disabled={running || !!chat?.sessionId}
+                    value={provider}
+                    onChange={(v) => void ui.run('chat:config', convId, { provider: v as Provider })}
+                    options={[
+                      { value: 'claude', label: 'Claude' },
+                      { value: 'copilot', label: 'GitHub Copilot' }
+                    ]}
+                  />
+                )}
+                <ProfileSelect convId={convId} />
+                {chat?.kind !== 'review' && (
+                  <Select
+                    className="mini-sel mode-sel"
+                    ariaLabel="Modo"
+                    title={provider === 'copilot' ? 'Agent: usa todos los comandos sin preguntar. Ask: solo los permitidos en Ajustes (Copilot no puede preguntar)' : 'Agent: edita y ejecuta sin pedir permiso. Ask: pregunta antes de editar o ejecutar'}
+                    disabled={running}
+                    value={chat?.mode ?? 'default'}
+                    onChange={(v) => void ui.run('chat:config', convId, { mode: v as ChatMode })}
+                    options={[
+                      ...(chat?.mode ? [] : [{ value: 'default', label: 'Según Ajustes' }]),
+                      { value: 'agent', label: '⚡ Agent' },
+                      { value: 'ask', label: '🔐 Ask' }
+                    ]}
+                  />
+                )}
+              </div>
+            )}
             <div className="cfoot">
               <button className="ib clip" title="Adjuntar archivos o fotos (también puedes pegar o arrastrar)" aria-label="Adjuntar" onClick={() => void pickFiles()}>
                 <G n="files" size={16} />
               </button>
               {chat?.kind !== 'design' && <ContextBar taskId={taskId} kinds={ctxKinds} onChange={setCtxKinds} terminalText={terminalText} />}
-              {chat?.kind !== 'design' && (
-                <Select
-                  className="mini-sel"
-                  ariaLabel="Proveedor"
-                  title={chat?.sessionId ? 'El proveedor no se puede cambiar una vez iniciada la conversación (reiníciala para cambiarlo)' : 'Con qué se ejecuta esta conversación'}
-                  disabled={running || !!chat?.sessionId}
-                  value={provider}
-                  onChange={(v) => void ui.run('chat:config', convId, { provider: v as Provider })}
-                  options={[
-                    { value: 'claude', label: 'Claude' },
-                    { value: 'copilot', label: 'GitHub Copilot' }
-                  ]}
-                />
-              )}
-              <ProfileSelect convId={convId} />
-              {chat?.kind !== 'review' && (
-                <Select
-                  className="mini-sel mode-sel"
-                  ariaLabel="Modo"
-                  title={provider === 'copilot' ? 'Agent: usa todos los comandos sin preguntar. Ask: solo los permitidos en Ajustes (Copilot no puede preguntar)' : 'Agent: edita y ejecuta sin pedir permiso. Ask: pregunta antes de editar o ejecutar'}
-                  disabled={running}
-                  value={chat?.mode ?? 'default'}
-                  onChange={(v) => void ui.run('chat:config', convId, { mode: v as ChatMode })}
-                  options={[
-                    ...(chat?.mode ? [] : [{ value: 'default', label: 'Según Ajustes' }]),
-                    { value: 'agent', label: '⚡ Agent' },
-                    { value: 'ask', label: '🔐 Ask' }
-                  ]}
-                />
-              )}
+              <button
+                className={`cfg-btn${cfgOpen ? ' on' : ''}`}
+                title="Proveedor, perfil y modo de esta conversación"
+                aria-expanded={cfgOpen}
+                onClick={() => setCfgOpen((o) => !o)}
+              >
+                {provider === 'copilot' ? 'Copilot' : 'Claude'} · {chat?.mode === 'agent' ? 'Agent' : chat?.mode === 'ask' ? 'Ask' : 'Según Ajustes'} <G n="more" size={13} />
+              </button>
               <Select
                 className="mini-sel"
                 ariaLabel="Modelo"

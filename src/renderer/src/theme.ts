@@ -87,10 +87,17 @@ function mk(label: string, base: 'light' | 'dark', c: Palette, accent: string | 
 export const PRESETS: Record<string, Preset> = {
   // predeterminado: paleta del rediseño (fondo oscuro, acento violeta, tarjetas sólidas)
   shutoki: mk(
-    'Shutoki',
+    'Nexo',
     'dark',
-    { bg: '#0b0b12', panel: '#12121c', panel2: '#171724', line: '#22222f', text: '#ecebf4', muted: '#9a99b0', user: '#262045', code: '#08080e', over: '#1d1d2c' },
-    '#7c5cff'
+    { bg: '#070b18', panel: '#0e1426', panel2: '#141c33', line: '#1f2a47', text: '#e8edff', muted: '#8d9bc4', user: '#1b2a55', code: '#050813', over: '#131b30' },
+    ['#22d3ee', '#0e8fb0']
+  ),
+  // variante clara de Nexo: fondo azul hielo (no blanco) y acento cian profundo, del mismo degradado del icono
+  nexoclaro: mk(
+    'Nexo claro',
+    'light',
+    { bg: '#e8edfa', panel: '#f5f7ff', panel2: '#dbe4f8', line: '#c6d2ee', text: '#131a35', muted: '#55608a', user: '#d3e2ff', code: '#dfe7f8', over: '#edf1ff' },
+    ['#22d3ee', '#0b7fa6']
   ),
   medianoche: {
     label: 'Medianoche',
@@ -268,11 +275,24 @@ export interface Appearance extends Look {
   motion: boolean
   confetti: boolean
   auto: AutoTheme
-  nav: { order: string[]; hidden: string[] }
+  /** Estilos que usa el botón día / noche ('' = clásico del modo). */
+  dayPreset: string
+  nightPreset: string
+  nav: { order: string[]; hidden: string[]; pinned: string[] }
   /** Color por proyecto ('p:Nombre') o cliente ('c:Nombre'). */
   colors: Record<string, string>
   bgDim: number
   bgGlass: number
+  /** Posición (%), zoom (%), ajuste, desenfoque (px), saturación y brillo (%) de la imagen de fondo. */
+  bgX: number
+  bgY: number
+  bgZoom: number
+  bgFit: 'cover' | 'contain' | 'tile'
+  bgBlur: number
+  bgSat: number
+  bgBright: number
+  /** Desenfoque del vidrio de los paneles (px). */
+  glassBlur: number
   saved: SavedTheme[]
 }
 
@@ -280,11 +300,16 @@ const DEFAULT_LOOK: Look = {
   mode: 'system', preset: 'shutoki', custom: DEFAULT_CUSTOM, accent: 'auto', uiFont: '', codeFont: '', lineHeight: 145,
   radius: 'soft', shadow: 1, bubbles: 'solid', syntax: 'auto'
 }
+/** Secciones fijas en la barra superior por defecto; el resto va en el botón «+». */
+export const DEFAULT_PINNED = ['today', 'board', 'chat', 'hours', 'notes', 'meetings']
+
 export const DEFAULT_APPEARANCE: Appearance = {
   ...DEFAULT_LOOK,
   density: 'comfortable', fontScale: 100, motion: true, confetti: true,
   auto: { on: false, lightFrom: '07:00', darkFrom: '19:00', light: 'papel', dark: 'medianoche' },
-  nav: { order: [], hidden: [] }, colors: {}, bgDim: 80, bgGlass: 78, saved: []
+  dayPreset: 'nexoclaro', nightPreset: 'shutoki',
+  nav: { order: [], hidden: [], pinned: DEFAULT_PINNED }, colors: {}, bgDim: 80, bgGlass: 78,
+  bgX: 50, bgY: 50, bgZoom: 100, bgFit: 'cover', bgBlur: 0, bgSat: 100, bgBright: 100, glassBlur: 12, saved: []
 }
 
 const KEY = 'shutoki.appearance'
@@ -344,10 +369,20 @@ export function sanitize(raw: unknown): Appearance {
     motion: r.motion !== false,
     confetti: r.confetti !== false,
     auto: { on: a.on === true, lightFrom: time(a.lightFrom, d.auto.lightFrom), darkFrom: time(a.darkFrom, d.auto.darkFrom), light: presetOrEmpty(a.light, d.auto.light), dark: presetOrEmpty(a.dark, d.auto.dark) },
-    nav: { order: strs(nav.order), hidden: strs(nav.hidden) },
+    dayPreset: presetOrEmpty(r.dayPreset, d.dayPreset),
+    nightPreset: presetOrEmpty(r.nightPreset, d.nightPreset),
+    nav: { order: strs(nav.order), hidden: strs(nav.hidden), pinned: Array.isArray(nav.pinned) ? strs(nav.pinned) : DEFAULT_PINNED },
     colors,
-    bgDim: num(r.bgDim, 40, 95, d.bgDim),
-    bgGlass: num(r.bgGlass, 40, 100, d.bgGlass),
+    bgDim: num(r.bgDim, 0, 95, d.bgDim),
+    bgGlass: num(r.bgGlass, 20, 100, d.bgGlass),
+    bgX: num(r.bgX, 0, 100, d.bgX),
+    bgY: num(r.bgY, 0, 100, d.bgY),
+    bgZoom: num(r.bgZoom, 100, 300, d.bgZoom),
+    bgFit: oneOf(r.bgFit, ['cover', 'contain', 'tile'], d.bgFit),
+    bgBlur: num(r.bgBlur, 0, 30, d.bgBlur),
+    bgSat: num(r.bgSat, 0, 200, d.bgSat),
+    bgBright: num(r.bgBright, 40, 160, d.bgBright),
+    glassBlur: num(r.glassBlur, 0, 30, d.glassBlur),
     saved: Array.isArray(r.saved)
       ? r.saved
           .filter((s): s is Record<string, unknown> => !!s && typeof s === 'object')
@@ -485,6 +520,7 @@ function apply(): void {
   const p = presetFor(key)
   const theme = p ? p.base : mode === 'system' ? (mq.matches ? 'light' : 'dark') : mode
   root.dataset.theme = theme
+  root.dataset.preset = key // permite estilos propios del tema Nexo (degradado de marca, nodos)
   root.dataset.density = A.density
   root.dataset.bubbles = A.bubbles
   if (!A.motion) root.dataset.motion = 'off'
@@ -507,8 +543,17 @@ function apply(): void {
     root.style.setProperty('--bg-image', `url("${img}")`)
     root.style.setProperty('--bg-dim', `${A.bgDim}%`)
     root.style.setProperty('--glass', `${A.bgGlass}%`)
+    // la imagen vive en body::before (para poder desenfocarla y moverla); aquí solo sus parámetros
+    root.style.setProperty('--bg-pos', `${A.bgX}% ${A.bgY}%`)
+    root.dataset.bgFit = A.bgFit
+    root.style.setProperty('--bg-filter', `blur(${A.bgBlur}px) saturate(${A.bgSat}%) brightness(${A.bgBright}%)`)
+    // el zoom escala la capa desde el punto elegido; el extra por desenfoque evita bordes claros
+    root.style.setProperty('--bg-scale', String((A.bgZoom / 100) * (A.bgBlur > 0 ? 1 + A.bgBlur / 120 : 1)))
+    root.style.setProperty('--bg-origin', `${A.bgX}% ${A.bgY}%`)
+    root.style.setProperty('--glass-blur', `${A.glassBlur}px`)
   } else {
     delete root.dataset.bg
+    for (const k of ['--bg-pos', '--bg-origin', '--bg-filter', '--bg-scale', '--glass-blur']) root.style.removeProperty(k)
     root.style.removeProperty('--bg-image')
     root.style.removeProperty('--bg-dim')
     root.style.removeProperty('--glass')
@@ -544,6 +589,8 @@ function apply(): void {
   if (focus) root.dataset.focus = '1'
   else delete root.dataset.focus
   root.style.setProperty('zoom', String(A.fontScale / 100))
+  // los popovers de Radix calculan su posición en píxeles de pantalla; el zoom de la raíz la multiplicaba y se abrían desplazados
+  root.style.setProperty('--zoom', String(A.fontScale / 100))
 }
 
 let syncTimer: ReturnType<typeof setTimeout> | undefined
@@ -604,12 +651,18 @@ export const getPreset = (): string => A.preset
 export const getBgDim = (): number => A.bgDim
 export const getBgGlass = (): number => A.bgGlass
 export const setMode = (m: ThemeMode): void => update({ mode: m })
+/** Botón día / noche: pasa al estilo claro u oscuro que el usuario eligió como predeterminado (y desactiva el horario, que lo pisaría). */
+export function toggleDayNight(): void {
+  const toLight = document.documentElement.dataset.theme !== 'light'
+  update({ auto: { ...A.auto, on: false }, mode: toLight ? 'light' : 'dark', preset: toLight ? A.dayPreset : A.nightPreset })
+}
 export const setAccent = (k: string): void => update({ accent: k })
 export const setDensity = (d: Density): void => update({ density: d })
 export const setFontScale = (n: number): void => update({ fontScale: n })
 export const setPreset = (k: string): void => update({ preset: k })
 export const setBgDim = (n: number): void => update({ bgDim: n })
 export const setBgGlass = (n: number): void => update({ bgGlass: n })
+export const resetBgAdjust = (): void => update({ bgX: 50, bgY: 50, bgZoom: 100, bgFit: 'cover', bgBlur: 0, bgSat: 100, bgBright: 100, bgDim: 80, bgGlass: 78, glassBlur: 12 })
 /** Elige el fondo: 'aurora' u otro integrado, o «img:<id>» de una imagen propia. */
 export function setBgActive(id: string): void {
   write('bgActive', id)

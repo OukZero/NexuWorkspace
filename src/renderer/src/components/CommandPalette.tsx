@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { convLabel, openConvs } from '../conversations'
 import { findTask, useDB } from '../store'
-import { PRESETS, getFocus, getMode, setFocusMode, setMode, setPreset } from '../theme'
+import { PRESETS, getFocus, setFocusMode, setPreset, toggleDayNight } from '../theme'
 import { applyPreset, savedLayouts } from '../layout'
 import { showSettingsTab } from './SettingsView'
 import { isWorkTask } from '../utils'
@@ -27,6 +27,7 @@ const VIEWS: Array<[View, string]> = [
   ['hours', 'Horas'],
   ['history', 'Historial'],
   ['redmine', 'Redmine · horas imputadas'],
+  ['dashboard', 'Productividad (dashboard)'],
   ['usage', 'Consumo'],
   ['groups', 'Carpetas'],
   ['notes', 'Notas'],
@@ -54,7 +55,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }): ReactNode 
     const out: Item[] = [
       { id: 'a-new', group: 'Acciones', label: 'Nueva tarea', hint: 'Crear una tarea detallada', run: go(() => ui.editTask({})) },
       { id: 'a-help', group: 'Acciones', label: 'Ver atajos de teclado', hint: 'Ctrl+/', run: go(ui.openHelp) },
-      { id: 'a-theme', group: 'Acciones', label: 'Alternar tema día / noche', run: go(() => setMode(getMode() === 'light' ? 'dark' : 'light')) },
+      { id: 'a-theme', group: 'Acciones', label: 'Alternar tema día / noche', run: go(toggleDayNight) },
       { id: 'a-focus', group: 'Acciones', label: 'Modo foco: ocultar menú y pestañas', hint: 'Ctrl+Mayús+F', run: go(() => setFocusMode(!getFocus())) },
       { id: 'a-look', group: 'Acciones', label: 'Personalizar apariencia…', hint: 'Temas, colores, tipografía, menú', run: go(() => { showSettingsTab('apariencia'); ui.go('settings') }) },
       ...savedLayouts().map((p) => ({ id: 'l-' + p.id, group: 'Acciones', label: `Disposición: ${p.name}`, hint: 'Paneles, terminal y modo foco', run: go(() => applyPreset(p)) })),

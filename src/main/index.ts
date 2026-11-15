@@ -8,6 +8,7 @@ import { commit, getDb, initDb, save } from './db'
 import { registerIpc } from './ipc'
 import { killPtysOf } from './pty'
 import { lifecycle } from './lifecycle'
+import { cleanup } from './quit'
 import { registerMockupProtocol, registerMockupScheme } from './mockups'
 import { registerNoteProtocol, registerNoteScheme } from './notes'
 import { showSplash } from './splash'
@@ -18,7 +19,9 @@ import { restart as startTelegram, stop as stopTelegram } from './telegram'
 import { activeEntry, stopActive } from './timer'
 import { initUpdater } from './updater'
 import { applyLoginItem, destroyTray, initTray } from './tray'
-import { createWindows, emit, showWin } from './windows'
+import { createWindows, emit, openSkills, showWin } from './windows'
+import { notify } from './notify'
+import { recommendedPending } from './skills'
 import { openWhatsApp, registerWhatsAppIpc } from './whatsapp'
 import { initWebviews } from './web'
 import { initContextMenu } from './contextMenu'
@@ -40,8 +43,8 @@ function ensureStartMenuShortcut(): void {
   try {
     const root = path.join(__dirname, '../..')
     const launcher = path.join(root, 'tools', 'launch.ps1')
-    const icon = path.join(root, 'resources', 'shutoki-ai.ico')
-    const lnk = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Shutoki AI Workspace.lnk')
+    const icon = path.join(root, 'resources', 'nexo.ico')
+    const lnk = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Nexo Workspace.lnk')
     // los accesos antiguos («Shutoki», «Shutoki One») tenían otro identificador y mantenía el icono viejo
     for (const old of ['Shutoki.lnk', 'Shutoki One.lnk']) fs.rmSync(path.join(path.dirname(lnk), old), { force: true })
     shell.writeShortcutLink(lnk, 'create', {
@@ -50,7 +53,7 @@ function ensureStartMenuShortcut(): void {
       cwd: root,
       icon,
       iconIndex: 0,
-      description: 'Shutoki AI Workspace',
+      description: 'Nexo Workspace',
       appUserModelId: APP_ID
     })
   } catch {
@@ -58,10 +61,29 @@ function ensureStartMenuShortcut(): void {
   }
 }
 
-if (!app.requestSingleInstanceLock()) {
+let gotLock = app.requestSingleInstanceLock()
+// tras «Reiniciar la aplicación», la instancia anterior puede tardar un poco en soltar el bloqueo
+for (let i = 0; !gotLock && process.argv.includes('--restarted') && i < 50; i++) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200)
+  gotLock = app.requestSingleInstanceLock()
+}
+if (!gotLock) {
   app.quit()
 } else {
   app.on('second-instance', showWin)
+
+  // Avisa una sola vez de las skills recomendadas que faltan; no instala nada sin que el usuario lo pida.
+  const suggestSkills = (): void => {
+    setTimeout(() => {
+      const s = getDb().settings
+      if (s.skillsPrompted) return
+      const missing = recommendedPending()
+      s.skillsPrompted = true
+      commit()
+      if (!missing.length) return
+      notify({ kind: 'attention', title: 'Skills recomendadas para Claude', body: `Faltan ${missing.length}: ${missing.join(', ')}. Haz click para instalarlas.`, tg: false, onClick: openSkills })
+    }, 20000)
+  }
 
   void app.whenReady().then(async () => {
     if (!process.argv.includes('--hidden')) showSplash() // primero: lo demás tarda un poco
@@ -94,6 +116,7 @@ if (!app.requestSingleInstanceLock()) {
       servicesOn = true
       startTelegram()
       generateRecurring()
+      suggestSkills()
     }
     if (auth.isSignedIn()) startServices()
     auth.onAuthChange((s) => {
@@ -125,11 +148,7 @@ if (!app.requestSingleInstanceLock()) {
     lifecycle.quitting = true
   })
   app.on('will-quit', () => {
-    destroyTray()
-    globalShortcut.unregisterAll()
-    stopTelegram()
-    chat.killAll()
-    killPtysOf()
+    cleanup()
     try {
       save()
     } catch {

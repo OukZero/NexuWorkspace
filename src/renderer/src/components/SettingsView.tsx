@@ -37,6 +37,33 @@ export function showSettingsTab(t: Tab): void {
 const wide = { gridColumn: 'span 2' } as const
 const checkRow = { display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text)' } as const
 
+/** Reinicio manual: cierra la app y la vuelve a abrir para cargar los cambios nuevos. Avisa si hay respuestas en curso. */
+function RestartApp(): ReactNode {
+  const db = useDB()
+  const ui = useUi()
+  const busy = Object.values(db.chats).some((c) => c.running)
+  const restart = async (): Promise<void> => {
+    const ok = await ui.confirm(
+      (busy ? 'Hay respuestas en curso: se cortarán. ' : '') + 'La app se cerrará y volverá a abrirse con los cambios más recientes. Tus tareas, horas y conversaciones se conservan.',
+      { title: 'Reiniciar la aplicación', confirmLabel: 'Reiniciar', danger: busy }
+    )
+    if (ok) void ui.run('app:restart')
+  }
+  return (
+    <div className="upd-card">
+      <div className="upd-row">
+        <div className="grow">
+          <b>Reiniciar la aplicación</b>
+          <div className="meta">Cierra y vuelve a abrir la app para cargar los cambios nuevos.</div>
+        </div>
+        <button className="btn sm" onClick={() => void restart()}>
+          Reiniciar
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function SettingsView(): ReactNode {
   const db = useDB()
   const ui = useUi()
@@ -69,6 +96,8 @@ export function SettingsView(): ReactNode {
       whisperModel: (s.whisperModel || '').trim(),
       whisperLang: (s.whisperLang || '').trim() || 'es',
       meetingKeepAudio: !!s.meetingKeepAudio,
+      myNames: (s.myNames || '').trim(),
+      meetingAutoTasks: !!s.meetingAutoTasks,
       copilotCmd: s.copilotCmd.trim() || 'copilot',
       copilotQuota: Math.max(0, Math.round(Number(s.copilotQuota) || 0)),
       copilotModels: s.copilotModels,
@@ -84,6 +113,7 @@ export function SettingsView(): ReactNode {
       baseBranch: (s.baseBranch || '').trim(),
       autoUpdate: s.autoUpdate !== false,
       autocompactTokens: Number(s.autocompactTokens) >= 100_000 ? Math.min(1_000_000, Math.round(Number(s.autocompactTokens))) : 0,
+      defaultChatModel: (s.defaultChatModel || '').trim(),
       contextWarnTokens: Math.max(10_000, Number(s.contextWarnTokens) || 100_000),
       contextCriticalTokens: Math.max(20_000, Number(s.contextCriticalTokens) || 160_000),
       notifyOnDone: s.notifyOnDone,
@@ -99,6 +129,7 @@ export function SettingsView(): ReactNode {
       taskTemplates: s.taskTemplates,
       miniFormat: s.miniFormat ?? 'full',
       miniOnTop: s.miniOnTop !== false,
+      miniOpacity: s.miniOpacity ?? 100,
       launchAtLogin: s.launchAtLogin,
       dailyTime: s.dailyTime || '',
       redmineUrl: s.redmineUrl.trim(),
@@ -246,6 +277,16 @@ export function SettingsView(): ReactNode {
                   <input type="checkbox" checked={!!s.meetingKeepAudio} onChange={(e) => set('meetingKeepAudio', e.target.checked)} /> Conservar el audio tras transcribir (por defecto se borra)
                 </label>
               </div>
+              <div style={wide}>
+                <label>Mis nombres en las reuniones (separados por comas)</label>
+                <input value={s.myNames} placeholder="Ej.: Martín, Martin Escobedo, Marto" onChange={(e) => set('myNames', e.target.value)} />
+                <div className="meta">Con estos nombres se detecta qué tareas de una reunión son tuyas. Si lo dejas vacío se usan las partes de tu correo de inicio de sesión.</div>
+              </div>
+              <div style={wide}>
+                <label className="check">
+                  <input type="checkbox" checked={!!s.meetingAutoTasks} onChange={(e) => set('meetingAutoTasks', e.target.checked)} /> Proponer tareas al terminar el resumen (nunca se crean sin que las confirmes)
+                </label>
+              </div>
 
               <h3 style={{ ...wide, margin: '12px 0 0' }}>Permisos de comandos</h3>
               <div>
@@ -373,6 +414,22 @@ export function SettingsView(): ReactNode {
                   value={Math.round((s.autocompactTokens || 0) / 1000)}
                   onChange={(e) => set('autocompactTokens', (e.target.valueAsNumber || 0) * 1000)}
                 />
+                <div className="meta">Recomendado: 150. Un chat largo vuelve a procesar toda la conversación en cada paso, y es lo que más consume.</div>
+              </div>
+              <div style={wide}>
+                <label>Modelo de los chats nuevos</label>
+                <Select
+                  ariaLabel="Modelo de los chats nuevos"
+                  value={s.defaultChatModel ?? ''}
+                  onChange={(v) => set('defaultChatModel', v)}
+                  options={[
+                    { value: '', label: 'El que use Claude Code (por defecto)' },
+                    { value: 'haiku', label: 'Haiku: el más barato, para cambios simples' },
+                    { value: 'sonnet', label: 'Sonnet: equilibrado' },
+                    { value: 'opus', label: 'Opus: el más potente y caro' }
+                  ]}
+                />
+                <div className="meta">Cada chat puede cambiarlo desde su selector de modelo. Las tareas de fondo (resúmenes, mensajes de commit) usan Haiku automáticamente.</div>
               </div>
               <div>
                 <label>Recomendar compactar desde (miles de tokens)</label>
@@ -472,6 +529,9 @@ export function SettingsView(): ReactNode {
                   <input type="checkbox" style={{ width: 'auto' }} checked={s.autoUpdate !== false} onChange={(e) => set('autoUpdate', e.target.checked)} />
                   Buscar y descargar versiones nuevas automáticamente (al abrir y cada 4 horas)
                 </label>
+                <div style={{ marginTop: 10 }}>
+                  <RestartApp />
+                </div>
               </div>
               <div style={wide}>
                 <label style={checkRow}>
@@ -492,6 +552,10 @@ export function SettingsView(): ReactNode {
                     <label style={{ ...checkRow, margin: 0 }}>
                       <input type="checkbox" style={{ width: 'auto' }} checked={s.miniOnTop !== false} onChange={(e) => set('miniOnTop', e.target.checked)} />
                       Siempre por encima de otras ventanas
+                    </label>
+                    <label style={{ ...checkRow, margin: 0 }}>
+                      Opacidad · {s.miniOpacity ?? 100}%
+                      <input type="range" style={{ width: 120 }} min={40} max={100} step={5} value={s.miniOpacity ?? 100} onChange={(e) => set('miniOpacity', Number(e.target.value))} />
                     </label>
                   </div>
                 )}

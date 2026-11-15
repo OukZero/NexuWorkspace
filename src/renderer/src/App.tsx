@@ -12,9 +12,10 @@ import { RedmineView } from './components/RedmineView'
 import { Hours } from './components/Hours'
 import { NewTabModal } from './components/NewTabModal'
 import { SettingsView } from './components/SettingsView'
-import { Sidebar } from './components/Sidebar'
+import { TopNav } from './components/Sidebar'
 import { StatusBar } from './components/StatusBar'
 import { ConvTabs, TaskTabs, type TaskMode } from './components/TabBar'
+import { G } from './components/glyphs'
 import { TaskHead } from './components/TaskHead'
 import { DesignView } from './components/DesignView'
 import { GitView } from './components/GitView'
@@ -30,7 +31,6 @@ import { TaskInfoModal } from './components/TaskInfoModal'
 import type { ConfirmRequest } from './components/ConfirmDialog'
 import { HelpModal } from './components/HelpModal'
 import { TaskModal } from './components/TaskModal'
-import { MiniPlayer } from './components/MiniPlayer'
 import { MusicView } from './components/MusicView'
 import { WhatsAppView } from './components/WhatsAppView'
 import { NotesView } from './components/NotesView'
@@ -38,15 +38,13 @@ import { MeetingsView } from './components/MeetingsView'
 import { WebView } from './components/WebView'
 import { addTab } from './webTabs'
 import { WebHost } from './components/webHost'
-import { TimerBar } from './components/TimerBar'
-import { G } from './components/glyphs'
 import { PANEL_LABEL } from './components/TabBar'
 import { Panel } from './components/Panel'
 import { ConvPane } from './components/ConvPane'
 import { Workspace } from './components/Workspace'
-import { NotificationBell } from './components/NotificationBell'
 import { toggleFullscreen, useFullscreen } from './fullscreen'
 import { Usage } from './components/Usage'
+import { Dashboard } from './components/Dashboard'
 import { openConvs } from './conversations'
 import { activeEntry, call, findTask, peek, useDB } from './store'
 import { UiContext, type Ui, type View } from './ui'
@@ -246,8 +244,76 @@ export function App(): ReactNode {
       .filter(([, c]) => !c.closed && findTask(db, c.taskId))
       .sort((a, b) => last(b[1]) - last(a[1]))[0]
     if (recent) return void openChat(recent[1].taskId, recent[0])
-    toast('Aún no tienes conversaciones: abre una tarea y pulsa «Abrir chat».')
+    // sin conversaciones abiertas, «Chats» lleva al Historial (donde se reabren las cerradas)
+    setView('history')
+    setPanel('history')
   }
+
+  // ---------- historial de navegación («Volver») ----------
+  // Cada cambio de vista, tarea, modo o conversación guarda el lugar anterior; así cualquier pantalla abierta desde otra permite regresar.
+  const here = { view, task: active, mode, conv: activeConv }
+  const hereKey = `${here.view}|${here.task}|${here.mode}|${here.conv}`
+  const navHist = useRef<(typeof here)[]>([])
+  const lastHere = useRef(here)
+  const restoring = useRef(false)
+  const [canBack, setCanBack] = useState(false)
+  useEffect(() => {
+    const prev = lastHere.current
+    lastHere.current = here
+    if (restoring.current) {
+      restoring.current = false
+      return
+    }
+    const pk = `${prev.view}|${prev.task}|${prev.mode}|${prev.conv}`
+    if (pk === hereKey) return
+    navHist.current = [...navHist.current.slice(-49), prev]
+    setCanBack(true)
+  }, [hereKey])
+
+  const goBack = (): void => {
+    if (modal) return setModal(null) // un diálogo abierto se cierra primero
+    while (navHist.current.length) {
+      const p = navHist.current.pop()!
+      const k = `${p.view}|${p.task}|${p.mode}|${p.conv}`
+      if (p.view === 'chat' && p.task && !findTask(db, p.task)) continue // la tarea ya no existe
+      if (k === hereKey) continue
+      restoring.current = true
+      setView(p.view)
+      if (p.view !== 'chat') setPanel(p.view)
+      if (p.view === 'chat' && p.task) {
+        const t = p.task
+        setTaskTabs((x) => (x.includes(t) ? x : [...x, t]))
+        setActiveTask(t)
+        setModes((m) => ({ ...m, [t]: p.mode }))
+        if (p.conv && db.chats[p.conv] && !db.chats[p.conv].closed) setSel((s) => ({ ...s, [t]: p.conv! }))
+      }
+      break
+    }
+    setCanBack(navHist.current.length > 0)
+  }
+  const goBackRef = useRef(goBack)
+  goBackRef.current = goBack
+  useEffect(() => {
+    // Alt+← y el botón «atrás» del ratón
+    const key = (e: KeyboardEvent): void => {
+      if (e.altKey && e.key === 'ArrowLeft') {
+        e.preventDefault()
+        goBackRef.current()
+      }
+    }
+    const mouse = (e: MouseEvent): void => {
+      if (e.button === 3) {
+        e.preventDefault()
+        goBackRef.current()
+      }
+    }
+    document.addEventListener('keydown', key)
+    document.addEventListener('mouseup', mouse)
+    return () => {
+      document.removeEventListener('keydown', key)
+      document.removeEventListener('mouseup', mouse)
+    }
+  }, [])
 
   const ui: Ui = {
     view,
@@ -462,6 +528,7 @@ export function App(): ReactNode {
     history: 'Todas tus conversaciones, abiertas y cerradas',
     redmine: 'Horas imputadas y pendientes',
     usage: 'Consumo de la IA y límites de tu plan',
+    dashboard: 'Horas, tareas, foco y consumo de un vistazo',
     whatsapp: 'WhatsApp Web dentro de la app',
     web: 'Pestañas integradas para webs de trabajo',
     notes: 'Se guardan como archivos Markdown en tu equipo',
@@ -489,6 +556,9 @@ export function App(): ReactNode {
       break
     case 'hours':
       content = <Hours />
+      break
+    case 'dashboard':
+      content = <Dashboard />
       break
     case 'usage':
       content = <Usage />
@@ -537,26 +607,18 @@ export function App(): ReactNode {
 
   return (
     <UiContext.Provider value={ui}>
-      {!popTask && <Sidebar />}
       <main>
         <div className="topstack">
+          {!popTask && <TopNav onSearch={() => setModal({ kind: 'palette' })} fullscreen={fullscreen} onFullscreen={() => void toggleFullscreen()} />}
           {!popTask && (
             <header className="topbar">
+              <button className="tb-back" title="Volver atrás (Alt+←)" aria-label="Volver atrás" disabled={!canBack && !modal} onClick={goBack}>
+                <G n="chevron" size={16} />
+              </button>
               <div className="tb-title">
                 <h1>{heading.title}</h1>
                 <small>{heading.sub}</small>
               </div>
-              <button className="search" title="Búsqueda global: tareas, conversaciones, vistas y acciones (Ctrl+K)" onClick={() => setModal({ kind: 'palette' })}>
-                <G n="search" size={15} />
-                <span>Buscar tareas, archivos, comandos…</span>
-                <kbd>Ctrl K</kbd>
-              </button>
-              <MiniPlayer />
-              <TimerBar />
-              <NotificationBell variant="top" />
-              <button className="ib" title={fullscreen ? 'Salir de pantalla completa (F11)' : 'Pantalla completa (F11)'} aria-label={fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'} aria-pressed={fullscreen} onClick={() => void toggleFullscreen()}>
-                <G n={fullscreen ? 'shrink' : 'expand'} size={17} />
-              </button>
             </header>
           )}
           {(!popTask && view === 'chat' && (tabs.length > 0 || active)) || (popTask && active) ? (

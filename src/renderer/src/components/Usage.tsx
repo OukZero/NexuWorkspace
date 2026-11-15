@@ -1,10 +1,12 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { fmtTokens } from '../../../shared/advice'
 import type { LimitWindow, UsageRecord } from '../../../shared/types'
 import { findTask, useDB } from '../store'
+import { useUi } from '../ui'
 import { dayKey } from '../utils'
 import { EmptyState } from './EmptyState'
+import { G } from './glyphs'
 
 const fmtUsd = (n: number): string => `$${n.toFixed(2)}`
 const DAY = 86400000
@@ -60,6 +62,23 @@ export function Limit({ label, w, plain }: { label: string; w?: LimitWindow; pla
       </div>
       <div className="meta">Se reinicia {untilReset(w.resetsAt)} · {when}</div>
     </div>
+  )
+}
+
+/** Botón ↻: consulta a Claude Code los límites actuales de la cuenta (no depende de que haya un chat abierto). */
+export function RefreshLimits(): ReactNode {
+  const ui = useUi()
+  const [busy, setBusy] = useState(false)
+  const refresh = async (): Promise<void> => {
+    setBusy(true)
+    const ok = await ui.run('usage:refresh') // si falla, ui.run ya muestra el error
+    setBusy(false)
+    if (ok) ui.toast('Límites actualizados')
+  }
+  return (
+    <button className="btn sm refresh-limits" disabled={busy} onClick={() => void refresh()} aria-label="Actualizar límites de la cuenta" title="Actualizar límites de la cuenta">
+      <G n="reset" size={13} /> {busy ? 'Actualizando…' : 'Actualizar'}
+    </button>
   )
 }
 
@@ -122,14 +141,16 @@ export function Usage(): ReactNode {
 
   return (
     <div className="kz">
-      <div className="eyebrow kz-eb">Límites de tu plan</div>
+      <div className="eyebrow kz-eb">
+        Límites de tu plan <RefreshLimits />
+      </div>
       <div className="kz-limits">
         <Limit label="Ventana de 5 horas" w={db.limits?.fiveHour} plain />
         <Limit label="Semana (7 días)" w={db.limits?.sevenDay} plain />
       </div>
       <div className="kz-note">
         {db.limits
-          ? `Informado por Claude Code en la última respuesta (${new Date(db.limits.updatedAt).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })})${stale ? ' — puede estar desactualizado' : ''}. Incluye todo el uso de tu cuenta, no solo esta app.`
+          ? `Informado por Claude Code a las ${new Date(db.limits.updatedAt).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}${stale ? ' — puede estar desactualizado: pulsa Actualizar' : ''}. Incluye todo el uso de tu cuenta, no solo esta app.`
           : 'Se mostrará después de la primera respuesta de Claude en un chat.'}
       </div>
 

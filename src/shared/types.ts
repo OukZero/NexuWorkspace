@@ -394,6 +394,7 @@ export interface SkillInfo {
   description: string
   installed: boolean
   custom?: boolean // instalada por ti, no es del catálogo oficial
+  recommended?: boolean // ayuda a Claude a trabajar con esta app
 }
 
 export interface CheckDef {
@@ -574,6 +575,10 @@ export interface Settings {
   whisperLang: string
   /** Reuniones: conservar el audio grabado tras transcribirlo (por defecto se borra). */
   meetingKeepAudio: boolean
+  /** Nombres y alias con los que te nombran en las reuniones, separados por comas. Vacío = se usa el de tu correo. */
+  myNames: string
+  /** Proponer tareas automáticamente al terminar el resumen de una reunión (nunca las crea sin que las confirmes). */
+  meetingAutoTasks: boolean
   /** Comando del CLI de GitHub Copilot. */
   copilotCmd: string
   /** Modelos de Copilot que se ofrecen en el selector, uno por línea. */
@@ -591,6 +596,10 @@ export interface Settings {
   gitAuthor?: string
   /** Compactación automática de Claude Code a partir de N tokens (0 = la decide Claude Code). */
   autocompactTokens: number
+  /** Modelo de Claude de los chats nuevos («haiku», «sonnet», «opus»); vacío = el que use el CLI. */
+  defaultChatModel?: string
+  /** Migración única que activó la compactación automática (los chats largos disparaban el consumo). */
+  tokenSavingsApplied?: boolean
   /** Umbrales de contexto para las recomendaciones (en tokens). */
   contextWarnTokens: number
   contextCriticalTokens: number
@@ -615,6 +624,12 @@ export interface Settings {
   miniFormat?: MiniFormat
   /** Siempre por encima de las demás ventanas (por defecto sí). */
   miniOnTop?: boolean
+  /** Ya se avisó de las skills recomendadas (solo se avisa una vez). */
+  skillsPrompted?: boolean
+  /** Opacidad de la ventana flotante (40–100, por defecto 100). */
+  miniOpacity?: number
+  /** Última posición de la ventana flotante: se recuerda al moverla. */
+  miniPos?: { x: number; y: number }
   launchAtLogin: boolean
   /** Aviso matutino con el daily listo (hora HH:MM; vacío = sin aviso). */
   dailyTime: string
@@ -799,6 +814,7 @@ export interface IpcChannels {
   'skills:list': { args: []; ret: SkillInfo[] }
   'skills:install': { args: [string]; ret: string }
   'skills:remove': { args: [string]; ret: string }
+  'skills:installRecommended': { args: []; ret: string }
   'window:skills': { args: []; ret: void } // abre la ventana del catálogo de skills
   'calendar:status': { args: []; ret: CalendarStatus }
   'calendar:save': { args: [CalendarSave]; ret: CalendarStatus }
@@ -826,10 +842,13 @@ export interface IpcChannels {
   'meetings:summarize': { args: [string]; ret: Meeting } // rehace solo el resumen a partir de la transcripción
   'meetings:retry': { args: [string]; ret: Meeting } // repite la transcripción (si aún está el audio) y el resumen
   'meetings:delete': { args: [string]; ret: void }
+  'meetings:extract': { args: [string]; ret: Meeting } // busca tareas en la reunión (las propone, no las crea)
+  'meetings:createTasks': { args: [string, MeetingTask[]]; ret: number } // crea las tareas elegidas y las vincula a la reunión; devuelve cuántas
   'badges:get': { args: []; ret: Record<string, number> } // sin leer actuales (para pintar al abrir o recargar la ventana)
   'whatsapp:open': { args: []; ret: void } // lleva a la vista de WhatsApp dentro de la app
   'window:fullscreen': { args: [boolean?]; ret: boolean } // pantalla completa de la ventana actual (sin argumento alterna); devuelve el estado nuevo
   'win:restore': { args: []; ret: void }
+  'mini:resize': { args: [number, number]; ret: void } // tamaño que necesita la ventana flotante (formato completo)
   'mini:hide': { args: []; ret: void } // oculta la ventana flotante hasta la próxima vez que se minimice la principal
   'claude:login': { args: []; ret: void }
   'claude:open': { args: [string]; ret: void }
@@ -844,6 +863,9 @@ export interface IpcChannels {
   'update:check': { args: []; ret: UpdateState }
   'update:download': { args: []; ret: void }
   'update:install': { args: []; ret: void }
+  'usage:refresh': { args: []; ret: true } // consulta mínima a Claude Code y actualiza los límites de la cuenta (ventana de 5 h y semana)
+  'app:quit': { args: []; ret: void } // sale de verdad: detiene el timer y mata los procesos hijos (no queda nada en segundo plano)
+  'app:restart': { args: []; ret: void } // cierra la app y la vuelve a abrir para cargar los cambios nuevos
   'window:popout': { args: [string, string | undefined, boolean | undefined]; ret: void } // abre la tarea en una ventana aparte (tarea, conversación, junto al cursor)
   'window:dock': { args: [string, string | undefined]; ret: void } // devuelve la tarea de una ventana suelta a la principal
   'url:open': { args: [string]; ret: void } // abre un enlace http(s) en el navegador
@@ -1073,6 +1095,19 @@ export interface Meeting {
   error?: string
   /** Si el archivo de audio sigue en disco. */
   hasAudio: boolean
+  /** Tareas que Claude propone a partir de la reunión (aún sin crear). */
+  proposals?: MeetingTask[]
+  /** Se está buscando tareas en la reunión. */
+  extracting?: boolean
+}
+
+/** Tarea propuesta desde una reunión. `mine` indica que el responsable es el usuario (según «Mis nombres» en Ajustes). */
+export interface MeetingTask {
+  title: string
+  description: string
+  priority: Priority
+  owner: string
+  mine: boolean
 }
 
 export interface MeetingPatch {
@@ -1081,6 +1116,8 @@ export interface MeetingPatch {
   taskId?: string | null
   summary?: string
   transcript?: string
+  /** `null` descarta las tareas propuestas. */
+  proposals?: null
 }
 
 export type Unsubscribe = () => void

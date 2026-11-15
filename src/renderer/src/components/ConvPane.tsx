@@ -41,11 +41,12 @@ export function ConvPane({ taskId, active, unread, onSelect, onClose, onNew, onM
   const db = useDB()
   const pane = useConvsPane()
   const ui = useUi()
-  if (!pane.open) return null
   const now = Date.now()
   const convs = openConvs(db, taskId)
     .map((c) => ({ ...c, last: c.chat.messages[c.chat.messages.length - 1]?.ts || c.chat.createdAt }))
     .sort((a, b) => b.last - a.last)
+  // En automático la lista solo aparece cuando hay varias conversaciones: con una sola sería un panel casi vacío.
+  if (!(pane.open ?? convs.length > 1)) return null
   const hidden = closedConvs(db, taskId).length
   const groups: Array<[string, typeof convs]> = []
   for (const c of convs) {

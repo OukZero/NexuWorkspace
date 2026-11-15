@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
-import { BG_BUILTIN, BG_MAX_IMAGES, addBgImageFile, getBgActive, getBgDim, getBgGlass, getBgLib, removeBgImage, setBgActive, setBgDim, setBgGlass, useAppearance, useBackgrounds } from '../theme'
+import { BG_BUILTIN, BG_MAX_IMAGES, addBgImageFile, getAppearance, getBgActive, getBgLib, removeBgImage, resetBgAdjust, setBgActive, update, useAppearance, useBackgrounds } from '../theme'
+import type { Appearance } from '../theme'
 import { useUi } from '../ui'
 import { G } from './glyphs'
 
@@ -17,6 +18,15 @@ export function BackgroundPicker(): ReactNode {
   const active = getBgActive()
   const lib = getBgLib()
   const isImage = active.startsWith('img:')
+  const a = getAppearance()
+  type NumKey = 'bgX' | 'bgY' | 'bgZoom' | 'bgDim' | 'bgBlur' | 'bgBright' | 'bgSat' | 'bgGlass' | 'glassBlur'
+  const sl = (k: NumKey, label: string, min: number, max: number, step: number, unit: string): ReactNode => (
+    <label>
+      {label} · {a[k]}
+      {unit}
+      <input type="range" min={min} max={max} step={step} value={a[k]} aria-label={label} onChange={(e) => update({ [k]: Number(e.target.value) })} />
+    </label>
+  )
 
   const add = async (f: File | undefined): Promise<void> => {
     if (!f) return
@@ -69,13 +79,25 @@ export function BackgroundPicker(): ReactNode {
       {isImage && (
         <div className="bgp-sl">
           <label>
-            Atenuar fondo · {getBgDim()}%
-            <input type="range" min={40} max={95} step={5} value={getBgDim()} aria-label="Atenuar fondo" onChange={(e) => setBgDim(Number(e.target.value))} />
+            Ajuste de la imagen
+            <select value={a.bgFit} onChange={(e) => update({ bgFit: e.target.value as Appearance['bgFit'] })}>
+              <option value="cover">Rellenar</option>
+              <option value="contain">Ajustar entera</option>
+              <option value="tile">Mosaico</option>
+            </select>
           </label>
-          <label>
-            Opacidad de paneles · {getBgGlass()}%
-            <input type="range" min={40} max={100} step={5} value={getBgGlass()} aria-label="Opacidad de paneles" onChange={(e) => setBgGlass(Number(e.target.value))} />
-          </label>
+          {sl('bgX', 'Posición horizontal', 0, 100, 1, '%')}
+          {sl('bgY', 'Posición vertical', 0, 100, 1, '%')}
+          {sl('bgZoom', 'Zoom', 100, 300, 5, '%')}
+          {sl('bgDim', 'Opacidad de la imagen (menos = más visible)', 0, 95, 5, '% velo')}
+          {sl('bgBlur', 'Desenfoque de la imagen', 0, 30, 1, ' px')}
+          {sl('bgBright', 'Brillo', 40, 160, 5, '%')}
+          {sl('bgSat', 'Saturación', 0, 200, 5, '%')}
+          {sl('bgGlass', 'Opacidad de paneles', 20, 100, 5, '%')}
+          {sl('glassBlur', 'Desenfoque de paneles', 0, 30, 1, ' px')}
+          <button className="btn sm" onClick={resetBgAdjust}>
+            Restablecer ajustes
+          </button>
         </div>
       )}
       <small className="bgp-note">Tus imágenes se guardan solo en este equipo (hasta {BG_MAX_IMAGES}).</small>

@@ -35,7 +35,7 @@ export function NotificationBell({ variant = 'rail' }: { variant?: 'rail' | 'top
         </button>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content className="notif-pop" side="right" align="end" sideOffset={10} collisionPadding={12}>
+        <Popover.Content className="notif-pop" side={variant === 'top' ? 'bottom' : 'right'} align="end" sideOffset={10} collisionPadding={12}>
           <div className="notif-head">
             <b>Notificaciones</b>
             <span className="grow" />

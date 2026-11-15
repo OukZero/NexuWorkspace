@@ -15,7 +15,7 @@ const baseBranch = async (dir: string): Promise<string> => {
 }
 
 const MAX_CHECKPOINTS = 30
-const IDENT = ['-c', 'user.name=Shutoki AI Workspace', '-c', 'user.email=shutoki@local', '-c', 'commit.gpgsign=false']
+const IDENT = ['-c', 'user.name=Nexo Workspace', '-c', 'user.email=shutoki@local', '-c', 'commit.gpgsign=false']
 const rid = (): string => Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
 
 /** Árbol de Git con TODO el contenido actual de la carpeta (incluye archivos nuevos y respeta .gitignore), sin tocar el índice real. */
