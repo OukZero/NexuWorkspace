@@ -80,7 +80,7 @@ export function SidePanel({ convId, mode = 'dock' }: { convId: string; mode?: 'd
   const files = new Set(activity.filter((a) => a.kind === 'edit' && a.status !== 'error').map((a) => a.target)).size
   const working = activity.some((a) => a.status === 'running')
   const tabs: Array<{ id: Tab; short: string; label: string; badge?: ReactNode }> = [
-    { id: 'session', short: 'Sesión', label: 'Sesión y contexto' },
+    { id: 'session', short: 'Consumo', label: 'Consumo y contexto' },
     { id: 'files', short: 'Archivos', label: 'Archivos modificados', badge: files > 0 ? <em className="badge">{files}</em> : null },
     { id: 'activity', short: 'Actividad', label: 'Actividad en vivo', badge: working ? <em className="badge run" /> : null }
   ]

@@ -5,6 +5,7 @@ import path from 'path'
 import type { CheckDef, CheckResult, Task } from '../shared/types'
 import { effectiveTask } from './groups'
 import { repoDirOf } from './context'
+import { trackChild } from './lifecycle'
 
 const MAX_OUT = 12000
 const TIMEOUT = 10 * 60 * 1000
@@ -57,6 +58,7 @@ export async function runCheck(task: Task, name: string, worktreeDir?: string): 
   return new Promise((resolve) => {
     // el comando sale de una lista armada por la app (no del usuario ni de la IA)
     const child = spawn(def.cmd, { shell: true, cwd: dir, windowsHide: true, env: { ...process.env, CI: '1', FORCE_COLOR: '0', NO_COLOR: '1' } })
+    trackChild(child)
     let buf = ''
     let truncated = false
     const take = (b: Buffer): void => {

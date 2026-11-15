@@ -136,7 +136,7 @@ export function Board(): ReactNode {
                 <b>{STATUS[st]}</b>
                 <span>{arr.length}</span>
               </header>
-              {arr.map(card)}
+              <div className="kb-cards">{arr.map(card)}</div>
             </div>
           )
         })}

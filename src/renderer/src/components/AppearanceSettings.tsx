@@ -154,7 +154,7 @@ export function AppearanceSettings(): ReactNode {
       ui.toast('Tema importado y aplicado')
       setPasted('')
     } catch {
-      ui.toast('Ese texto no es un tema de Shutoki válido', true)
+      ui.toast('Ese texto no es un tema de Nexo válido', true)
     }
   }
 
@@ -173,6 +173,7 @@ export function AppearanceSettings(): ReactNode {
     update({ nav: { ...a.nav, order: [...a.nav.order.filter((x) => !group.includes(x)), ...base] } })
   }
   const ordered = (group: string[]): string[] => [...group].sort((x, y) => (a.nav.order.indexOf(x) < 0 ? 1000 + group.indexOf(x) : a.nav.order.indexOf(x)) - (a.nav.order.indexOf(y) < 0 ? 1000 + group.indexOf(y) : a.nav.order.indexOf(y)))
+  const togglePin = (id: string): void => update({ nav: { ...a.nav, pinned: a.nav.pinned.includes(id) ? a.nav.pinned.filter((x) => x !== id) : [...a.nav.pinned, id] } })
   const toggleNav = (id: string): void => update({ nav: { ...a.nav, hidden: a.nav.hidden.includes(id) ? a.nav.hidden.filter((x) => x !== id) : [...a.nav.hidden, id] } })
 
   const accentSwatch = (key: string): string => (key in ACCENTS ? ACCENTS[key][0] : '')
@@ -371,6 +372,18 @@ export function AppearanceSettings(): ReactNode {
         </pre>
       </div>
 
+      {/* ---------------- botón día / noche ---------------- */}
+      <h3>Botón día / noche</h3>
+      <div className="ap-row">
+        <label>Tema claro</label>
+        <Select ariaLabel="Tema claro predeterminado" value={a.dayPreset} onChange={(dayPreset) => update({ dayPreset })} options={[{ value: '', label: 'Clásico (claro)' }, ...light.map(([k, p]) => ({ value: k, label: p.label }))]} />
+      </div>
+      <div className="ap-row">
+        <label>Tema oscuro</label>
+        <Select ariaLabel="Tema oscuro predeterminado" value={a.nightPreset} onChange={(nightPreset) => update({ nightPreset })} options={[{ value: '', label: 'Clásico (oscuro)' }, ...dark.map(([k, p]) => ({ value: k, label: p.label }))]} />
+      </div>
+      <p className="meta">El botón de la barra lateral y la paleta de comandos alternan entre estos dos estilos.</p>
+
       {/* ---------------- horario ---------------- */}
       <h3>Tema según la hora</h3>
       <label className="tpl-check">
@@ -398,8 +411,8 @@ export function AppearanceSettings(): ReactNode {
       <Layouts />
 
       {/* ---------------- menú ---------------- */}
-      <h3>Menú lateral</h3>
-      <div className="meta">Ordena las secciones o escóndelas (siguen disponibles con Ctrl+K). Ajustes y el perfil no se pueden ocultar.</div>
+      <h3>Menú superior</h3>
+      <div className="meta">Fija en la barra superior lo más importante; el resto queda en el botón «+». También puedes ordenar u ocultar secciones (siguen disponibles con Ctrl+K).</div>
       <div className="ap-nav">
         {NAV_GROUPS.map((g) => {
           const ids = g.items.map(([v]) => v as string)
@@ -417,6 +430,9 @@ export function AppearanceSettings(): ReactNode {
                   </button>
                   <button className="icon" title="Bajar" aria-label={`Bajar ${label(id)}`} onClick={() => navMove(id, ids, 1)}>
                     ↓
+                  </button>
+                  <button className="icon" title={a.nav.pinned.includes(id) ? 'Quitar de la barra' : 'Fijar en la barra'} aria-label={`${a.nav.pinned.includes(id) ? 'Desfijar' : 'Fijar'} ${label(id)}`} aria-pressed={a.nav.pinned.includes(id)} onClick={() => togglePin(id)}>
+                    {a.nav.pinned.includes(id) ? '📌' : '＋'}
                   </button>
                   <button className="icon" title={a.nav.hidden.includes(id) ? 'Mostrar' : 'Ocultar'} aria-label={`${a.nav.hidden.includes(id) ? 'Mostrar' : 'Ocultar'} ${label(id)}`} onClick={() => toggleNav(id)}>
                     {a.nav.hidden.includes(id) ? '🚫' : '👁'}

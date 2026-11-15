@@ -1,7 +1,7 @@
 {
   "name": "shutoki-ai-workspace",
-  "productName": "Shutoki AI Workspace",
-  "version": "0.2.0",
+  "productName": "Nexo Workspace",
+  "version": "0.2.1",
   "description": "Gestor local de tareas con timer, horas en Excel y chat con Claude",
   "author": "Martin Escobedo",
   "license": "UNLICENSED",
@@ -31,7 +31,7 @@
         "releaseType": "release"
       }
     ],
-    "productName": "Shutoki AI Workspace",
+    "productName": "Nexo Workspace",
     "directories": {
       "output": "release"
     },
@@ -40,7 +40,7 @@
       "resources/**/*",
       "package.json"
     ],
-    "artifactName": "Shutoki-AI-Workspace-Setup-${version}.${ext}",
+    "artifactName": "Nexo-Workspace-Setup-${version}.${ext}",
     "npmRebuild": false,
     "asarUnpack": [
       "**/node_modules/node-pty/**"
@@ -54,12 +54,12 @@
           ]
         }
       ],
-      "icon": "resources/shutoki-ai.ico"
+      "icon": "resources/nexo.ico"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "Shutoki AI Workspace"
+      "shortcutName": "Nexo Workspace"
     }
   },
   "devDependencies": {

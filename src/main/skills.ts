@@ -73,7 +73,7 @@ export async function listSkills(): Promise<SkillInfo[]> {
       } catch {
         /* sin descripción */
       }
-      return { name, description, installed: have.has(name) }
+      return { name, description, installed: have.has(name), ...(name in RECOMMENDED ? { recommended: true } : {}) }
     })
   )
   // las que ya tienes instaladas pero no son oficiales (propias) también se muestran, para poder quitarlas
@@ -107,4 +107,32 @@ export function removeSkill(name: string): string {
   if (!valid(name)) throw new Error('Nombre de skill no válido')
   fs.rmSync(path.join(dirOf(), name), { recursive: true, force: true })
   return `Skill «${name}» quitada.`
+}
+
+// Skills que ayudan a Claude a trabajar con esta app: probar la interfaz en un navegador, diseñar mejor y crear skills propias.
+export const RECOMMENDED: Record<string, string> = {
+  'webapp-testing': 'Probar la interfaz con un navegador y comprobar que los cambios funcionan',
+  'frontend-design': 'Diseño visual más cuidado al crear o cambiar pantallas',
+  'skill-creator': 'Crear y mejorar tus propias skills'
+}
+
+/** Recomendadas que aún no están instaladas (solo mira el disco: funciona sin conexión). */
+export const recommendedPending = (): string[] => {
+  const have = installed()
+  return Object.keys(RECOMMENDED).filter((n) => !have.has(n))
+}
+
+export async function installRecommended(): Promise<string> {
+  const todo = recommendedPending()
+  if (!todo.length) return 'Ya tienes instaladas todas las skills recomendadas.'
+  const failed: string[] = []
+  for (const n of todo) {
+    try {
+      await installSkill(n)
+    } catch {
+      failed.push(n)
+    }
+  }
+  const ok = todo.length - failed.length
+  return failed.length ? `Se instalaron ${ok} de ${todo.length}; fallaron: ${failed.join(', ')}. Revisa tu conexión.` : `Se instalaron ${ok} skills recomendadas. Las conversaciones nuevas ya las pueden usar.`
 }

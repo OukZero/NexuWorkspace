@@ -61,7 +61,7 @@ export function Login({ status }: { status: AuthStatus }): ReactNode {
   return (
     <div className="login">
       <form className="login-card" onSubmit={(e) => void submit(e)}>
-        <h1>Shutoki AI Workspace</h1>
+        <h1>Nexo Workspace</h1>
         <div className="sub">{title}</div>
 
         {!status.configured && (

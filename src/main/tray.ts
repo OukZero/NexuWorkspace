@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { withDot } from './badge'
 import { commit, getDb } from './db'
+import { quitApp } from './quit'
 import { stopActive } from './timer'
 import { showWin } from './windows'
 
@@ -20,7 +21,7 @@ export function applyLoginItem(): void {
 
 function trayMenu(): Electron.Menu {
   return Menu.buildFromTemplate([
-    { label: 'Abrir Shutoki AI Workspace', click: showWin },
+    { label: 'Abrir Nexo Workspace', click: showWin },
     { label: unread > 0 ? `Abrir WhatsApp (${unread} sin leer)` : 'Abrir WhatsApp', click: () => openWsp() },
     {
       label: 'Detener el timer',
@@ -31,17 +32,17 @@ function trayMenu(): Electron.Menu {
       }
     },
     { type: 'separator' },
-    { label: 'Salir', click: () => app.quit() }
+    { label: 'Salir', click: () => quitApp() }
   ])
 }
 
 export function initTray(onWhatsApp: () => void): void {
   openWsp = onWhatsApp
-  const icon = path.join(__dirname, '../../resources/shutoki-ai.ico')
+  const icon = path.join(__dirname, '../../resources/nexo.ico')
   if (!fs.existsSync(icon)) return // sin icono no hay bandeja (se genera con `npm run icon`)
   baseIcon = nativeImage.createFromPath(icon)
   tray = new Tray(baseIcon)
-  tray.setToolTip('Shutoki AI Workspace')
+  tray.setToolTip('Nexo Workspace')
   tray.on('click', showWin)
   tray.setContextMenu(trayMenu())
 }
@@ -57,6 +58,6 @@ export function setUnreadBadge(n: number): void {
   unread = n
   if (!tray) return
   if (baseIcon) tray.setImage(n > 0 ? withDot(baseIcon) : baseIcon)
-  tray.setToolTip(n > 0 ? `Shutoki AI Workspace · WhatsApp: ${n} sin leer` : 'Shutoki AI Workspace')
+  tray.setToolTip(n > 0 ? `Nexo Workspace · WhatsApp: ${n} sin leer` : 'Nexo Workspace')
   tray.setContextMenu(trayMenu())
 }

@@ -11,6 +11,8 @@ export const DEFAULT_SETTINGS: Settings = {
   whisperModel: '',
   whisperLang: 'es',
   meetingKeepAudio: false,
+  myNames: '',
+  meetingAutoTasks: true,
   copilotCmd: 'copilot',
   copilotModels: [
     'auto',
@@ -36,7 +38,7 @@ export const DEFAULT_SETTINGS: Settings = {
   targetHours: 8,
   reminderTime: '17:30',
   idleMinutes: 5,
-  autocompactTokens: 0,
+  autocompactTokens: 150_000, // sin compactar, un chat largo vuelve a procesar toda la conversación en cada paso
   contextWarnTokens: 100_000,
   contextCriticalTokens: 160_000,
   notifyOnDone: true,
@@ -91,6 +93,11 @@ function normalize(raw: Partial<DB>): DB {
     d.settings.openMode = 'chat'
     d.settings.openModeChat = true
   }
+  // migración única: quien tenía la compactación apagada (0) pasa a 150k; después se respeta lo que elija
+  if (!d.settings.tokenSavingsApplied) {
+    if (!d.settings.autocompactTokens) d.settings.autocompactTokens = DEFAULT_SETTINGS.autocompactTokens
+    d.settings.tokenSavingsApplied = true
+  }
   // migración: antes había un solo chat por tarea y su clave era el id de la tarea
   for (const [key, c] of Object.entries(d.chats)) {
     c.taskId ??= key
@@ -122,7 +129,7 @@ export const backupsDir = (): string => current().backupsDir()
 
 /** Reemplaza todos los datos (importar): antes se guarda una copia de lo actual. */
 export function replaceDb(raw: Partial<DB>): void {
-  if (!Array.isArray(raw.tasks) || !Array.isArray(raw.entries)) throw new Error('El archivo no parece una exportación de Shutoki AI Workspace (faltan tareas u horas).')
+  if (!Array.isArray(raw.tasks) || !Array.isArray(raw.entries)) throw new Error('El archivo no parece una exportación de Nexo Workspace (faltan tareas u horas).')
   current().snapshot('pre-importacion')
   db = normalize(raw)
   commit()

@@ -14,17 +14,17 @@ function html(): string {
   const logo = fs.existsSync(logoPath) ? `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}` : ''
   return `<!doctype html><html><head><meta charset="utf-8"><style>
 *{box-sizing:border-box;margin:0}
-html,body{width:100%;height:100%;overflow:hidden;background:#10082a;font-family:'Segoe UI',system-ui,sans-serif;-webkit-user-select:none}
-.card{position:absolute;inset:0;background:radial-gradient(120% 120% at 20% 10%,#2a1259 0%,#10082a 55%,#05030c 100%);box-shadow:inset 0 0 0 1px #4c1d95;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;animation:in .35s ease-out}
-img{width:92px;height:92px;filter:drop-shadow(0 0 18px rgba(139,92,246,.55));animation:pulse 1.8s ease-in-out infinite}
-h1{font-size:22px;font-weight:700;color:#f3eeff;letter-spacing:.4px}
-h2{font-size:10px;font-weight:600;color:#a78bfa;letter-spacing:3px;text-transform:uppercase;margin-top:-10px}
-.bar{width:150px;height:3px;border-radius:3px;background:#2e1170;overflow:hidden;margin-top:6px}
-.bar i{display:block;height:100%;width:40%;border-radius:3px;background:linear-gradient(90deg,#6d28d9,#c4b0ff);animation:slide 1.2s ease-in-out infinite}
+html,body{width:100%;height:100%;overflow:hidden;background:#070b18;font-family:'Segoe UI',system-ui,sans-serif;-webkit-user-select:none}
+.card{position:absolute;inset:0;background:radial-gradient(120% 120% at 20% 10%,#16264d 0%,#0a1020 55%,#04060f 100%);box-shadow:inset 0 0 0 1px #1f3a6b;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;animation:in .35s ease-out}
+img{width:92px;height:92px;filter:drop-shadow(0 0 18px rgba(34,211,238,.5));animation:pulse 1.8s ease-in-out infinite}
+h1{font-size:22px;font-weight:700;color:#e8edff;letter-spacing:.4px}
+h2{font-size:10px;font-weight:600;color:#22d3ee;letter-spacing:3px;text-transform:uppercase;margin-top:-10px}
+.bar{width:150px;height:3px;border-radius:3px;background:#14224a;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;width:40%;border-radius:3px;background:linear-gradient(90deg,#22d3ee,#8b5cf6);animation:slide 1.2s ease-in-out infinite}
 @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
 @keyframes slide{0%{transform:translateX(-110%)}100%{transform:translateX(260%)}}
 @keyframes in{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
-</style></head><body><div class="card">${logo ? `<img src="${logo}">` : ''}<h1>Shutoki</h1><h2>AI Workspace</h2><div class="bar"><i></i></div></div></body></html>`
+</style></head><body><div class="card">${logo ? `<img src="${logo}">` : ''}<h1>Nexo</h1><h2>Workspace</h2><div class="bar"><i></i></div></div></body></html>`
 }
 
 /** Pantalla de inicio: aparece al instante, antes de cargar los datos y la ventana principal, para que se note que la app está abriendo. */

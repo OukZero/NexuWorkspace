@@ -50,7 +50,7 @@ function Ring({ pct, label, sub }: { pct: number; label: string; sub: string }):
   )
 }
 
-/** Revisión de lo imputado en Redmine, día a día, frente a lo registrado en Shutoki. */
+/** Revisión de lo imputado en Redmine, día a día, frente a lo registrado en Nexo. */
 export function RedmineView(): ReactNode {
   const db = useDB()
   const ui = useUi()
@@ -80,7 +80,7 @@ export function RedmineView(): ReactNode {
     void load()
   }, [load])
 
-  // horas de Shutoki por día: total registrado y lo que aún no se imputó
+  // horas de Nexo por día: total registrado y lo que aún no se imputó
   const mine = useMemo(() => {
     const m: Record<string, { total: number; pending: number }> = {}
     for (const e of db.entries) {
@@ -182,7 +182,7 @@ export function RedmineView(): ReactNode {
             <small>{count('part') + count('none')} días por completar</small>
           </div>
           <div className="rm-card rm-kpi" style={{ ['--k' as string]: pending > 0.01 ? 'var(--danger)' : 'var(--accent)' }}>
-            <span>En Shutoki sin enviar</span>
+            <span>En Nexo sin enviar</span>
             <b>
               {f2(pending)}<em>h</em>
             </b>
@@ -203,7 +203,7 @@ export function RedmineView(): ReactNode {
           <span className="rm-eb">Horas por día</span>
           <span className="rm-keys">
             <i style={{ background: 'var(--accent2)' }} /> Redmine
-            <i className="ghost" /> Shutoki sin enviar
+            <i className="ghost" /> Nexo sin enviar
             <i className="dash" /> Laborables
           </span>
         </div>

@@ -1,6 +1,6 @@
-// Genera los iconos de Shutoki AI Workspace a partir de tools/icon.svg usando Electron (sin dependencias extra):
+// Genera los iconos de Nexo Workspace a partir de tools/icon.svg usando Electron (sin dependencias extra):
 //   npm run icon
-// Salidas: resources/icon.png (512), resources/shutoki-ai.ico (16–256), src/renderer/public/icon.png (128, marca del menú lateral).
+// Salidas: resources/icon.png (512), resources/nexo.ico (16–256), src/renderer/public/icon.png (128, marca del menú lateral).
 const { app, BrowserWindow } = require('electron')
 const fs = require('fs')
 const os = require('os')
@@ -55,9 +55,9 @@ app.whenReady().then(async () => {
     fs.mkdirSync(path.join(ROOT, 'resources'), { recursive: true })
     fs.mkdirSync(path.join(ROOT, 'src', 'renderer', 'public'), { recursive: true })
     fs.writeFileSync(path.join(ROOT, 'resources', 'icon.png'), png[512])
-    fs.writeFileSync(path.join(ROOT, 'resources', 'shutoki-ai.ico'), ico(ICO_SIZES.map((size) => ({ size, data: png[size] }))))
+    fs.writeFileSync(path.join(ROOT, 'resources', 'nexo.ico'), ico(ICO_SIZES.map((size) => ({ size, data: png[size] }))))
     fs.writeFileSync(path.join(ROOT, 'src', 'renderer', 'public', 'icon.png'), png[128])
-    console.log('Iconos generados: resources/icon.png, resources/shutoki-ai.ico, src/renderer/public/icon.png')
+    console.log('Iconos generados: resources/icon.png, resources/nexo.ico, src/renderer/public/icon.png')
     app.exit(0)
   } catch (e) {
     console.error(e)

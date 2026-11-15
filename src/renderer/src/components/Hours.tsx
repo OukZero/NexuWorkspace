@@ -6,6 +6,7 @@ import { baseName, dayKey, fmtH, hhmm, isWorkTask, toTs } from '../utils'
 import { useUi } from '../ui'
 import { DailyView } from './DailyView'
 import { DatePicker } from './DatePicker'
+import { DayTimeline } from './DayTimeline'
 import { meetingMs, useCalendar } from '../calendar'
 import { EmptyState } from './EmptyState'
 import { G } from './glyphs'
@@ -264,9 +265,58 @@ export function Hours(): ReactNode {
     )
   }
 
+  const closed = es.filter((e) => e.end)
+  const noNote = closed.filter((e) => !e.note?.trim()).length
+  const imputable = closed.filter((e) => e.note?.trim()).reduce((a, e) => a + ((e.end as number) - e.start), 0)
+  const nTasks = Object.keys(byTask).length
+  const target = db.settings.targetHours
+  const SEGS = 8
+  const filled = Math.min(SEGS, Math.round((total / 3600000 / (target || 8)) * SEGS))
+  // hora estimada de cierre: ahora + lo que falta (solo tiene sentido hoy)
+  const closeAt = day === today && missing > 0 ? new Date(now + missing * 3600000).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''
+
   return (
     <>
       {header}
+      <div className="hr-stats">
+        <div className="bc hr-stat main">
+          <span className="eyebrow">Total del día</span>
+          <b className="num">
+            {hc(total)}
+            <small> h / {target} h</small>
+          </b>
+          <div className="hr-segs" aria-hidden>
+            {Array.from({ length: SEGS }, (_, i) => (
+              <i key={i} className={i < filled ? 'on' : ''} />
+            ))}
+          </div>
+        </div>
+        <div className="bc hr-stat">
+          <span className="eyebrow">Faltan</span>
+          <b className="num">
+            {n2(Math.max(0, missing))}
+            <small> h</small>
+          </b>
+          <span className="meta">{missing <= 0 ? 'Objetivo cumplido' : closeAt ? `Cierre estimado ${closeAt}` : 'Para llegar al objetivo'}</span>
+        </div>
+        <div className="bc hr-stat">
+          <span className="eyebrow">Sesiones</span>
+          <b className="num">{es.length}</b>
+          <span className="meta">
+            {nTasks} {nTasks === 1 ? 'tarea distinta' : 'tareas distintas'}
+          </span>
+        </div>
+        <div className="bc hr-stat warn">
+          <span className="eyebrow">Por imputar</span>
+          <b className="num">
+            {n2(imputable / 3600000)}
+            <small> h</small>
+          </b>
+          <span className="meta">{noNote ? `${noNote} ${noNote === 1 ? 'registro sin nota' : 'registros sin nota'}` : 'Todo con nota'}</span>
+        </div>
+      </div>
+      <div className="hr-grid">
+      <div className="hr-main">
       <section className="bc hr-draft">
         <div className="hr-draft-h">
           <div>
@@ -297,7 +347,7 @@ export function Hours(): ReactNode {
           </div>
         </div>
         <div className="hr-sep" />
-        <HourStrip day={day} entries={es} now={now} />
+        {es.length > 0 ? <DayTimeline day={day} entries={es} /> : <HourStrip day={day} entries={es} now={now} />}
       </section>
 
       <section className="bc hr-table">
@@ -341,7 +391,30 @@ export function Hours(): ReactNode {
         </div>
       </section>
 
-      <div className="hr-split">
+      {dayCommits && (
+        <section className="bc hr-commits">
+          <div className="card-h">
+            <span className="eyebrow">Commits del día (ayuda para recordar)</span>
+          </div>
+          {Object.keys(dayCommits).length ? (
+            Object.entries(dayCommits).map(([f, c]) => (
+              <div key={f} className="hr-commit">
+                <b>{baseName(f)}</b>
+                {c.map((m, i) => (
+                  <div key={i} className="commit">
+                    • {m}
+                  </div>
+                ))}
+              </div>
+            ))
+          ) : (
+            <div className="empty">No hay commits (o git no está disponible).</div>
+          )}
+        </section>
+      )}
+      </div>
+
+      <div className="hr-side">
         <section className="bc">
           <div className="card-h">
             <span className="eyebrow">Resumen por tarea</span>
@@ -364,30 +437,6 @@ export function Hours(): ReactNode {
           )}
         </section>
         <RedminePanel day={day} />
-      </div>
-
-      {dayCommits && (
-        <section className="bc hr-commits">
-          <div className="card-h">
-            <span className="eyebrow">Commits del día (ayuda para recordar)</span>
-          </div>
-          {Object.keys(dayCommits).length ? (
-            Object.entries(dayCommits).map(([f, c]) => (
-              <div key={f} className="hr-commit">
-                <b>{baseName(f)}</b>
-                {c.map((m, i) => (
-                  <div key={i} className="commit">
-                    • {m}
-                  </div>
-                ))}
-              </div>
-            ))
-          ) : (
-            <div className="empty">No hay commits (o git no está disponible).</div>
-          )}
-        </section>
-      )}
-
       <section className="bc hr-export">
         <div>
           <div className="eyebrow">Exportar a Excel</div>
@@ -406,6 +455,8 @@ export function Hours(): ReactNode {
           <G n="download" size={15} /> Exportar .xlsx
         </button>
       </section>
+      </div>
+      </div>
     </>
   )
 }

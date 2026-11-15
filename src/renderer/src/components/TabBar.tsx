@@ -13,6 +13,7 @@ export const PANEL_LABEL: Record<string, string> = {
   redmine: 'Redmine',
   history: 'Historial',
   usage: 'Consumo',
+  dashboard: 'Productividad',
   groups: 'Carpetas',
   music: 'Música',
   web: 'Navegador',

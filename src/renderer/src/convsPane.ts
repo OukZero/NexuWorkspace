@@ -1,18 +1,20 @@
 import { useSyncExternalStore } from 'react'
 
 const KEY = 'shutoki.convsOpen'
-const read = (): boolean => {
+// null = automático: solo se muestra la lista cuando la tarea tiene más de una conversación abierta.
+const read = (): boolean | null => {
   try {
-    return localStorage.getItem(KEY) !== '0'
+    const v = localStorage.getItem(KEY)
+    return v === '1' ? true : v === '0' ? false : null
   } catch {
-    return true
+    return null
   }
 }
-let state = { open: read() }
+let state: { open: boolean | null } = { open: read() }
 const listeners = new Set<() => void>()
 
-/** Si el panel de conversaciones (lista a la izquierda del chat) está visible. */
-export const useConvsPane = (): { open: boolean } => useSyncExternalStore((cb) => (listeners.add(cb), () => listeners.delete(cb)), () => state)
+/** Si el panel de conversaciones (lista a la izquierda del chat) está visible (null = según cuántas haya). */
+export const useConvsPane = (): { open: boolean | null } => useSyncExternalStore((cb) => (listeners.add(cb), () => listeners.delete(cb)), () => state)
 
 export function setConvsOpen(open: boolean): void {
   state = { open }

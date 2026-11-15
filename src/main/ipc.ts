@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import fs from 'fs'
 import { dayKey, pad } from '../shared/util'
 import type { DB, IpcChannels, Task } from '../shared/types'
@@ -13,9 +13,12 @@ import { buildContext, expandVars, repoDirOf, taskById, withContext } from './co
 import { startReview } from './review'
 import * as sessions from './sessions'
 import * as updater from './updater'
+import { lifecycle } from './lifecycle'
+import { quitApp } from './quit'
+import { refreshLimits } from './usage'
 import * as iso from './isolation'
 import * as checks from './checks'
-import { applyMini, dockPopout, hideMini, openPopout } from './windows'
+import { applyMini, dockPopout, hideMini, openPopout, resizeMini } from './windows'
 import { backupsDir, commit, getDb, replaceDb, uid } from './db'
 import { exportExcel } from './excel'
 import { gitCommits, launchTask, openClaude, openLogin, openTerminalHere, openVSCode, renderPrompt } from './launch'
@@ -30,7 +33,7 @@ import * as calendar from './calendar'
 import { planAssistant, readAndAnswer } from './assistant'
 import { attachGuest, markActive } from './web'
 import { deleteNote, listNotes, saveNote, saveNoteImage, unlinkTask } from './notes'
-import { appendChunk, deleteMeeting, listMeetings, retryMeeting, startMeeting, stopMeeting, updateMeeting } from './meetings'
+import { appendChunk, createMeetingTasks, deleteMeeting, extractMeeting, listMeetings, retryMeeting, startMeeting, stopMeeting, updateMeeting } from './meetings'
 import { attachWhatsApp, getBadges, openWhatsApp, setWhatsAppVisible, WSP_SLOT } from './whatsapp'
 import { generateRecurring } from './scheduler'
 import * as telegram from './telegram'
@@ -152,6 +155,8 @@ export function registerIpc(): void {
   api('meetings:summarize', (id) => retryMeeting(id, 'summary'))
   api('meetings:retry', (id) => retryMeeting(id, 'auto'))
   api('meetings:delete', (id) => deleteMeeting(id))
+  api('meetings:extract', (id) => extractMeeting(id))
+  api('meetings:createTasks', (id, tasks) => createMeetingTasks(id, tasks))
 
   api('task:prompt', (id) => renderPrompt(findTask(id)))
 
@@ -182,6 +187,7 @@ export function registerIpc(): void {
   // ---------- lanzadores ----------
   api('win:restore', () => showWin())
   api('mini:hide', () => hideMini())
+  api('mini:resize', (w, h) => resizeMini(w, h))
   api('claude:login', () => openLogin())
   api('claude:open', (taskId) => {
     openClaude(findTask(taskId))
@@ -449,6 +455,21 @@ export function registerIpc(): void {
   api('update:check', () => updater.check())
   api('update:download', () => updater.download())
   api('update:install', () => updater.install())
+  api('usage:refresh', async (): Promise<true> => {
+    await refreshLimits()
+    return true
+  })
+  api('app:restart', () => {
+    commit() // guarda antes de salir
+    lifecycle.quitting = true // sin esto «cerrar a la bandeja» impediría salir
+    // la nueva instancia arranca con --restarted: espera a que esta suelte el bloqueo de instancia única
+    const args = process.argv.slice(1).filter((a) => a !== '--restarted')
+    app.relaunch({ args: [...args, '--restarted'] })
+    setTimeout(() => app.quit(), 200) // después de responder a la llamada
+  })
+  api('app:quit', () => {
+    setTimeout(() => quitApp(), 100) // después de responder a la llamada
+  })
   api('window:popout', (taskId, convId, atCursor) => {
     if (!getDb().tasks.some((t) => t.id === taskId)) throw new Error('Tarea no encontrada')
     openPopout(taskId, convId, !!atCursor)
@@ -456,6 +477,7 @@ export function registerIpc(): void {
   api('skills:list', () => skills.listSkills())
   api('skills:install', (n) => skills.installSkill(n))
   api('skills:remove', (n) => skills.removeSkill(n))
+  api('skills:installRecommended', () => skills.installRecommended())
   api('window:skills', () => openSkills())
   api('badges:get', () => getBadges())
   api('whatsapp:open', () => openWhatsApp())

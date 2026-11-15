@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react'
-import type { Meeting, MeetingPatch } from '../../shared/types'
+import type { Meeting, MeetingPatch, MeetingTask } from '../../shared/types'
 
 /**
  * Reuniones en el renderer. La grabadora vive a nivel de módulo (no en un componente) para que la grabación
@@ -27,7 +27,7 @@ export async function loadMeetings(): Promise<void> {
   }
 }
 
-const processing = (m: Meeting): boolean => m.status === 'transcribing' || m.status === 'summarizing'
+const processing = (m: Meeting): boolean => m.status === 'transcribing' || m.status === 'summarizing' || !!m.extracting
 
 export function useMeetings(): Meeting[] {
   const meetings = useSyncExternalStore(
@@ -57,6 +57,13 @@ export const updateMeeting = async (id: string, p: MeetingPatch): Promise<Meetin
 }
 export const retryMeeting = async (id: string): Promise<void> => upsert(await window.api.call('meetings:retry', id))
 export const resummarizeMeeting = async (id: string): Promise<void> => upsert(await window.api.call('meetings:summarize', id))
+export const extractTasks = async (id: string): Promise<void> => upsert(await window.api.call('meetings:extract', id))
+/** Crea las tareas elegidas y devuelve cuántas se crearon. */
+export async function createTasks(id: string, tasks: MeetingTask[]): Promise<number> {
+  const n = await window.api.call('meetings:createTasks', id, tasks)
+  await loadMeetings()
+  return n
+}
 export async function deleteMeeting(id: string): Promise<void> {
   await window.api.call('meetings:delete', id)
   setList(list.filter((x) => x.id !== id))

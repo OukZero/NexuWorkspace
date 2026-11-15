@@ -8,8 +8,7 @@ export const NAV_GROUPS: Array<{ title: string; items: Array<[View, string, stri
       ['today', '⌂', 'Inicio'],
       ['board', '▦', 'Tablero'],
       ['workspace', '▥', 'Espacio'],
-      ['chat', '💬', 'Chats'],
-      ['history', '☰', 'Historial']
+      ['chat', '💬', 'Chats']
     ]
   },
   {
@@ -17,6 +16,7 @@ export const NAV_GROUPS: Array<{ title: string; items: Array<[View, string, stri
     items: [
       ['hours', '⏱', 'Horas'],
       ['redmine', '✓', 'Redmine'],
+      ['dashboard', '▤', 'Productividad'],
       ['usage', '◔', 'Consumo IA']
     ]
   },

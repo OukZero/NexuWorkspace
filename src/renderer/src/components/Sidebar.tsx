@@ -15,18 +15,19 @@ import {
   setDensity,
   setFontScale,
   setMode,
+  toggleDayNight,
   setName,
   navOrder,
   useAppearance,
   type Density,
   type ThemeMode
 } from '../theme'
-import { activeEntry, findTask, msToday, useDB, useNow } from '../store'
-import { baseName, fmtH } from '../utils'
-import { workFolder } from '../../../shared/util'
-import { getSideWide, setSideWide, useSideWide } from '../sideMode'
+import { useDB } from '../store'
 import { useUi, type View } from '../ui'
 import { UpdateChip } from './UpdateCard'
+import { MiniPlayer } from './MiniPlayer'
+import { TimerBar } from './TimerBar'
+import { NotificationBell } from './NotificationBell'
 import { showSettingsTab } from './SettingsView'
 import { NAV_GROUPS } from '../navDefs'
 import { BackgroundPicker } from './BackgroundPicker'
@@ -83,7 +84,7 @@ function Profile({ wide }: { wide?: boolean }): ReactNode {
         </button>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content className="pmenu" side="right" align="end" sideOffset={10} collisionPadding={12}>
+        <Popover.Content className="pmenu" side="bottom" align="end" sideOffset={10} collisionPadding={12}>
           <div className="pm-head">
             <span className="avatar big">{initials(name)}</span>
             <div className="grow">
@@ -196,6 +197,9 @@ function Profile({ wide }: { wide?: boolean }): ReactNode {
             )}
           </div>
           <div className="pm-foot">
+            <button className="btn sm" onClick={toggleDayNight}>
+              ◐ Claro / oscuro
+            </button>
             <button
               className="btn sm"
               onClick={() => {
@@ -222,44 +226,7 @@ function Profile({ wide }: { wide?: boolean }): ReactNode {
   )
 }
 
-const NAV_ICON: Record<string, GlyphName> = { today: 'panelhome', workspace: 'workspace', board: 'board', groups: 'folders', history: 'history', chat: 'chats', hours: 'hours', redmine: 'redmine', usage: 'usage', music: 'music', notes: 'files', meetings: 'volume', web: 'popout', whatsapp: 'chat' }
-
-/** Avance del día como anillo, bajo el logo: horas registradas frente al objetivo. */
-function DayRing(): ReactNode {
-  const db = useDB()
-  const now = useNow(30000)
-  const ms = msToday(db, now)
-  const target = db.settings.targetHours * 3600000
-  const p = Math.min(1, target ? ms / target : 0)
-  const c = 2 * Math.PI * 9
-  return (
-    <span className="rail-ring" data-tip={`${fmtH(ms)} h de ${db.settings.targetHours} h hoy`} role="img" aria-label={`${fmtH(ms)} horas de ${db.settings.targetHours} hoy`}>
-      <svg viewBox="0 0 24 24" width="22" height="22">
-        <circle cx="12" cy="12" r="9" stroke="var(--line)" />
-        <circle cx="12" cy="12" r="9" stroke="var(--accent2)" strokeDasharray={`${p * c} ${c}`} strokeLinecap="round" />
-      </svg>
-    </span>
-  )
-}
-
-function ThemeToggle({ small }: { small?: boolean }): ReactNode {
-  useAppearance()
-  const dark = document.documentElement.dataset.theme !== 'light'
-  return (
-    <button
-      className={small ? 'ib' : 'rb'}
-      data-tip={small ? undefined : dark ? 'Tema claro' : 'Tema oscuro'}
-      title={small ? (dark ? 'Tema claro' : 'Tema oscuro') : undefined}
-      aria-label={dark ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
-      onClick={() => {
-        if (getPreset()) setPreset('') // los estilos con nombre son de un solo modo: se vuelve al clásico día / noche
-        setMode(dark ? 'light' : 'dark')
-      }}
-    >
-      <G n={dark ? 'sun' : 'moon'} />
-    </button>
-  )
-}
+const NAV_ICON: Record<string, GlyphName> = { today: 'panelhome', workspace: 'workspace', board: 'board', groups: 'folders', history: 'history', chat: 'chats', hours: 'hours', redmine: 'redmine', usage: 'usage', dashboard: 'usage', music: 'music', notes: 'files', meetings: 'volume', web: 'popout', whatsapp: 'chat' }
 
 /** Mensajes sin leer de los servicios de mensajería (vista → número), enviados por el proceso principal. */
 function useBadges(): Record<string, number> {
@@ -271,55 +238,16 @@ function useBadges(): Record<string, number> {
   return b
 }
 
-/** Jornada de hoy como barra fina (menú ancho): horas registradas frente al objetivo. */
-function DayBar(): ReactNode {
-  const db = useDB()
-  const now = useNow(30000)
-  const ms = msToday(db, now)
-  const target = db.settings.targetHours * 3600000
-  const p = Math.min(1, target ? ms / target : 0)
-  return (
-    <div className="wide-day" role="img" aria-label={`${fmtH(ms)} horas de ${db.settings.targetHours} hoy`} title={`${fmtH(ms)} h de ${db.settings.targetHours} h hoy`}>
-      <div>
-        <span>Jornada de hoy</span>
-        <b>
-          {fmtH(ms).replace('.', ',')} h<small> / {db.settings.targetHours} h</small>
-        </b>
-      </div>
-      <i>
-        <b style={{ width: `${p * 100}%` }} />
-      </i>
-    </div>
-  )
-}
 
-const MODES: Array<['chat' | 'design' | 'git' | 'files', string, GlyphName]> = [
-  ['chat', 'Chat IA', 'chat'],
-  ['design', 'Diseño', 'design'],
-  ['git', 'Git', 'git'],
-  ['files', 'Archivos', 'code']
-]
-
-const openPalette = (): void => {
-  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))
-}
-
-const LOGO = (
-  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M12 3c4 2 6 6 4 10-1 2-3 3-4 8-1-5-3-6-4-8-2-4 0-8 4-10z" />
-  </svg>
-)
-
-/** Menú principal: ancho (nombres, secciones y tarea activa) o reducido a una barra de iconos. Ctrl+B cambia entre ambos. */
-export function Sidebar(): ReactNode {
+/** Barra superior: logo, lo fijado por el usuario, «+» con el resto, búsqueda, timer y utilidades. */
+export function TopNav({ onSearch, fullscreen, onFullscreen }: { onSearch: () => void; fullscreen: boolean; onFullscreen: () => void }): ReactNode {
   const ui = useUi()
   const db = useDB()
   const badges = useBadges()
-  const wide = useSideWide()
-  useAppearance() // repinta al reordenar u ocultar secciones
+  const [more, setMore] = useState(false)
+  const app = useAppearance() // repinta al fijar, reordenar u ocultar secciones
   const ca = ui.chatAlerts
   const chatN = ca.waiting + ca.unread
-  /** Texto del aviso del botón «Chats»: qué conversaciones necesitan atención. */
   const chatTip = (label: string): string => {
     const p: string[] = []
     if (ca.waiting) p.push(`${ca.waiting} esperando tu respuesta`)
@@ -328,6 +256,15 @@ export function Sidebar(): ReactNode {
     return p.length ? `${label} · ${p.join(' · ')}` : label
   }
   const pending = db.tasks.filter((t) => !t.archived && (!t.recurrence || t.recurrence.type === 'none') && (t.status === 'today' || t.status === 'doing')).length
+  /** Pide confirmación antes de salir de verdad; avisa de lo que quedará detenido. */
+  const closeApp = async (): Promise<void> => {
+    const notes: string[] = []
+    if (db.entries.some((e) => !e.end)) notes.push('el timer en marcha se detendrá')
+    if (ca.running) notes.push(`${ca.running} respuesta${ca.running > 1 ? 's' : ''} de IA en curso se cancelará${ca.running > 1 ? 'n' : ''}`)
+    const text = 'Se cierra Nexo por completo: no quedará nada en segundo plano (ni en la bandeja).' + (notes.length ? ` Además: ${notes.join(' y ')}.` : '')
+    if (!(await ui.confirm(text, { title: 'Cerrar Nexo', confirmLabel: 'Cerrar la aplicación', danger: true }))) return
+    void ui.run('app:quit')
+  }
   /** Aviso de cada botón: número (rojo si espera tu respuesta) o un punto si solo está respondiendo. */
   const badgeOf = (v: string): { n: number; need: boolean; dot: boolean } => {
     if (v === 'chat') return { n: chatN, need: ca.waiting > 0, dot: chatN === 0 && ca.running > 0 }
@@ -335,116 +272,91 @@ export function Sidebar(): ReactNode {
     return { n: badges[v] ?? 0, need: false, dot: false }
   }
 
-  // Ctrl+B: ancho ↔ reducido (sin pisar el teclado dentro de cuadros de texto)
-  useEffect(() => {
-    const on = (e: KeyboardEvent): void => {
-      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'b') return
-      const t = e.target as HTMLElement | null
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
-      e.preventDefault()
-      setSideWide(!getSideWide())
-    }
-    window.addEventListener('keydown', on)
-    return () => window.removeEventListener('keydown', on)
-  }, [])
-
-  // tarea activa: la de la pestaña abierta o, si estás en otra pantalla, la del timer
-  const task = findTask(db, ui.activeTask ?? activeEntry(db)?.taskId ?? db.paused)
-  const folder = task ? workFolder(task, db.groups) : ''
-
-  if (wide) {
-    return (
-      <aside className="side rail-side wide" aria-label="Principal">
-        <div className="wide-brand">
-          <button className="wide-brand-b" onClick={openPalette} title="Búsqueda global (Ctrl+K)" aria-label="Búsqueda global">
-            <span className="wide-logo">{LOGO}</span>
-            <span className="wide-bn">
-              <b>Shutoki</b>
-              <small>AI Workspace</small>
-            </span>
-          </button>
-          <button className="ib" title="Reducir el menú (Ctrl+B)" aria-label="Reducir el menú" onClick={() => setSideWide(false)}>
-            <G n="chevron" size={15} />
-          </button>
-        </div>
-        <nav id="nav" className="wide-nav">
-          {NAV_GROUPS.map((g) => (
-            <div key={g.title} className="nav-group wide-group">
-              <div className="wide-gt">{g.title}</div>
-              {navOrder(g.items.map(([id, , label]) => ({ id, label }))).map(({ id: v, label }) => {
-                const b = badgeOf(v)
-                return (
-                  <button key={v} className={`wi${ui.view === v ? ' on' : ''}`} title={v === 'chat' ? chatTip(label) : undefined} aria-current={ui.view === v ? 'page' : undefined} onClick={() => ui.go(v)}>
-                    <G n={NAV_ICON[v] ?? 'today'} size={17} />
-                    <span className="wi-t">{label}</span>
-                    {b.n > 0 ? <span className={`wi-n${b.need ? ' need' : ''}`}>{b.n > 9 ? '9+' : b.n}</span> : b.dot ? <span className="wi-dot" aria-hidden /> : null}
-                  </button>
-                )
-              })}
-            </div>
-          ))}
-          {task && (
-            <div className="nav-group wide-group">
-              <div className="wide-gt">Tarea activa</div>
-              <button className="wide-task" onClick={() => ui.openChat(task.id)} title={`${task.title}${folder ? ` · ${folder}` : ''}\nAbrir su chat`}>
-                <small>{task.title}</small>
-                <b>{[folder ? baseName(folder) : task.project || 'Sin carpeta', task.branch].filter(Boolean).join(' · ')}</b>
-              </button>
-              {MODES.map(([m, label, icon]) => (
-                <button key={m} className={`wi${ui.view === 'chat' && ui.activeTask === task.id && ui.activeMode === m ? ' on' : ''}`} onClick={() => ui.openMode(task.id, m)}>
-                  <G n={icon} size={17} />
-                  <span className="wi-t">{label}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </nav>
-        <span className="sp" />
-        <DayBar />
-        <div className="wide-foot">
-          <Profile wide />
-          <UpdateChip />
-          <ThemeToggle small />
-          <button className={`ib${ui.view === 'settings' ? ' on' : ''}`} title="Ajustes" aria-label="Ajustes" onClick={() => ui.go('settings')}>
-            <G n="settings" size={16} />
-          </button>
-        </div>
-      </aside>
-    )
-  }
+  const all = navOrder(NAV_GROUPS.flatMap((g) => g.items.map(([id, , label]) => ({ id, label, group: g.title }))))
+  const pinned = all.filter((x) => app.nav.pinned.includes(x.id))
+  const rest = all.filter((x) => !app.nav.pinned.includes(x.id))
+  const isOn = (v: string): boolean => ui.view === v || (v === 'chat' && ui.view === 'history')
+  const restBadge = rest.reduce((n, x) => n + badgeOf(x.id).n, 0)
 
   return (
-    <aside className="side rail-side" aria-label="Principal">
-      <button className="rail-logo" data-tip="Shutoki AI Workspace · Ctrl+K" aria-label="Búsqueda global" onClick={openPalette}>
-        {LOGO}
+    <nav className="topnav" id="nav" aria-label="Principal">
+      <div className="tn-start">
+      <button className="tn-logo"title="Nexo Workspace · Ctrl+K" aria-label="Búsqueda global" onClick={onSearch}>
+        N
       </button>
-      <nav id="nav">
-        {NAV_GROUPS.map((g, gi) => (
-          <div key={g.title} className="nav-group">
-            {gi > 0 && <span className="rail-sep" />}
-            {navOrder(g.items.map(([id, , label]) => ({ id, label }))).map(({ id: v, label }) => {
-              const b = badgeOf(v)
-              return (
-                <button key={v} className={`rb ${ui.view === v ? 'on' : ''}`} data-tip={v === 'chat' ? chatTip(label) : badges[v] ? `${label} · ${badges[v]} sin leer` : label} aria-label={badges[v] ? `${label}, ${badges[v]} sin leer` : label} aria-current={ui.view === v ? 'page' : undefined} onClick={() => ui.go(v)}>
-                  <G n={NAV_ICON[v] ?? 'today'} />
-                  {b.n > 0 ? <span className={`rb-badge${b.need ? ' need' : ''}`}>{b.n > 9 ? '9+' : b.n}</span> : b.dot ? <span className="rb-dot" aria-hidden /> : null}
-                </button>
-              )
-            })}
-          </div>
-        ))}
-      </nav>
-      <span className="sp" />
-      <button className="rb" data-tip="Ampliar el menú · Ctrl+B" aria-label="Ampliar el menú" onClick={() => setSideWide(true)}>
-        <G n="chevron" size={16} />
+      <div className="tn-items">
+        {pinned.map(({ id: v, label }) => {
+          const b = badgeOf(v)
+          return (
+            <button key={v} className={`tn-i${isOn(v) ? ' on' : ''}`} title={v === 'chat' ? chatTip(label) : label} aria-current={ui.view === v ? 'page' : undefined} onClick={() => ui.go(v)}>
+              <G n={NAV_ICON[v] ?? 'today'} size={16} />
+              <span className="tn-t">{label}</span>
+              {b.n > 0 ? <span className={`tn-n${b.need ? ' need' : ''}`}>{b.n > 9 ? '9+' : b.n}</span> : b.dot ? <span className="tn-dot" aria-hidden /> : null}
+            </button>
+          )
+        })}
+        {rest.length > 0 && (
+          <Popover.Root open={more} onOpenChange={setMore}>
+            <Popover.Trigger asChild>
+              <button className={`tn-i tn-plus${rest.some((x) => isOn(x.id)) ? ' on' : ''}`} title="Más secciones" aria-label="Más secciones">
+                <G n="plus" size={16} />
+                {restBadge > 0 && <span className="tn-dot" aria-hidden />}
+              </button>
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content className="pmenu tn-more" side="bottom" align="start" sideOffset={8} collisionPadding={12}>
+                {NAV_GROUPS.map((g) => {
+                  const items = rest.filter((x) => x.group === g.title)
+                  if (!items.length) return null
+                  return (
+                    <div key={g.title} className="tn-mg">
+                      <div className="wide-gt">{g.title}</div>
+                      {items.map(({ id: v, label }) => {
+                        const b = badgeOf(v)
+                        return (
+                          <button
+                            key={v}
+                            className={`tn-mi${isOn(v) ? ' on' : ''}`}
+                            onClick={() => {
+                              setMore(false)
+                              ui.go(v)
+                            }}
+                          >
+                            <G n={NAV_ICON[v] ?? 'today'} size={16} />
+                            <span className="grow">{label}</span>
+                            {b.n > 0 && <span className={`tn-n${b.need ? ' need' : ''}`}>{b.n > 9 ? '9+' : b.n}</span>}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+                <div className="tn-mf">Elige qué se fija arriba en Ajustes → Apariencia.</div>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
+        )}
+      </div>
+      </div>
+      {/* reproductor y timer en el centro de la barra; la lupa va con las utilidades */}
+      <div className="tn-mid">
+        <MiniPlayer />
+        <TimerBar />
+      </div>
+      <div className="tn-end">
+      <button className="ib" title="Buscar o ejecutar (Ctrl K)" aria-label="Búsqueda global" onClick={onSearch}>
+        <G n="search" size={16} />
       </button>
-      <DayRing />
+      <NotificationBell variant="top" />
       <UpdateChip />
-      <ThemeToggle />
-      <button className={`rb ${ui.view === 'settings' ? 'on' : ''}`} data-tip="Ajustes" aria-label="Ajustes" onClick={() => ui.go('settings')}>
-        <G n="settings" />
+      <button className="ib" title={fullscreen ? 'Salir de pantalla completa (F11)' : 'Pantalla completa (F11)'} aria-label={fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'} aria-pressed={fullscreen} onClick={onFullscreen}>
+        <G n={fullscreen ? 'shrink' : 'expand'} size={16} />
+      </button>
+      <button className="ib tn-quit" title="Cerrar Nexo por completo" aria-label="Cerrar la aplicación" onClick={() => void closeApp()}>
+        <G n="x" size={16} />
       </button>
       <Profile />
-    </aside>
+      </div>
+    </nav>
   )
 }
