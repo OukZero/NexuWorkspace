@@ -261,8 +261,8 @@ export function TopNav({ onSearch, fullscreen, onFullscreen }: { onSearch: () =>
     const notes: string[] = []
     if (db.entries.some((e) => !e.end)) notes.push('el timer en marcha se detendrá')
     if (ca.running) notes.push(`${ca.running} respuesta${ca.running > 1 ? 's' : ''} de IA en curso se cancelará${ca.running > 1 ? 'n' : ''}`)
-    const text = 'Se cierra Nexo por completo: no quedará nada en segundo plano (ni en la bandeja).' + (notes.length ? ` Además: ${notes.join(' y ')}.` : '')
-    if (!(await ui.confirm(text, { title: 'Cerrar Nexo', confirmLabel: 'Cerrar la aplicación', danger: true }))) return
+    const text = 'Se cierra Nexu por completo: no quedará nada en segundo plano (ni en la bandeja).' + (notes.length ? ` Además: ${notes.join(' y ')}.` : '')
+    if (!(await ui.confirm(text, { title: 'Cerrar Nexu', confirmLabel: 'Cerrar la aplicación', danger: true }))) return
     void ui.run('app:quit')
   }
   /** Aviso de cada botón: número (rojo si espera tu respuesta) o un punto si solo está respondiendo. */
@@ -281,7 +281,7 @@ export function TopNav({ onSearch, fullscreen, onFullscreen }: { onSearch: () =>
   return (
     <nav className="topnav" id="nav" aria-label="Principal">
       <div className="tn-start">
-      <button className="tn-logo"title="Nexo Workspace · Ctrl+K" aria-label="Búsqueda global" onClick={onSearch}>
+      <button className="tn-logo"title="Nexu Workspace · Ctrl+K" aria-label="Búsqueda global" onClick={onSearch}>
         N
       </button>
       <div className="tn-items">
@@ -352,7 +352,7 @@ export function TopNav({ onSearch, fullscreen, onFullscreen }: { onSearch: () =>
       <button className="ib" title={fullscreen ? 'Salir de pantalla completa (F11)' : 'Pantalla completa (F11)'} aria-label={fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'} aria-pressed={fullscreen} onClick={onFullscreen}>
         <G n={fullscreen ? 'shrink' : 'expand'} size={16} />
       </button>
-      <button className="ib tn-quit" title="Cerrar Nexo por completo" aria-label="Cerrar la aplicación" onClick={() => void closeApp()}>
+      <button className="ib tn-quit" title="Cerrar Nexu por completo" aria-label="Cerrar la aplicación" onClick={() => void closeApp()}>
         <G n="x" size={16} />
       </button>
       <Profile />

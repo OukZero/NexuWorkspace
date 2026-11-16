@@ -1,4 +1,4 @@
-// Genera los iconos de Nexo Workspace a partir de tools/icon.svg usando Electron (sin dependencias extra):
+// Genera los iconos de Nexu Workspace a partir de tools/icon.svg usando Electron (sin dependencias extra):
 //   npm run icon
 // Salidas: resources/icon.png (512), resources/nexo.ico (16–256), src/renderer/public/icon.png (128, marca del menú lateral).
 const { app, BrowserWindow } = require('electron')

@@ -14,6 +14,7 @@ export const DEFAULT_SETTINGS: Settings = {
   myNames: '',
   meetingAutoTasks: true,
   copilotCmd: 'copilot',
+  geminiCmd: 'gemini',
   copilotModels: [
     'auto',
     'claude-sonnet-5.5',
@@ -129,7 +130,7 @@ export const backupsDir = (): string => current().backupsDir()
 
 /** Reemplaza todos los datos (importar): antes se guarda una copia de lo actual. */
 export function replaceDb(raw: Partial<DB>): void {
-  if (!Array.isArray(raw.tasks) || !Array.isArray(raw.entries)) throw new Error('El archivo no parece una exportación de Nexo Workspace (faltan tareas u horas).')
+  if (!Array.isArray(raw.tasks) || !Array.isArray(raw.entries)) throw new Error('El archivo no parece una exportación de Nexu Workspace (faltan tareas u horas).')
   current().snapshot('pre-importacion')
   db = normalize(raw)
   commit()

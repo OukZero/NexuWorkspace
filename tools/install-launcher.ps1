@@ -1,5 +1,5 @@
-# Crea los accesos directos de Nexo Workspace apuntando al ejecutable empaquetado (arranque rápido, sin compilar):
-#   - Escritorio:  "Nexo Workspace"  -> release\win-unpacked\Nexo Workspace.exe
+# Crea los accesos directos de Nexu Workspace apuntando al ejecutable empaquetado (arranque rápido, sin compilar):
+#   - Escritorio:  "Nexu Workspace"  -> release\win-unpacked\Nexu Workspace.exe
 #   - Inicio de Windows (-Startup): mismo .exe con --hidden, arranca en la bandeja
 # Uso:  powershell -ExecutionPolicy Bypass -File tools\install-launcher.ps1 [-Startup] [-Remove] [-Dev]
 #   -Dev  : en vez del .exe, el acceso directo usa tools\launch.ps1 (compila los cambios nuevos antes de abrir; para desarrollar)
@@ -7,11 +7,11 @@
 param([switch]$Startup, [switch]$Remove, [switch]$Dev)
 
 $root = Split-Path $PSScriptRoot -Parent
-$exe = Join-Path $root 'release\win-unpacked\Nexo Workspace.exe'
+$exe = Join-Path $root 'release\win-unpacked\Nexu Workspace.exe'
 $launch = Join-Path $PSScriptRoot 'launch.ps1'
 $icon = Join-Path $root 'resources\nexo.ico'
-$desktop = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Nexo Workspace.lnk'
-$startupLnk = Join-Path ([Environment]::GetFolderPath('Startup')) 'Nexo Workspace.lnk'
+$desktop = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Nexu Workspace.lnk'
+$startupLnk = Join-Path ([Environment]::GetFolderPath('Startup')) 'Nexu Workspace.lnk'
 
 if ($Remove) {
   Remove-Item $desktop, $startupLnk -ErrorAction SilentlyContinue
@@ -32,12 +32,12 @@ function New-Link([string]$path, [bool]$hidden) {
     $l.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$launch`"" + $(if ($hidden) { ' -Hidden' } else { '' })
     $l.WorkingDirectory = $root
     $l.WindowStyle = 7 # minimizada
-    $l.Description = 'Nexo Workspace (compila los cambios nuevos y abre)'
+    $l.Description = 'Nexu Workspace (compila los cambios nuevos y abre)'
   } else {
     $l.TargetPath = $exe
     $l.Arguments = $(if ($hidden) { '--hidden' } else { '' })
     $l.WorkingDirectory = Split-Path $exe -Parent
-    $l.Description = 'Nexo Workspace'
+    $l.Description = 'Nexu Workspace'
   }
   if (Test-Path $icon) { $l.IconLocation = $icon }
   $l.Save()

@@ -13,7 +13,6 @@ import { buildContext, expandVars, repoDirOf, taskById, withContext } from './co
 import { startReview } from './review'
 import * as sessions from './sessions'
 import * as updater from './updater'
-import { lifecycle } from './lifecycle'
 import { quitApp } from './quit'
 import { refreshLimits } from './usage'
 import * as iso from './isolation'
@@ -461,11 +460,12 @@ export function registerIpc(): void {
   })
   api('app:restart', () => {
     commit() // guarda antes de salir
-    lifecycle.quitting = true // sin esto «cerrar a la bandeja» impediría salir
-    // la nueva instancia arranca con --restarted: espera a que esta suelte el bloqueo de instancia única
-    const args = process.argv.slice(1).filter((a) => a !== '--restarted')
+    // la nueva instancia arranca con --restarted: espera a que esta suelte el bloqueo de instancia única.
+    // Se quita --hidden: un reinicio manual tiene que mostrar la ventana, no dejarla en la bandeja.
+    const args = process.argv.slice(1).filter((a) => a !== '--restarted' && a !== '--hidden')
     app.relaunch({ args: [...args, '--restarted'] })
-    setTimeout(() => app.quit(), 200) // después de responder a la llamada
+    // mismo cierre que «Salir» (timer, procesos, ventanas) con salida forzada si algo se retrasa, para liberar el bloqueo
+    setTimeout(() => quitApp(), 200) // después de responder a la llamada
   })
   api('app:quit', () => {
     setTimeout(() => quitApp(), 100) // después de responder a la llamada

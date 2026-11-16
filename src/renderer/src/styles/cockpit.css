@@ -1611,7 +1611,7 @@ html .side.rail-side.wide { width: 236px; padding: 14px 10px 10px; align-items: 
 .meetings .nt-list { min-width: 0; }
 
 /* =====================================================================
-   Tema Nexo (predeterminado): degradado cian → violeta del icono, halo,
+   Tema Nexu (predeterminado): degradado cian → violeta del icono, halo,
    nodos con brillo y líneas que se conectan. Solo aplica con data-preset="shutoki".
    ===================================================================== */
 html:is([data-preset="shutoki"], [data-preset="nexoclaro"]) {

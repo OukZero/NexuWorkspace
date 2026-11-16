@@ -10,6 +10,8 @@ import type { Activity, Attachment, Chat, ChatMessage, ChatMode, ChatUsage, Hunk
 import { clip } from '../shared/util'
 import { profilesOf } from '../shared/templates'
 import { buildInvocation, readUsage, type CopilotEvent, type CopilotUsage } from './copilot'
+import { geminiArgs, parseGeminiLine } from './gemini'
+import { randomUUID } from 'crypto'
 import { broadcast, commit, getDb, push } from './db'
 import { copilotDirs, effectiveTask, groupAccess, groupNote } from './groups'
 import { allowForever, claudeAllow, claudeDeny, copilotAllow, copilotDeny, isAllowed, ruleFor } from './permissions'
@@ -65,7 +67,7 @@ function onControl(convId: string, child: ChildProcess, ev: ControlEvent): void 
     return
   }
   const r = ev.request
-  if (r?.subtype !== 'can_use_tool' || !r.tool_name) return reply(child, id, {}, 'Solicitud no soportada por Nexo Workspace')
+  if (r?.subtype !== 'can_use_tool' || !r.tool_name) return reply(child, id, {}, 'Solicitud no soportada por Nexu Workspace')
   const tool = r.tool_name
   const input = r.input ?? {}
   // preguntas al usuario y planes necesitan una interfaz propia que el chat no tiene: Claude debe preguntar en texto
@@ -644,6 +646,58 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[], e
     child.stdin?.on('error', () => {})
     child.stdin?.end()
     onLine = (line) => handleCopilot(convId, task.folder, JSON.parse(line) as CopilotEvent)
+  } else if (provider === 'gemini') {
+    // CLI de Gemini con clave de API: una ejecución por mensaje. La primera crea la sesión con un UUID; las siguientes usan --resume latest.
+    // El id se guarda solo al recibir «result»: si el primer intento falla, el CLI no tiene sesión y --resume daría error.
+    const resume = !!chat.sessionId
+    const sid = chat.sessionId ?? randomUUID()
+    let prompt = files.length ? `${modelText || 'Revisa los archivos adjuntos.'}\n\nArchivos adjuntos (puedes leerlos con tus herramientas):\n${files.map((f) => `- ${f.path}`).join('\n')}` : modelText
+    // igual que Copilot: el contexto de carpetas y las instrucciones del perfil van al primer mensaje de la sesión
+    const note = resume ? '' : [groupNote(task), prof?.instructions].filter(Boolean).join('\n\n')
+    if (note) prompt = `[Contexto de carpetas]\n${note}\n\n[Pedido]\n${prompt}`
+    // sin modelo elegido se usa uno concreto: el «auto» del CLI no devuelve respuesta con clave de API
+    child = spawn(`${db.settings.geminiCmd.trim() || 'gemini'} ${geminiArgs({ sessionId: sid, resume, model: useModel || 'gemini-3-flash-preview', readOnly, agent: chat.mode === 'agent' }).join(' ')}`, { shell: true, cwd: task.folder, windowsHide: true })
+    child.stdin?.on('error', () => {})
+    child.stdin?.end(prompt)
+    // el texto llega en fragmentos (delta) o completo; los fragmentos se acumulan y se guardan al terminar
+    let streamed = ''
+    let toolNoted = false
+    onLine = (line) => {
+      const ev = parseGeminiLine(line)
+      if (!ev) return
+      if (ev.type === 'message' && ev.role === 'assistant' && ev.content) {
+        if (ev.delta) {
+          streamed += ev.content
+          broadcast('chat:delta', { convId, text: ev.content })
+        } else {
+          streamed = ''
+          chat.messages.push({ role: 'assistant', text: ev.content.trim(), ts: Date.now() })
+          push()
+        }
+      } else if (ev.type === 'result') {
+        chat.gotResult = true
+        chat.sessionId = sid
+        if (streamed.trim()) chat.messages.push({ role: 'assistant', text: streamed.trim(), ts: Date.now() })
+        streamed = ''
+        // el motivo real (p. ej. cuota diaria agotada) llega en «error» del propio resultado
+        if (ev.status && ev.status !== 'success') {
+          const why = typeof ev.error === 'string' ? ev.error : ev.error?.message
+          chat.messages.push(sysMsg(`Gemini no pudo responder: ${why ? why.split('\n')[0].slice(0, 300) : `estado ${ev.status}`}`))
+        }
+        push()
+      } else if (ev.type === 'tool_use') {
+        // sin esta señal la respuesta parece colgada mientras el CLI lee archivos (puede tardar decenas de segundos)
+        if (!toolNoted) {
+          toolNoted = true
+          chat.messages.push(sysMsg('Gemini está consultando archivos del proyecto…'))
+          push()
+        }
+      } else if (ev.type === 'error') {
+        const msg = typeof ev.error === 'string' ? ev.error : ev.error?.message
+        chat.messages.push(sysMsg(`Gemini: ${msg || 'error desconocido'}`))
+        push()
+      }
+    }
   } else {
     // la entrada por stream-json (en vez de texto plano) es lo que permite ejecutar comandos / como /compact
     const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages']
@@ -734,11 +788,12 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[], e
       if (u) trackCopilot(chat.taskId, chat, u)
     }
     let failed: string | null = null
-    const name = provider === 'copilot' ? 'copilot' : 'claude'
+    const name = provider === 'copilot' ? 'copilot' : provider === 'gemini' ? 'gemini' : 'claude'
     if (chat.cancelled) chat.messages.push({ role: 'system', text: 'Respuesta cancelada.', ts: Date.now() })
     else if (spawnErr || (code !== 0 && !chat.gotResult)) {
-      const cmd = provider === 'copilot' ? db.settings.copilotCmd : db.settings.claudeCmd
-      const m = sysMsg(spawnErr?.message || err.trim() || `${name} terminó con código ${code}. ¿Responde "${cmd} --version" en PowerShell?${provider === 'copilot' ? ' Si no has iniciado sesión: copilot login.' : ''}`)
+      const cmd = provider === 'copilot' ? db.settings.copilotCmd : provider === 'gemini' ? db.settings.geminiCmd : db.settings.claudeCmd
+      const hint = provider === 'copilot' ? ' Si no has iniciado sesión: copilot login.' : provider === 'gemini' ? ' Define GEMINI_API_KEY (variable de entorno de usuario) y reinicia la app.' : ''
+      const m = sysMsg(spawnErr?.message || err.trim() || `${name} terminó con código ${code}. ¿Responde "${cmd} --version" en PowerShell?${hint}`)
       if (provider === 'copilot') delete m.action // el botón de inicio de sesión es de Claude (claude auth login)
       chat.messages.push(m)
       failed = m.text
@@ -749,7 +804,7 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[], e
     const wasCancelled = chat.cancelled
     chat.cancelled = false
     commit()
-    if (!wasCancelled && !isCommand) notifyDone(convId, task, chat, runStart, failed, provider === 'copilot' ? 'Copilot' : 'Claude')
+    if (!wasCancelled && !isCommand) notifyDone(convId, task, chat, runStart, failed, provider === 'copilot' ? 'Copilot' : provider === 'gemini' ? 'Gemini' : 'Claude')
   }
   child.on('error', (e) => finish(1, e))
   child.on('close', (code) => finish(code))
