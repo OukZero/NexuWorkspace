@@ -322,7 +322,7 @@ export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string
 
   // abre la terminal elegida en Ajustes, en la carpeta de la tarea, ya retomando esta conversación
   const provider: Provider = chat?.provider ?? 'claude'
-  const ai = provider === 'copilot' ? 'Copilot' : 'Claude'
+  const ai = provider === 'copilot' ? 'Copilot' : provider === 'gemini' ? 'Gemini' : 'Claude'
   const copilotModels = db.settings.copilotModels
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -330,7 +330,13 @@ export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string
   const modelOptions: SelectOption[] =
     provider === 'copilot'
       ? [{ value: '', label: 'Modelo: predeterminado' }, ...copilotModels.map((m) => ({ value: m, label: m }))]
-      : [
+      : provider === 'gemini'
+        ? [
+          // «auto» del CLI se queda colgado sin respuesta con clave de API: se usa un modelo concreto
+          { value: 'gemini-3-flash-preview', label: 'gemini-3-flash-preview (predeterminado)' },
+          { value: 'gemini-3-pro-preview', label: 'gemini-3-pro-preview (cuota limitada)' }
+        ]
+        : [
           { value: '', label: 'Modelo: predeterminado' },
           { value: 'sonnet', label: 'sonnet' },
           { value: 'opus', label: 'opus' },
@@ -357,7 +363,7 @@ export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string
   }
 
   const continueInTerminal = async (): Promise<void> => {
-    if (provider === 'copilot') return ui.toast('Continuar en terminal solo está disponible para conversaciones con Claude', true)
+    if (provider !== 'claude') return ui.toast('Continuar en terminal solo está disponible para conversaciones con Claude', true)
     if (!chat?.sessionId) return ui.toast('Aún no hay conversación que continuar: envía un mensaje primero', true)
     ui.openTerminal(taskId, chat.sessionId)
   }
@@ -654,7 +660,8 @@ export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string
                     onChange={(v) => void ui.run('chat:config', convId, { provider: v as Provider })}
                     options={[
                       { value: 'claude', label: 'Claude' },
-                      { value: 'copilot', label: 'GitHub Copilot' }
+                      { value: 'copilot', label: 'GitHub Copilot' },
+                      { value: 'gemini', label: 'Gemini (clave de API)' }
                     ]}
                   />
                 )}
@@ -687,7 +694,7 @@ export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string
                 aria-expanded={cfgOpen}
                 onClick={() => setCfgOpen((o) => !o)}
               >
-                {provider === 'copilot' ? 'Copilot' : 'Claude'} · {chat?.mode === 'agent' ? 'Agent' : chat?.mode === 'ask' ? 'Ask' : 'Según Ajustes'} <G n="more" size={13} />
+                {ai} · {chat?.mode === 'agent' ? 'Agent' : chat?.mode === 'ask' ? 'Ask' : 'Según Ajustes'} <G n="more" size={13} />
               </button>
               <Select
                 className="mini-sel"

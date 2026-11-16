@@ -34,7 +34,7 @@ function buildPrompt(request: string): string {
   const tasks = visibleTasks()
   const sites = (db.settings.webLinks ?? []).map((l) => `${l.name}: ${l.url}`).slice(0, 20)
   return [
-    'Eres el asistente de una aplicación de productividad para desarrolladores (Nexo Workspace). Conviertes la instrucción del usuario en acciones de la app.',
+    'Eres el asistente de una aplicación de productividad para desarrolladores (Nexu Workspace). Conviertes la instrucción del usuario en acciones de la app.',
     'Responde SOLO con un objeto JSON, sin texto antes ni después ni bloques de código, con esta forma:',
     '{"say": "respuesta breve en español", "actions": [ ... ]}',
     'Acciones permitidas (type y campos):',

@@ -26,7 +26,7 @@ function explain(e: Error): string {
   if (/404|Not Found/i.test(m)) return 'No hay publicaciones accesibles en GitHub (¿el repositorio es privado o todavía no se publicó una versión con «npm run release»?).'
   if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ENETUNREACH|net::|getaddrinfo/i.test(m)) return 'Sin conexión con GitHub: se reintentará más tarde.'
   if (/latest\.yml/i.test(m)) return 'La publicación no incluye latest.yml: usa «npm run release» para publicarla.'
-  if (/app-update\.yml/i.test(m)) return 'Esta copia no trae la configuración de actualizaciones. Instala la versión con el instalador (Nexo-Workspace-Setup) para que se actualice sola.'
+  if (/app-update\.yml/i.test(m)) return 'Esta copia no trae la configuración de actualizaciones. Instala la versión con el instalador (Nexu-Workspace-Setup) para que se actualice sola.'
   return clip(m.split('\n')[0], 220)
 }
 

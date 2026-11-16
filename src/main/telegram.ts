@@ -170,11 +170,11 @@ async function handle(token: string, u: Update): Promise<void> {
         link = null
         commit()
         status = { ...status, linked: true }
-        return void (await say(token, msg.chat.id, '✅ Vinculado. Desde ahora recibirás aquí los avisos de Nexo Workspace y podrás responder los permisos de Claude.'))
+        return void (await say(token, msg.chat.id, '✅ Vinculado. Desde ahora recibirás aquí los avisos de Nexu Workspace y podrás responder los permisos de Claude.'))
       }
       link.tries++
     }
-    return void (await say(token, msg.chat.id, 'Para vincular este chat, genera un código en Nexo Workspace (Ajustes → Telegram) y escribe /vincular CÓDIGO.'))
+    return void (await say(token, msg.chat.id, 'Para vincular este chat, genera un código en Nexu Workspace (Ajustes → Telegram) y escribe /vincular CÓDIGO.'))
   }
   if (msg.chat.id !== linked) return // otro usuario: se ignora sin responder
   await command(token, linked, msg, text)
@@ -188,7 +188,7 @@ const taskOf = (convId: string): string => {
 
 const HELP = [
   'Qué puedes hacer:',
-  '• Responder a un aviso de Nexo Workspace → tu mensaje va a esa conversación.',
+  '• Responder a un aviso de Nexu Workspace → tu mensaje va a esa conversación.',
   '• /tareas → elegir la tarea con la que hablar.',
   '• Escribir sin responder → va a la tarea elegida (/actual).',
   '• /cancelar → detener la respuesta en curso.'
@@ -220,7 +220,7 @@ async function command(token: string, chat: number, msg: NonNullable<Update['mes
   }
   const convId = s.telegramConv
   const c = convId ? getDb().chats[convId] : undefined
-  if (!convId || !c || c.closed) return void (await say(token, chat, 'Primero elige una tarea con /tareas, o responde a un aviso de Nexo Workspace.'))
+  if (!convId || !c || c.closed) return void (await say(token, chat, 'Primero elige una tarea con /tareas, o responde a un aviso de Nexu Workspace.'))
   try {
     sendToChat(convId, text)
   } catch (e) {
@@ -269,7 +269,7 @@ function ready(): { token: string; chat: number } | null {
 export async function test(): Promise<void> {
   const r = ready()
   if (!r) throw new Error('El bot no está conectado o no está vinculado.')
-  await say(r.token, r.chat, '✅ Nexo Workspace está conectado a Telegram.')
+  await say(r.token, r.chat, '✅ Nexu Workspace está conectado a Telegram.')
 }
 
 const ICON: Record<NotificationKind, string> = { daily: '📋', reminder: '⏰', done: '✅', attention: '⚠️', permission: '🔐', idle: '💤', ci: '⚙️', whatsapp: '💬', calendar: '📅' }
@@ -278,7 +278,7 @@ const GENERIC: Record<NotificationKind, string> = {
   reminder: 'Recordatorio: cierre del día.',
   done: 'Una tarea terminó.',
   attention: 'Una tarea necesita atención.',
-  permission: 'Claude pide permiso en una tarea. Ábrelo en Nexo Workspace para responder.',
+  permission: 'Claude pide permiso en una tarea. Ábrelo en Nexu Workspace para responder.',
   idle: 'Llevas un rato sin actividad.',
   ci: 'Cambió el estado de CI o del PR de una tarea.',
   whatsapp: 'Tienes un mensaje nuevo de WhatsApp.',

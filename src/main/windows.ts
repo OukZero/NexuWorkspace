@@ -133,7 +133,7 @@ export function openPopout(taskId: string, convId?: string, atCursor = false): v
     minHeight: 400,
     ...(pos ? { x: Math.max(0, pos.x - 460), y: Math.max(0, pos.y - 24) } : {}),
     backgroundColor: '#0f1115',
-    title: 'Nexo Workspace',
+    title: 'Nexu Workspace',
     ...icon(),
     autoHideMenuBar: true,
     webPreferences: { preload: preload(), contextIsolation: true, nodeIntegration: false }
@@ -159,7 +159,7 @@ export function openSkills(): void {
     minWidth: 520,
     minHeight: 400,
     backgroundColor: '#0f1115',
-    title: 'Skills · Nexo Workspace',
+    title: 'Skills · Nexu Workspace',
     ...icon(),
     autoHideMenuBar: true,
     webPreferences: { preload: preload(), contextIsolation: true, nodeIntegration: false }
@@ -187,7 +187,7 @@ export function createWindows(): void {
     minWidth: 900,
     minHeight: 560,
     backgroundColor: '#0f1115',
-    title: 'Nexo Workspace',
+    title: 'Nexu Workspace',
     ...icon(),
     autoHideMenuBar: true,
     webPreferences: { preload: preload(), contextIsolation: true, nodeIntegration: false, webviewTag: true }
@@ -201,7 +201,7 @@ export function createWindows(): void {
       appId: APP_ID,
       appIconPath: iconPath,
       appIconIndex: 0,
-      relaunchDisplayName: 'Nexo Workspace',
+      relaunchDisplayName: 'Nexu Workspace',
       // en desarrollo, fijarla en la barra la reabre compilando los últimos cambios
       ...(!app.isPackaged && fs.existsSync(launcher)
         ? { relaunchCommand: `powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${launcher}"` }

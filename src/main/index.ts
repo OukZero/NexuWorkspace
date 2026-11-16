@@ -44,7 +44,7 @@ function ensureStartMenuShortcut(): void {
     const root = path.join(__dirname, '../..')
     const launcher = path.join(root, 'tools', 'launch.ps1')
     const icon = path.join(root, 'resources', 'nexo.ico')
-    const lnk = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Nexo Workspace.lnk')
+    const lnk = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Nexu Workspace.lnk')
     // los accesos antiguos («Shutoki», «Shutoki One») tenían otro identificador y mantenía el icono viejo
     for (const old of ['Shutoki.lnk', 'Shutoki One.lnk']) fs.rmSync(path.join(path.dirname(lnk), old), { force: true })
     shell.writeShortcutLink(lnk, 'create', {
@@ -53,7 +53,7 @@ function ensureStartMenuShortcut(): void {
       cwd: root,
       icon,
       iconIndex: 0,
-      description: 'Nexo Workspace',
+      description: 'Nexu Workspace',
       appUserModelId: APP_ID
     })
   } catch {

@@ -87,14 +87,14 @@ function mk(label: string, base: 'light' | 'dark', c: Palette, accent: string | 
 export const PRESETS: Record<string, Preset> = {
   // predeterminado: paleta del rediseño (fondo oscuro, acento violeta, tarjetas sólidas)
   shutoki: mk(
-    'Nexo',
+    'Nexu',
     'dark',
     { bg: '#070b18', panel: '#0e1426', panel2: '#141c33', line: '#1f2a47', text: '#e8edff', muted: '#8d9bc4', user: '#1b2a55', code: '#050813', over: '#131b30' },
     ['#22d3ee', '#0e8fb0']
   ),
-  // variante clara de Nexo: fondo azul hielo (no blanco) y acento cian profundo, del mismo degradado del icono
+  // variante clara de Nexu: fondo azul hielo (no blanco) y acento cian profundo, del mismo degradado del icono
   nexoclaro: mk(
-    'Nexo claro',
+    'Nexu claro',
     'light',
     { bg: '#e8edfa', panel: '#f5f7ff', panel2: '#dbe4f8', line: '#c6d2ee', text: '#131a35', muted: '#55608a', user: '#d3e2ff', code: '#dfe7f8', over: '#edf1ff' },
     ['#22d3ee', '#0b7fa6']
@@ -520,7 +520,7 @@ function apply(): void {
   const p = presetFor(key)
   const theme = p ? p.base : mode === 'system' ? (mq.matches ? 'light' : 'dark') : mode
   root.dataset.theme = theme
-  root.dataset.preset = key // permite estilos propios del tema Nexo (degradado de marca, nodos)
+  root.dataset.preset = key // permite estilos propios del tema Nexu (degradado de marca, nodos)
   root.dataset.density = A.density
   root.dataset.bubbles = A.bubbles
   if (!A.motion) root.dataset.motion = 'off'
@@ -673,17 +673,31 @@ export function setBgActive(id: string): void {
 export function clearBgImage(): void {
   setBgActive('aurora')
 }
-/** Agrega una imagen propia a la biblioteca (máx. 1600 px, JPEG) y la deja activa. Lanza si no cabe o ya hay demasiadas. */
+/** Tamaño hasta el que el original se guarda tal cual (sin recomprimir). Más grande, se reduce; el límite es el de localStorage. */
+const BG_RAW_MAX = 1_000_000
+/** Agrega una imagen propia a la biblioteca y la deja activa. Lanza si no cabe o ya hay demasiadas. */
 export async function addBgImageFile(file: File): Promise<void> {
   const lib = getBgLib()
   if (lib.length >= BG_MAX_IMAGES) throw new Error('Ya tienes ' + BG_MAX_IMAGES + ' fondos propios: quita alguno para agregar otro.')
-  const bmp = await createImageBitmap(file)
-  const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height))
-  const c = document.createElement('canvas')
-  c.width = Math.round(bmp.width * scale)
-  c.height = Math.round(bmp.height * scale)
-  c.getContext('2d')?.drawImage(bmp, 0, 0, c.width, c.height)
-  const url = c.toDataURL('image/jpeg', 0.78)
+  let url: string
+  if (file.size <= BG_RAW_MAX && file.type.startsWith('image/')) {
+    // el archivo original, sin pérdida de calidad
+    url = await new Promise<string>((resolve, reject) => {
+      const r = new FileReader()
+      r.onload = () => resolve(String(r.result))
+      r.onerror = () => reject(new Error('No se pudo leer la imagen'))
+      r.readAsDataURL(file)
+    })
+  } else {
+    // imagen grande: se reduce a 2560 px con calidad alta para que quepa
+    const bmp = await createImageBitmap(file)
+    const scale = Math.min(1, 2560 / Math.max(bmp.width, bmp.height))
+    const c = document.createElement('canvas')
+    c.width = Math.round(bmp.width * scale)
+    c.height = Math.round(bmp.height * scale)
+    c.getContext('2d')?.drawImage(bmp, 0, 0, c.width, c.height)
+    url = c.toDataURL('image/jpeg', 0.92)
+  }
   const item: BgImage = { id: Math.random().toString(36).slice(2, 9), name: file.name.replace(/\.[^.]+$/, '').slice(0, 24) || 'Mi fondo', url }
   const next = [...lib, item]
   try {

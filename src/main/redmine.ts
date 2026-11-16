@@ -27,7 +27,7 @@ function getWin(): BrowserWindow {
     width: 1100,
     height: 820,
     show: false, // solo se muestra para iniciar sesión o si algo falla
-    title: 'Redmine · Nexo Workspace',
+    title: 'Redmine · Nexu Workspace',
     autoHideMenuBar: true,
     webPreferences: { partition: PARTITION, contextIsolation: true, nodeIntegration: false }
   })

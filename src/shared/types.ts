@@ -308,8 +308,8 @@ export interface ChatUsage {
   updatedAt: number
 }
 
-/** Con qué se ejecuta una conversación: Claude Code o el CLI de GitHub Copilot. */
-export type Provider = 'claude' | 'copilot'
+/** Con qué se ejecuta una conversación: Claude Code, el CLI de GitHub Copilot o el CLI de Gemini (clave de API). */
+export type Provider = 'claude' | 'copilot' | 'gemini'
 
 /** Solicitud de permiso de Claude Code para usar una herramienta (p. ej. ejecutar un comando). */
 export interface PermissionRequest {
@@ -581,6 +581,8 @@ export interface Settings {
   meetingAutoTasks: boolean
   /** Comando del CLI de GitHub Copilot. */
   copilotCmd: string
+  /** Comando del CLI de Gemini. La clave se lee de la variable de entorno GEMINI_API_KEY, no se guarda en la app. */
+  geminiCmd: string
   /** Modelos de Copilot que se ofrecen en el selector, uno por línea. */
   copilotModels: string
   /** Comandos de shell que Claude y Copilot pueden ejecutar sin preguntar, uno por línea (ej. «git status», «npm run»). */

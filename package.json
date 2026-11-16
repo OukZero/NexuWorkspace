@@ -1,6 +1,6 @@
 {
   "name": "shutoki-ai-workspace",
-  "productName": "Nexo Workspace",
+  "productName": "Nexu Workspace",
   "version": "0.2.1",
   "description": "Gestor local de tareas con timer, horas en Excel y chat con Claude",
   "author": "Martin Escobedo",
@@ -31,7 +31,7 @@
         "releaseType": "release"
       }
     ],
-    "productName": "Nexo Workspace",
+    "productName": "Nexu Workspace",
     "directories": {
       "output": "release"
     },
@@ -40,7 +40,7 @@
       "resources/**/*",
       "package.json"
     ],
-    "artifactName": "Nexo-Workspace-Setup-${version}.${ext}",
+    "artifactName": "Nexu-Workspace-Setup-${version}.${ext}",
     "npmRebuild": false,
     "asarUnpack": [
       "**/node_modules/node-pty/**"
@@ -59,7 +59,7 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "Nexo Workspace"
+      "shortcutName": "Nexu Workspace"
     }
   },
   "devDependencies": {
@@ -67,7 +67,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.2.1",
-    "electron": "^45.2.2",
+    "electron": "^45.3.2",
     "electron-builder": "^26.18.0",
     "electron-vite": "^6.0.0",
     "typescript": "^7.0.2",

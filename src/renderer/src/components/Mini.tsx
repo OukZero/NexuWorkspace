@@ -377,7 +377,7 @@ function Full(p: FullProps): ReactNode {
           ⌄
         </button>
         <span className="sep" />
-        <button className="quit" title="Cerrar Nexo por completo" onClick={() => confirm('¿Cerrar Nexo por completo? Se detendrá el timer y todo lo que esté en segundo plano.') && void call('app:quit')}>
+        <button className="quit" title="Cerrar Nexu por completo" onClick={() => confirm('¿Cerrar Nexu por completo? Se detendrá el timer y todo lo que esté en segundo plano.') && void call('app:quit')}>
           ✕
         </button>
       </div>

@@ -154,7 +154,7 @@ export function AppearanceSettings(): ReactNode {
       ui.toast('Tema importado y aplicado')
       setPasted('')
     } catch {
-      ui.toast('Ese texto no es un tema de Nexo válido', true)
+      ui.toast('Ese texto no es un tema de Nexu válido', true)
     }
   }
 

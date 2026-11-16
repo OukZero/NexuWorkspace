@@ -24,7 +24,7 @@ h2{font-size:10px;font-weight:600;color:#22d3ee;letter-spacing:3px;text-transfor
 @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
 @keyframes slide{0%{transform:translateX(-110%)}100%{transform:translateX(260%)}}
 @keyframes in{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
-</style></head><body><div class="card">${logo ? `<img src="${logo}">` : ''}<h1>Nexo</h1><h2>Workspace</h2><div class="bar"><i></i></div></div></body></html>`
+</style></head><body><div class="card">${logo ? `<img src="${logo}">` : ''}<h1>Nexu</h1><h2>Workspace</h2><div class="bar"><i></i></div></div></body></html>`
 }
 
 /** Pantalla de inicio: aparece al instante, antes de cargar los datos y la ventana principal, para que se note que la app está abriendo. */

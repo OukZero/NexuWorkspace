@@ -21,7 +21,7 @@ export function applyLoginItem(): void {
 
 function trayMenu(): Electron.Menu {
   return Menu.buildFromTemplate([
-    { label: 'Abrir Nexo Workspace', click: showWin },
+    { label: 'Abrir Nexu Workspace', click: showWin },
     { label: unread > 0 ? `Abrir WhatsApp (${unread} sin leer)` : 'Abrir WhatsApp', click: () => openWsp() },
     {
       label: 'Detener el timer',
@@ -42,7 +42,7 @@ export function initTray(onWhatsApp: () => void): void {
   if (!fs.existsSync(icon)) return // sin icono no hay bandeja (se genera con `npm run icon`)
   baseIcon = nativeImage.createFromPath(icon)
   tray = new Tray(baseIcon)
-  tray.setToolTip('Nexo Workspace')
+  tray.setToolTip('Nexu Workspace')
   tray.on('click', showWin)
   tray.setContextMenu(trayMenu())
 }
@@ -58,6 +58,6 @@ export function setUnreadBadge(n: number): void {
   unread = n
   if (!tray) return
   if (baseIcon) tray.setImage(n > 0 ? withDot(baseIcon) : baseIcon)
-  tray.setToolTip(n > 0 ? `Nexo Workspace · WhatsApp: ${n} sin leer` : 'Nexo Workspace')
+  tray.setToolTip(n > 0 ? `Nexu Workspace · WhatsApp: ${n} sin leer` : 'Nexu Workspace')
   tray.setContextMenu(trayMenu())
 }
