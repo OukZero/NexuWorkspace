@@ -24,6 +24,36 @@ function loadPage(w: BrowserWindow, page: 'index' | 'mini', query?: Record<strin
 
 export const getMain = (): BrowserWindow | null => win
 
+/** Tamaño inicial y mínimos que caben en la pantalla donde se abrirá la ventana (área de trabajo, sin barra de tareas). */
+function fitSize(w: number, h: number, minW: number, minH: number): { width: number; height: number; minWidth: number; minHeight: number } {
+  const a = screen.getPrimaryDisplay().workArea
+  return { width: Math.min(w, a.width), height: Math.min(h, a.height), minWidth: Math.min(minW, a.width), minHeight: Math.min(minH, a.height) }
+}
+
+/** Mantiene la ventana dentro de la pantalla en que está: la reduce si no cabe y la mueve si queda fuera (cambio de resolución, monitor desconectado). */
+function keepOnScreen(w: BrowserWindow): void {
+  if (w.isDestroyed() || w.isMaximized() || w.isFullScreen() || w.isMinimized()) return
+  const b = w.getBounds()
+  const a = screen.getDisplayMatching(b).workArea
+  const width = Math.min(b.width, a.width)
+  const height = Math.min(b.height, a.height)
+  const x = Math.min(Math.max(b.x, a.x), a.x + a.width - width)
+  const y = Math.min(Math.max(b.y, a.y), a.y + a.height - height)
+  if (x !== b.x || y !== b.y || width !== b.width || height !== b.height) w.setBounds({ x, y, width, height })
+}
+
+/** Aplica `keepOnScreen` ahora y cada vez que cambia la pantalla (resolución, escala o monitores). */
+function autoFit(w: BrowserWindow): void {
+  const run = (): void => keepOnScreen(w)
+  screen.on('display-metrics-changed', run)
+  screen.on('display-removed', run)
+  w.once('closed', () => {
+    screen.removeListener('display-metrics-changed', run)
+    screen.removeListener('display-removed', run)
+  })
+  w.once('ready-to-show', run)
+}
+
 /** Envía un evento a la ventana principal. */
 export function emit(channel: string, payload?: unknown): void {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
@@ -67,7 +97,13 @@ export function applyMini(): void {
   const [w, h] = miniSize()
   const b = mini.getBounds()
   // el formato cambia el tamaño sin mover la esquina inferior derecha
-  if (b.width !== w || b.height !== h) mini.setBounds({ x: b.x + b.width - w, y: b.y + b.height - h, width: w, height: h })
+  if (b.width !== w || b.height !== h) {
+    // y sin salirse del área de trabajo: si no, al crecer (vista expandida) el input queda tapado por la barra de tareas o fuera de la pantalla
+    const a = screen.getDisplayMatching(b).workArea
+    const x = Math.min(Math.max(b.x + b.width - w, a.x), a.x + a.width - w)
+    const y = Math.min(Math.max(b.y + b.height - h, a.y), a.y + a.height - h - 8)
+    mini.setBounds({ x, y, width: w, height: h })
+  }
   mini.setAlwaysOnTop(s.miniOnTop !== false, 'screen-saver')
   mini.setOpacity(Math.min(1, Math.max(0.4, (s.miniOpacity ?? 100) / 100)))
   if (s.miniEnabled === false) mini.hide()
@@ -110,6 +146,18 @@ function createMini(): void {
     }, 400)
   })
   registerWindow(mini)
+  // si la posición guardada queda bajo la barra de tareas o cambia la pantalla, se vuelve a meter en el área visible
+  const refit = (): void => {
+    if (!mini || mini.isDestroyed()) return
+    const b = mini.getBounds()
+    const a = screen.getDisplayMatching(b).workArea
+    const x = Math.min(Math.max(b.x, a.x), a.x + a.width - b.width)
+    const y = Math.min(Math.max(b.y, a.y), a.y + a.height - b.height - 8)
+    if (x !== b.x || y !== b.y) mini.setPosition(x, y)
+  }
+  mini.once('ready-to-show', refit)
+  screen.on('display-metrics-changed', refit)
+  mini.once('closed', () => screen.removeListener('display-metrics-changed', refit))
   loadPage(mini, 'mini')
 }
 
@@ -127,10 +175,7 @@ export function openPopout(taskId: string, convId?: string, atCursor = false): v
   }
   const pos = atCursor ? screen.getCursorScreenPoint() : null
   const w = new BrowserWindow({
-    width: 920,
-    height: 720,
-    minWidth: 520,
-    minHeight: 400,
+    ...fitSize(920, 720, 520, 400),
     ...(pos ? { x: Math.max(0, pos.x - 460), y: Math.max(0, pos.y - 24) } : {}),
     backgroundColor: '#0f1115',
     title: 'Nexu Workspace',
@@ -139,6 +184,7 @@ export function openPopout(taskId: string, convId?: string, atCursor = false): v
     webPreferences: { preload: preload(), contextIsolation: true, nodeIntegration: false }
   })
   registerWindow(w)
+  autoFit(w)
   popouts.set(key, w)
   w.on('closed', () => popouts.delete(key))
   loadPage(w, 'index', { pop: taskId, ...(convId ? { conv: convId } : {}) })
@@ -154,10 +200,7 @@ export function openSkills(): void {
     return
   }
   const w = new BrowserWindow({
-    width: 860,
-    height: 680,
-    minWidth: 520,
-    minHeight: 400,
+    ...fitSize(860, 680, 520, 400),
     backgroundColor: '#0f1115',
     title: 'Skills · Nexu Workspace',
     ...icon(),
@@ -165,6 +208,7 @@ export function openSkills(): void {
     webPreferences: { preload: preload(), contextIsolation: true, nodeIntegration: false }
   })
   registerWindow(w)
+  autoFit(w)
   skillsWin = w
   w.on('closed', () => (skillsWin = null))
   loadPage(w, 'index', { skills: '1' })
@@ -182,10 +226,7 @@ export function createWindows(): void {
   const hidden = process.argv.includes('--hidden') // arranque con Windows: empieza en la bandeja
   win = new BrowserWindow({
     show: false, // se muestra al terminar de cargar (mientras tanto se ve la pantalla de inicio)
-    width: 1200,
-    height: 780,
-    minWidth: 900,
-    minHeight: 560,
+    ...fitSize(1200, 780, 900, 560),
     backgroundColor: '#0f1115',
     title: 'Nexu Workspace',
     ...icon(),
@@ -193,6 +234,7 @@ export function createWindows(): void {
     webPreferences: { preload: preload(), contextIsolation: true, nodeIntegration: false, webviewTag: true }
   })
   registerWindow(win)
+  autoFit(win)
   win.once('ready-to-show', () => closeSplash(() => !hidden && win?.show()))
   // Sin esto, al fijar la app en la barra de tareas (o en su menú de salto) Windows usa el icono de electron.exe.
   if (process.platform === 'win32' && fs.existsSync(iconPath)) {
