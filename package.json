@@ -11,6 +11,7 @@
     "dev": "electron-vite dev",
     "dev:live": "electron-vite dev --watch",
     "live": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/launch-live.ps1",
+    "main": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/launch-main.ps1",
     "build": "electron-vite build",
     "start": "electron-vite build && electron-vite preview",
     "pack": "electron-vite build && electron-builder --win --dir",

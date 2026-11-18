@@ -79,6 +79,8 @@ async function loop(my: number, token: string): Promise<void> {
     const me = await call<{ username?: string }>(token, 'getMe')
     if (my !== gen) return
     status = { ...status, running: true, bot: me.username ? `@${me.username}` : undefined, error: undefined }
+    // menú nativo de Telegram al escribir «/»
+    void call(token, 'setMyCommands', { commands: COMMANDS }).catch(() => undefined)
   } catch (e) {
     if (my === gen) status = { ...status, running: false, error: e instanceof Error ? e.message : String(e) }
     return
@@ -103,8 +105,77 @@ async function loop(my: number, token: string): Promise<void> {
   }
 }
 
-const say = (token: string, chat: number, text: string, markup?: unknown): Promise<{ message_id: number }> =>
-  call(token, 'sendMessage', { chat_id: chat, text: clip(text, 3500), ...(markup ? { reply_markup: markup } : {}) })
+const COMMANDS = [
+  { command: 'tareas', description: 'Elegir la tarea con la que hablar' },
+  { command: 'actual', description: 'Ver con qué tarea hablas ahora' },
+  { command: 'cancelar', description: 'Detener la respuesta en curso' },
+  { command: 'ayuda', description: 'Qué puedes hacer desde aquí' }
+]
+
+const MAX_MSG = 3500 // el límite de Telegram es 4096; se deja margen para el HTML
+
+/** Parte un texto largo en mensajes, por saltos de línea, cerrando y reabriendo los bloques de código cortados. */
+function split(text: string, max: number): string[] {
+  const out: string[] = []
+  let rest = text
+  let reopen = ''
+  while (reopen.length + rest.length > max) {
+    const room = max - reopen.length - 4
+    let cut = rest.lastIndexOf('\n', room)
+    if (cut < room / 2) cut = room
+    let part = reopen + rest.slice(0, cut)
+    rest = rest.slice(cut).replace(/^\n/, '')
+    if ((part.match(/```/g)?.length ?? 0) % 2) {
+      part += '\n```'
+      reopen = '```\n'
+    } else reopen = ''
+    out.push(part)
+  }
+  out.push(reopen + rest)
+  return out
+}
+
+const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+/** Markdown básico de Claude (código, negritas, títulos) → HTML de Telegram. */
+function toHtml(text: string): string {
+  const keep: string[] = []
+  const hold = (h: string): string => `\u0000${keep.push(h) - 1}\u0000`
+  const s = text
+    .replace(/```[^\n]*\n?([\s\S]*?)```/g, (_, c: string) => hold(`<pre>${esc(c.replace(/\n$/, ''))}</pre>`))
+    .replace(/`([^`\n]+)`/g, (_, c: string) => hold(`<code>${esc(c)}</code>`))
+  return esc(s)
+    .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
+    .replace(/^#{1,6}\s+(.+)$/gm, '<b>$1</b>')
+    .replace(/\u0000(\d+)\u0000/g, (_, i: string) => keep[Number(i)])
+}
+
+/** Envía un texto (dividido si es largo); los botones van en el último mensaje. Con `html`, si Telegram rechaza el formato se reenvía en texto plano. */
+async function say(token: string, chat: number, text: string, markup?: unknown, html = false): Promise<{ message_id: number }> {
+  const parts = split(text, MAX_MSG)
+  let last = { message_id: 0 }
+  for (let i = 0; i < parts.length; i++) {
+    const extra = i === parts.length - 1 && markup ? { reply_markup: markup } : {}
+    const plain = { chat_id: chat, text: parts[i], ...extra }
+    last = html
+      ? await call<{ message_id: number }>(token, 'sendMessage', { ...plain, text: toHtml(parts[i]), parse_mode: 'HTML' }).catch(() => call<{ message_id: number }>(token, 'sendMessage', plain))
+      : await call<{ message_id: number }>(token, 'sendMessage', plain)
+  }
+  return last
+}
+
+/** Muestra «escribiendo…» mientras Claude responde (Telegram lo apaga a los ~5 s, por eso se repite). */
+function typing(token: string, chat: number, convId: string): void {
+  const t0 = Date.now()
+  const tick = (): void => {
+    const running = !!getDb().chats[convId]?.running
+    // margen inicial: la conversación puede tardar un instante en marcarse como en curso
+    if ((!running && Date.now() - t0 > 6000) || Date.now() - t0 > 15 * 60_000) return
+    void call(token, 'sendChatAction', { chat_id: chat, action: 'typing' }).catch(() => undefined)
+    setTimeout(tick, 4000)
+  }
+  tick()
+}
 
 async function handle(token: string, u: Update): Promise<void> {
   const linked = settings().telegramChat
@@ -227,6 +298,7 @@ async function command(token: string, chat: number, msg: NonNullable<Update['mes
     return void (await say(token, chat, `⚠ ${e instanceof Error ? e.message : String(e)}`))
   }
   fromTg.add(convId)
+  typing(token, chat, convId)
   remember(await say(token, chat, `➡ Enviado a «${clip(taskOf(convId), 50)}». Te aviso cuando termine.`), convId)
 }
 
@@ -292,13 +364,17 @@ export function forward(n: AppNotification): void {
   const convId = n.goto?.startsWith('chat:') ? n.goto.slice(5) : undefined
   const details = settings().telegramDetails !== false
   let body = n.body
-  // si el mensaje salió de Telegram, se manda la respuesta completa
+  let full = false
+  // si el mensaje salió de Telegram, se manda la respuesta completa (en varios mensajes si es larga)
   if (convId && n.kind === 'done' && fromTg.delete(convId) && details) {
     const lastReply = [...(getDb().chats[convId]?.messages ?? [])].reverse().find((m) => m.role === 'assistant')
-    if (lastReply?.text.trim()) body = clip(lastReply.text.trim(), 3000)
+    if (lastReply?.text.trim()) {
+      body = clip(lastReply.text.trim(), 12000)
+      full = true
+    }
   }
   const text = details ? `${n.title}${body ? `\n${body}` : ''}` : GENERIC[n.kind]
-  void say(r.token, r.chat, `${ICON[n.kind]} ${text}`).then((m) => convId && remember(m, convId), () => undefined)
+  void say(r.token, r.chat, `${ICON[n.kind]} ${text}`, undefined, full).then((m) => convId && remember(m, convId), () => undefined)
 }
 
 /** Pide el permiso por Telegram con botones Permitir / Permitir siempre / Rechazar. */

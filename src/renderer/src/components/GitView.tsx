@@ -449,7 +449,7 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
           ↑ {st?.upstream ? 'Push' : 'Publicar'}
           {st?.ahead ? ` ${st.ahead}` : ''}
         </button>
-        <button className="btn sm primary" disabled={!!busy} title="Revisión de código con IA: hallazgos, simulación de escenarios y veredicto (solo lectura)" onClick={() => void startReview()}>
+        <button className="btn sm primary" disabled={!!busy} title={'Pide a la IA que revise los cambios de esta rama frente a la rama base (lo que verá quien revise el PR).\nAbre una conversación de solo lectura, sin modificar archivos, con: hallazgos (bugs, riesgos, estilo), simulación de escenarios y un veredicto final.\nUsa el contexto de la tarea, el issue y el diff.'} onClick={() => void startReview()}>
           ✦ Revisar código
         </button>
     </>
