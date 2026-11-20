@@ -12,6 +12,7 @@ Viven en `.claude/skills/` y sus versiones exactas en `skills-lock.json`.
 | `find-animation-opportunities` | Detectar dónde falta animación (solo lectura) | `emilkowalski/skills` |
 | `improve-animations` | Auditoría de movimiento y planes de mejora | `emilkowalski/skills` |
 | `review-animations` | Revisar animaciones de un cambio | `emilkowalski/skills` |
+| `ui-ux-pro-max` | Diseño UI/UX: estilos, paletas, tipografías, guías de UX y accesibilidad | `nextlevelbuilder/ui-ux-pro-max-skill` |
 | `find-skills` | Buscar e instalar skills nuevas (solo en `.agents/`, no versionada) | `vercel-labs/skills` |
 
 ## Reinstalar
@@ -20,6 +21,7 @@ Viven en `.claude/skills/` y sus versiones exactas en `skills-lock.json`.
 npx skills add emilkowalski/skills
 npx skills add vibe-motion/skills@disney-animation-rule-skill
 npx skills add vercel-labs/skills@find-skills
+npx skills add nextlevelbuilder/ui-ux-pro-max-skill@ui-ux-pro-max -a claude-code -y
 ```
 
 `npx skills add` también crea carpetas de otros agentes (`.adal/`, `.zencoder/`, `skills/`, `data/`…);
