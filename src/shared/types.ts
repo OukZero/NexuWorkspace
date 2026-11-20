@@ -798,7 +798,21 @@ export interface TeamCharacter {
 export interface AgentTeam {
   character: TeamCharacter
   agents: TeamAgent[]
+  /** Obsoleto: adornos en emoji. Se migran a `props` al abrir la vista. */
   decor: string[]
+  /** Objetos colocados libremente en la sala (x/y en % de la sala, anclados por el centro). */
+  props?: TeamProp[]
+}
+
+export interface TeamProp {
+  id: string
+  /** Clave del asset (planta, gato, sofá…). */
+  k: string
+  x: number
+  y: number
+  /** Escala 0.6–2. */
+  s: number
+  flip?: boolean
 }
 
 export interface DB {

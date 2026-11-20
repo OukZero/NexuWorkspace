@@ -15,6 +15,13 @@
       "skillPath": "skills/break-ui/SKILL.md",
       "computedHash": "f089f3663e197fb4e106249df70e815a96e3236520a2e1c0919d1694816baca8"
     },
+    "disney-animation-rule-skill": {
+      "source": "vibe-motion/skills",
+      "commit": "f558ec411484b7b20893dff0a1d4408dd386044c",
+      "sourceType": "github",
+      "skillPath": "disney-animation-rule-skill/SKILL.md",
+      "computedHash": "969b4f4c297e9f35e491f92c1fb7a09af5938e3712232d0b6a9da085e6f6f701"
+    },
     "emil-design-eng": {
       "source": "emilkowalski/skills",
       "commit": "64eb3deb9a5fbfa041faf783e0bc3fd635872e9c",
@@ -28,6 +35,13 @@
       "sourceType": "github",
       "skillPath": "skills/find-animation-opportunities/SKILL.md",
       "computedHash": "9ec1c8c622b2c3caf9bda1712440e25dd4f9bc6da1207db4fa80b784aa319186"
+    },
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "commit": "57217cf86ba38148a57af9e90d14a4c049558330",
+      "sourceType": "github",
+      "skillPath": "skills/find-skills/SKILL.md",
+      "computedHash": "7bc223e2aafbdbf6e50ea243ba6ef67fe432bb069ab439fea0390795dac0bf7f"
     },
     "improve-animations": {
       "source": "emilkowalski/skills",

@@ -473,7 +473,8 @@ html .dialog.taskinfo { width: 740px; padding: 24px; }
   .tb-title { max-width: 40%; }
 }
 @media (prefers-reduced-motion: reduce) {
-  *, *::before { animation: none !important; transition: none !important; }
+  *, *::before { animation-iteration-count: 1 !important; }
+  .rb, .ib, .now-b, .card { transition-property: background-color, color, opacity !important; }
 }
 
 /* ---------- ajustes finos de alineación ---------- */
@@ -1670,7 +1671,7 @@ html:is([data-preset="shutoki"], [data-preset="nexoclaro"]) .card { animation: n
 @keyframes nx-in { from { opacity: 0; transform: translateY(6px) scale(.985); } }
 /* respeta «Reducir movimiento» del sistema y el ajuste de la app */
 @media (prefers-reduced-motion: reduce) {
-  html:is([data-preset="shutoki"], [data-preset="nexoclaro"]) *, html:is([data-preset="shutoki"], [data-preset="nexoclaro"]) body::before { animation: none !important; }
+  html:is([data-preset="shutoki"], [data-preset="nexoclaro"]) body::before { animation: none !important; }
 }
 html:is([data-preset="shutoki"], [data-preset="nexoclaro"])[data-motion="off"] *, html:is([data-preset="shutoki"], [data-preset="nexoclaro"])[data-motion="off"] body::before { animation: none !important; }
 /* variante clara: fondo azul hielo (no blanco), halo y brillos más suaves */

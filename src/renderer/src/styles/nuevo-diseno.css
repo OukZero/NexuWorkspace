@@ -253,19 +253,6 @@ html :is(.dialog, .pmenu, .notif-pop, .sel-pop, .composer.cbox, .nt-list, .nt-ma
 .tm-reply{margin-top:12px;padding:10px;border:1px solid var(--line);border-radius:6px;background:var(--code,#07080c);white-space:pre-wrap;font:12px/1.5 "IBM Plex Mono",monospace;max-height:260px;overflow:auto}
 .tm-empty{color:var(--muted);padding:20px 0}
 /* sala */
-.tm-room{position:relative;height:300px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:linear-gradient(180deg,var(--over,#141729) 0 62%,var(--panel2) 62%)}
-.tm-room::before{content:"";position:absolute;left:0;right:0;top:62%;height:1px;background:var(--line)}
-.tm-win{position:absolute;top:24px;left:50%;transform:translateX(-50%);width:200px;height:84px;border:2px solid var(--line);border-radius:6px;background:linear-gradient(180deg,#1b2140,#2a2447 60%,#46304a)}
-.tm-lamp{position:absolute;top:0;left:70px;width:2px;height:56px;background:var(--line)}
-.tm-lamp::after{content:"";position:absolute;left:-12px;top:56px;width:26px;height:14px;border-radius:14px 14px 0 0;background:#ffb868;box-shadow:0 14px 40px 8px rgba(255,184,104,.35)}
-.tm-shelf{position:absolute;top:36px;right:20px;display:flex;gap:6px;font-size:18px;border-bottom:3px solid var(--line);padding-bottom:2px}
-.tm-floor{position:absolute;left:16px;bottom:10px;display:flex;gap:14px;font-size:24px}
-.tm-desk{position:absolute;bottom:44px;width:120px;height:14px;transform:translateX(-50%);border-radius:4px;background:var(--panel2);border:1px solid var(--line)}
-.tm-mon{position:absolute;left:38px;bottom:12px;width:44px;height:30px;border:2px solid var(--line);border-radius:4px;background:var(--bg);box-shadow:0 0 18px -4px var(--c)}
-.tm-bot{position:absolute;left:43px;bottom:46px;width:34px;text-align:center}
-.tm-bot b{display:grid;place-items:center;width:34px;height:34px;border-radius:10px 10px 6px 6px;border:2px solid var(--c);background:color-mix(in srgb,var(--c) 22%,var(--bg));font-size:16px}
-.tm-bot small{display:block;margin-top:2px;font:9px "IBM Plex Mono",monospace;color:var(--muted);white-space:nowrap;transform:translateX(-30%)}
-.tm-me{position:absolute;bottom:6px;transform:translateX(-50%)}
 /* lista de agentes */
 .tm-agent{display:grid;grid-template-columns:44px 1fr auto;gap:10px;align-items:center;width:100%;text-align:left;margin-top:8px;padding:10px;position:relative;border:1px solid var(--line);border-radius:6px;background:var(--panel2);color:var(--text);cursor:pointer}
 .tm-agent::before{content:"";position:absolute;left:-1px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--c);box-shadow:0 0 10px var(--c)}
@@ -275,3 +262,44 @@ html :is(.dialog, .pmenu, .notif-pop, .sel-pop, .composer.cbox, .nt-list, .nt-ma
 .tm-agent .sk span{font:10.5px "IBM Plex Mono",monospace;border:1px solid var(--line);border-radius:4px;padding:0 6px;color:var(--muted)}
 .tm-agent .st{font:11px "IBM Plex Mono",monospace;color:var(--muted)}
 @media (max-width:1100px){.tm-wrap{grid-template-columns:1fr}}
+
+/* ===== Movimiento (auditoría de animaciones) =====
+   Va al final para ganar a extra.css/cockpit.css con igual especificidad. */
+:root { --ease-out: cubic-bezier(0.23, 1, 0.32, 1); --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1); --t-press: 140ms; --t-ui: 180ms; }
+@keyframes mv-fade { from { opacity: 0; } }
+@keyframes mv-rise { from { opacity: 0; transform: translateY(4px); } }
+@keyframes mv-pop { from { opacity: 0; transform: scale(.96); } }
+@keyframes mv-toast { from { opacity: 0; transform: translate(-50%, 16px); } }
+@keyframes mv-bar { from { transform: scaleX(0); } }
+/* vista, diálogo y aviso: salen rápido y sin rebote */
+#view > * { animation: viewin .2s var(--ease-out) both; }
+.modal { animation: mv-fade .15s var(--ease-out); }
+.dialog { animation: pop-in .2s var(--ease-out); }
+html .toast { animation: mv-toast .3s var(--ease-out); }
+/* la paleta se abre decenas de veces al día: sin animación */
+.modal:has(> .dialog.palette), .dialog.palette { animation: none; backdrop-filter: none; }
+/* popovers: crecen desde su disparador */
+.notif-pop, .menu-pop, html .pmenu { transform-origin: var(--radix-popover-content-transform-origin, var(--radix-dropdown-menu-content-transform-origin, top center)); animation: mv-pop .15s var(--ease-out); }
+/* decorativo infinito fuera: el halo estático y el brillo del logo se mantienen */
+html:is([data-preset="shutoki"], [data-preset="nexoclaro"]) body::before { animation: none; }
+html:is([data-preset="shutoki"], [data-preset="nexoclaro"]) .rail-logo { animation: none; }
+html:is([data-preset="shutoki"], [data-preset="nexoclaro"]) .card { animation: none; }
+/* barras con transform en vez de width */
+.hb i { transform-origin: left; animation: mv-bar 1s var(--ease-out) both; }
+/* transiciones explícitas en vez de «.15s» (que equivale a all) */
+.music-wrap .mu-pl, .hist .hist-row { transition: background-color .15s ease, border-color .15s ease, transform .15s var(--ease-out), opacity .15s ease; }
+/* feedback al pulsar */
+@media (hover: hover) and (pointer: fine) {
+  .ib, .rb, .now-b { transition-property: background-color, color, transform, opacity; transition-duration: var(--t-press); transition-timing-function: var(--ease-out); }
+}
+.ib:active:not(:disabled), .now-b:active:not(:disabled) { transform: scale(.94); }
+html .rb:active:not(:disabled) { transform: scale(.96); }
+/* chat: el último mensaje entra suave (incluido el que se está escribiendo) */
+.msgs > .msg:last-child { animation: mv-rise .16s var(--ease-out); }
+/* movimiento reducido: sin desplazamientos ni escalas, se mantiene el fundido */
+@media (prefers-reduced-motion: reduce) {
+  #view > *, .dialog, .notif-pop, .menu-pop, html .pmenu, .msgs > .msg:last-child { animation: mv-fade .15s ease both !important; }
+  html .toast { animation: mv-fade .15s ease both !important; }
+  .hb i { animation: none !important; }
+  .ib:active, .rb:active, .now-b:active { transform: none !important; }
+}
