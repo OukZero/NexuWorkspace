@@ -224,7 +224,9 @@ html :is(.dialog, .pmenu, .notif-pop, .sel-pop, .composer.cbox, .nt-list, .nt-ma
   background: linear-gradient(to top right, transparent calc(50% - 1px), color-mix(in srgb, var(--accent) 45%, transparent) calc(50% - 1px), color-mix(in srgb, var(--accent) 45%, transparent) 50%, transparent 50%);
 }
 /* el contenido de las tarjetas no debe sobresalir de las esquinas redondeadas */
-.bc, .card, .dialog, .pmenu, .notif-pop, .mu-card, .nt-list, .nt-main { overflow: clip; overflow-clip-margin: 0px; }
+.bc, .card, .pmenu, .notif-pop, .mu-card, .nt-list, .nt-main { overflow: clip; overflow-clip-margin: 0px; }
+/* los diálogos sí deben poder hacer scroll (clip lo impedía y los formularios largos quedaban cortados) */
+.dialog { overflow: auto; }
 /* efecto al pasar el cursor, para todos los temas (no solo Obsidiana) */
 .bc, .card { transition: border-color .2s, box-shadow .2s; }
 .bc:hover, .card:hover { border-color: color-mix(in srgb, var(--accent) 34%, var(--line)); box-shadow: inset 0 1px 0 var(--nd-edge), 0 18px 40px -28px #000, 0 0 26px -16px var(--glow); }
