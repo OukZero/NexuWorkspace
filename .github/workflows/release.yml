@@ -34,7 +34,15 @@ jobs:
           v=$(node -p "require('./package.json').version")
           git tag "v$v"
           git push origin "v$v"
-      - name: Compilar y publicar
-        run: npx electron-vite build && npx electron-builder --win --publish always
+      - name: Compilar
+        run: npx electron-vite build && npx electron-builder --win --publish never
+      # electron-builder sube .exe y .blockmap en paralelo y ambos crean la Release a la vez (carrera):
+      # la creamos nosotros con gh y subimos todo junto. latest.yml es lo que lee electron-updater.
+      - name: Publicar Release
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          v=$(node -p "require('./package.json').version")
+          ls release
+          gh release create "v$v" "release/Nexu-Workspace-Setup-$v.exe" "release/Nexu-Workspace-Setup-$v.exe.blockmap" release/latest.yml --title "v$v" --generate-notes --verify-tag
