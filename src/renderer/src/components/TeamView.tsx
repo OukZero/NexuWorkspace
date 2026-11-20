@@ -127,7 +127,22 @@ function Room({ team, working, done, sel, onSel, onProps, onDrop }: {
             key={p.id}
             className={`tr-prop ${as.wall ? 'wall' : ''} ${sel === p.id ? 'on' : ''}`}
             style={{ left: `${p.x}%`, top: `${p.y}%`, width: as.w * p.s, zIndex: as.wall ? 1 : 10 + Math.round(p.y), ['--fx' as string]: p.flip ? -1 : 1 }}
-            title="Arrástralo para moverlo"
+            title="Arrástralo o usa las flechas (Mayús = más rápido)"
+            tabIndex={0}
+            role="button"
+            aria-label={`${as.label}: flechas para mover, Supr para quitar`}
+            onFocus={() => onSel(p.id)}
+            onKeyDown={(e) => {
+              const k = e.key
+              if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); onProps(props.filter((q) => q.id !== p.id)); onDrop(); return }
+              const d = e.shiftKey ? 5 : 1
+              const dx = k === 'ArrowLeft' ? -d : k === 'ArrowRight' ? d : 0
+              const dy = k === 'ArrowUp' ? -d : k === 'ArrowDown' ? d : 0
+              if (!dx && !dy) return
+              e.preventDefault()
+              onProps(props.map((q) => (q.id === p.id ? { ...q, x: clamp(q.x + dx, 3, 97), y: clamp(q.y + dy, 6, 98) } : q)))
+              onDrop()
+            }}
             onPointerDown={(e) => { e.stopPropagation(); e.currentTarget.setPointerCapture(e.pointerId); drag.current = p.id; onSel(p.id) }}
           >
             {as.el}
