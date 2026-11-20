@@ -27,6 +27,13 @@ jobs:
         run: |
           base=$(node -p "require('./package.json').version.split('.').slice(0,2).join('.')")
           npm version "$base.${{ github.run_number }}" --no-git-tag-version --allow-same-version
+      # releaseType "release" exige que el tag exista ya ("Published releases must have a valid tag")
+      - name: Crear tag
+        shell: bash
+        run: |
+          v=$(node -p "require('./package.json').version")
+          git tag "v$v"
+          git push origin "v$v"
       - name: Compilar y publicar
         run: npx electron-vite build && npx electron-builder --win --publish always
         env:
