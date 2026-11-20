@@ -99,6 +99,13 @@ export const PRESETS: Record<string, Preset> = {
     { bg: '#e8edfa', panel: '#f5f7ff', panel2: '#dbe4f8', line: '#c6d2ee', text: '#131a35', muted: '#55608a', user: '#d3e2ff', code: '#dfe7f8', over: '#edf1ff' },
     ['#22d3ee', '#0b7fa6']
   ),
+  // paleta del mockup «nuevo diseño»: casi negro azulado, acento índigo claro, vivo menta y cálido ámbar
+  obsidiana: mk(
+    'Nexu Obsidiana',
+    'dark',
+    { bg: '#0a0b10', panel: '#11131b', panel2: '#181b26', line: '#262b3a', text: '#e8ebf4', muted: '#9aa1b4', user: '#1d2440', code: '#07080c', over: '#141722' },
+    ['#8fa4ff', '#4a63d6']
+  ),
   medianoche: {
     label: 'Medianoche',
     base: 'dark',

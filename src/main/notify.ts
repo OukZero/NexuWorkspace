@@ -1,7 +1,7 @@
 import { Notification } from 'electron'
 import type { AppNotification, NotificationKind } from '../shared/types'
 import { commit, getDb, uid } from './db'
-import { forward } from './telegram'
+import { forward } from './features/telegram/service'
 import { emit, getMain, showWin } from './windows'
 
 const MAX = 100

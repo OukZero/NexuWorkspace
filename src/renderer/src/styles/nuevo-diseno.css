@@ -1,0 +1,277 @@
+/* =====================================================================
+   Nuevo diseño (ver mockups/nuevo-diseno.html). Va el último: sobreescribe
+   la piel de cockpit.css sin tocar la estructura.
+   - Radios cortos (6–8 px), ni cuadrados ni redondeados.
+   - Superficies casi sólidas con luz en el borde superior.
+   - Acento con degradado y halo; la tarjeta de foco lleva esquina biselada.
+   Sin fuentes externas: la CSP del renderer no las permite.
+   ===================================================================== */
+
+:root {
+  --nd-r: 6px;
+  --nd-r-lg: 8px;
+  --nd-cut: 14px;
+  --nd-edge: rgba(255, 255, 255, .06);
+  --r-card: var(--nd-r-lg);
+}
+html[data-theme="light"] { --nd-edge: rgba(255, 255, 255, .8); }
+
+/* ---------- superficies ---------- */
+.bc, .card {
+  border-radius: var(--nd-r-lg);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  box-shadow: inset 0 1px 0 var(--nd-edge), 0 18px 40px -28px #000;
+  backdrop-filter: none;
+}
+.msg, .dtl-box, .menu-pop, .tabmenu, .side-panel .panel-body, .side-panel .rail { border-radius: var(--nd-r-lg); }
+.menu-pop, .tabmenu { box-shadow: inset 0 1px 0 var(--nd-edge), 0 18px 40px -20px #000; }
+
+/* ---------- controles: radio corto; las pastillas pasan a etiquetas ---------- */
+.btn, .btn.sm, .seg, .seg button, .tabs3, .tabs3 button, .tn-i, .tb-back, .tab, .tabmenu button,
+.menu-item, .tn-mi, .side-search, .side-toggle, .taskhead .modeseg, .taskhead .modeseg button, .chips {
+  border-radius: var(--nd-r);
+}
+.tag, .pill, .chip, .btn.sm { border-radius: 4px; }
+input:not([type]), input[type="text"], input[type="search"], input[type="number"], select, textarea {
+  border-radius: var(--nd-r);
+}
+
+.btn.primary {
+  background: var(--grad);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 8px 22px -10px var(--glow);
+}
+.btn.primary:hover:not(:disabled) {
+  background: var(--grad);
+  filter: brightness(1.1);
+}
+
+/* ---------- barra superior ---------- */
+.tn-logo {
+  border-radius: var(--nd-r);
+  box-shadow: 0 0 22px -6px var(--glow);
+}
+.tb-title h1 { font-weight: 650; letter-spacing: -.01em; }
+
+/* ---------- timer activo: el elemento que más se mira ---------- */
+.now {
+  border-radius: var(--nd-r);
+  border: 1px solid color-mix(in srgb, var(--ln2) 80%, transparent);
+}
+.now.run {
+  border-color: rgba(95, 227, 180, .4);
+  box-shadow: 0 0 26px -8px rgba(95, 227, 180, .45);
+}
+.now-c { font-family: var(--font-code); font-variant-numeric: tabular-nums; }
+
+/* ---------- inicio: tarjeta de foco con esquina biselada y halo ---------- */
+.home-l > .bc:first-child {
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--nd-cut)) 0,
+    100% var(--nd-cut),
+    100% 100%,
+    0 100%
+  );
+  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+  background:
+    radial-gradient(360px 260px at 50% 0%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 70%),
+    linear-gradient(180deg, #181c2b, #0f1119);
+}
+html[data-theme="light"] .home-l > .bc:first-child {
+  background:
+    radial-gradient(360px 260px at 50% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%),
+    var(--panel);
+}
+
+/* Titulares de tarjeta: peso y espaciado algo más firmes que el cuerpo */
+.card-h h2, .bc h2 { font-weight: 600; letter-spacing: -.005em; }
+
+/* ---------- tipografía del mockup: Sora (títulos), IBM Plex Sans (UI), IBM Plex Mono (cifras) ---------- */
+body, button, input, select, textarea { font-family: 'IBM Plex Sans', var(--font-ui, system-ui), sans-serif; }
+h1, h2, h3, .tb-title h1, .card-h h2, .bc h2 { font-family: 'Sora', 'IBM Plex Sans', sans-serif; }
+.now-c, .tl-t, kbd, code, .mono { font-family: 'IBM Plex Mono', var(--font-code), monospace; font-variant-numeric: tabular-nums; }
+
+/* ---------- riel lateral (64 px) ---------- */
+.navrail {
+  flex: none; width: 64px; height: 100vh; display: flex; flex-direction: column; align-items: center;
+  gap: 6px; padding: 14px 0; background: color-mix(in srgb, var(--panel) 96%, #000);
+  border-right: 1px solid var(--line); box-shadow: inset -1px 0 0 var(--nd-edge); z-index: 7;
+}
+.navrail :where(button) { width: auto; margin-bottom: 0; }
+.navrail .tn-logo { margin-bottom: 10px; }
+.navrail .tn-items {
+  flex-direction: column; align-items: center; gap: 4px; margin: 0; overflow: visible; flex: 0 1 auto;
+}
+.navrail .tn-i {
+  width: 42px; height: 42px; padding: 0; justify-content: center; border-radius: var(--nd-r);
+}
+.navrail .tn-t { display: none !important; }
+.navrail .tn-i.on { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); box-shadow: none; }
+.navrail .tn-i.on::before {
+  content: ''; position: absolute; left: -11px; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0;
+  background: var(--accent); box-shadow: 0 0 12px var(--glow);
+}
+.navrail .tn-n { position: absolute; top: 3px; right: 3px; min-width: 15px; height: 15px; font-size: 9px; }
+.navrail .tn-dot { position: absolute; top: 6px; right: 6px; }
+.navrail .nr-sp { flex: 1; }
+.navrail .rail-av { margin: 0; }
+
+/* ---------- barra superior ---------- */
+.topbar { padding: 12px 24px; gap: 14px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); }
+.tb-tools { margin-left: auto; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.tb-search {
+  display: flex; align-items: center; gap: 9px; width: 260px; min-width: 40px; padding: 8px 11px;
+  border: 1px solid var(--line2, var(--line)); border-radius: var(--nd-r); background: var(--panel);
+  color: var(--muted); font-size: 13px; text-align: left; cursor: pointer;
+}
+.tb-search:hover { border-color: var(--ln2); color: var(--text); }
+.tb-search span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tb-search kbd { font-size: 11px; border: 1px solid var(--line2, var(--line)); border-radius: 4px; padding: 0 6px; background: none; }
+.tb-tools .ib { width: 34px; height: 34px; border-radius: var(--nd-r); background: var(--panel); border: 1px solid var(--line2, var(--line)); }
+.tb-tools .miniplayer, .tb-tools .now { border-radius: var(--nd-r); }
+@media (max-width: 1100px) { .tb-search span, .tb-search kbd { display: none; } .tb-search { width: auto; } }
+
+/* ---------- inicio: detalles del mockup ---------- */
+/* la barra de captura es `fixed` pero el contenedor del bento la contiene: se le da altura de pantalla para que quede abajo */
+.bento.home { min-height: calc(100vh - 128px); }
+.bento.home:not(.compact) .addin.hm-add { position: absolute; bottom: 14px; }
+.addin.hm-add {
+  border-radius: var(--nd-r-lg); border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+  box-shadow: inset 0 1px 0 var(--nd-edge), 0 18px 44px -14px #000, 0 0 30px -14px var(--glow);
+}
+.eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; }
+.hm-col { border-radius: var(--nd-r-lg); background: color-mix(in srgb, var(--panel) 70%, transparent); }
+.hm-col > header { font-family: 'Sora', sans-serif; font-weight: 600; }
+.hm-col .task, .hm-col [draggable] { border-radius: var(--nd-r); }
+.hm-days > div { border-radius: var(--nd-r); background: var(--panel2); position: relative; overflow: hidden; }
+.hm-days > div::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--line); }
+.hm-days > div:has(b.on)::after { background: var(--grad); box-shadow: 0 0 8px var(--glow); }
+.hm-days .today { box-shadow: 0 0 18px -6px var(--glow); }
+.commits em { font-family: 'IBM Plex Mono', monospace; color: var(--accent); font-style: normal; }
+.hm-line, .hm-ai, .hm-week, .hm-git { border-radius: var(--nd-r-lg); }
+
+/* `.navrail :where(button){width:auto}` pisaba el ancho de logo y avatar y los dejaba como píldoras estrechas */
+.navrail .tn-logo { width: 40px; height: 40px; font-family: 'Sora', sans-serif; font-weight: 700; font-size: 18px; }
+.navrail .rail-av { width: 36px; height: 36px; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 13px; }
+
+/* el punto de aviso de la campana estaba posicionado solo bajo `.topbar > .ib`; dentro de .tb-tools caía en una 2.ª fila y subía el icono */
+.tb-tools .ib { position: relative; }
+.tb-tools .ib .bd { position: absolute; top: 7px; right: 8px; width: 7px; height: 7px; border-radius: 50%; background: var(--pink); }
+
+/* =====================================================================
+   Estilo «Nexu Obsidiana»: colores y efectos del mockup (data-preset="obsidiana")
+   índigo #8fa4ff · vivo #5fe3b4 · cálido #ffb868 · borde superior con luz,
+   halo del acento y destello al pasar por tarjetas y botones.
+   ===================================================================== */
+html[data-preset="obsidiana"] {
+  --accent: #8fa4ff;
+  --accent2: #5fe3b4;
+  --ok: #5fe3b4;
+  --warn: #ffb868;
+  --pink: #ff7a9c;
+  --grad: linear-gradient(135deg, #5b72e8 0%, #8fa4ff 100%);
+  --glow: rgba(143, 164, 255, .35);
+  --r-card: 8px;
+  --ln: #262b3a;
+  --ln2: #343b52;
+  --gl: #11131b;
+  --gl2: #181b26;
+  --dim: #5d6478;
+  --nd-edge: rgba(255, 255, 255, .07);
+}
+/* halo del acento arriba a la derecha y brasa cálida abajo a la izquierda, como el mockup */
+html[data-preset="obsidiana"][data-bg-kind="plano"] body::before {
+  display: block; content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(640px 420px at 88% -8%, rgba(143, 164, 255, .14), transparent 70%),
+    radial-gradient(520px 380px at 4% 108%, rgba(255, 184, 104, .07), transparent 70%);
+}
+html[data-preset="obsidiana"] .btn.primary { color: #0a0b10; font-weight: 600; background: var(--grad); }
+html[data-preset="obsidiana"] .tn-logo { color: #0a0b10; }
+html[data-preset="obsidiana"] .rail-av { color: #0a0b10; background: linear-gradient(135deg, #8fa4ff, #5fe3b4); border-color: var(--ln2); }
+html[data-preset="obsidiana"] .navrail { background: #0d0f16; }
+/* brillo en el borde de las tarjetas bajo el cursor */
+html[data-preset="obsidiana"] .bc, html[data-preset="obsidiana"] .card { transition: border-color .2s, box-shadow .2s; }
+html[data-preset="obsidiana"] .bc:hover, html[data-preset="obsidiana"] .card:hover {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
+  box-shadow: inset 0 1px 0 var(--nd-edge), 0 18px 40px -28px #000, 0 0 26px -16px var(--glow);
+}
+html[data-preset="obsidiana"] .tn-i.on, html[data-preset="obsidiana"] .tab.active { color: var(--accent); }
+html[data-preset="obsidiana"] ::selection { background: rgba(143, 164, 255, .3); }
+html[data-preset="obsidiana"] *::-webkit-scrollbar-thumb { background: #262b3a; border-radius: 4px; }
+
+/* ---------- resto de ventanas: tarjetas, paneles y diálogos con radio corto ---------- */
+html :is(.group-card, .limit, .period, .bars, .wbars, .activity, .design-list, .design-chat, .gleft, .gright, .rm-card,
+  .files-side, .files-main, .heat, .hist-row, .addin, .sess, .sessp .sess, .wsx .lay, .wsp, .wsp-host, .ti-stats > div, .ti-session,
+  .mu-card, .mu-search, .mu-sbox, .mu-row, .nt-list, .nt-main, .nt-menu, .nt-item, .web-host, .webv-body, .as-ans, .imp,
+  .grp-page .folder-row, .grp-page .mode, .statusbar, .row, .empty, .bento .tl-list .row, .bento .addin,
+  .dialog, .dialog.palette, .dialog.assistant, .pmenu, .notif-pop, .sel-pop, .msg, .chatpane .msg, .msg.user, .msg pre,
+  .composer.cbox, .composer.cbox textarea, .miniplayer, .side.rail-side) { border-radius: var(--nd-r-lg); }
+html :is(.wsp-opt, .mu-art, .mu-thumb, .mu-cover, .mu-pl, .bgp-t, .dialog.palette .pitem, .subbar .modeseg, .mu-ctl .ib, .rb) { border-radius: var(--nd-r); }
+/* antes del cambio de tema: mismas superficies, luz en el borde superior */
+html :is(.dialog, .pmenu, .notif-pop, .sel-pop, .composer.cbox, .nt-list, .nt-main, .mu-card, .group-card) { box-shadow: inset 0 1px 0 var(--nd-edge), 0 24px 60px -24px #000; }
+
+/* ---------- reloj de Inicio ---------- */
+.hm-clock { font: 500 20px 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; letter-spacing: .02em; color: var(--text); margin-right: 6px; text-shadow: 0 0 18px var(--glow); }
+
+/* ---------- contorno ---------- */
+/* clip-path recorta también el borde en la esquina biselada: se dibuja la diagonal para cerrar el contorno */
+.home-l > .bc:first-child { position: relative; }
+.home-l > .bc:first-child::after {
+  content: ''; position: absolute; top: -1px; right: -1px; width: calc(var(--nd-cut) + 1px); height: calc(var(--nd-cut) + 1px); pointer-events: none;
+  background: linear-gradient(to top right, transparent calc(50% - 1px), color-mix(in srgb, var(--accent) 45%, transparent) calc(50% - 1px), color-mix(in srgb, var(--accent) 45%, transparent) 50%, transparent 50%);
+}
+/* el contenido de las tarjetas no debe sobresalir de las esquinas redondeadas */
+.bc, .card, .dialog, .pmenu, .notif-pop, .mu-card, .nt-list, .nt-main { overflow: clip; overflow-clip-margin: 0px; }
+/* efecto al pasar el cursor, para todos los temas (no solo Obsidiana) */
+.bc, .card { transition: border-color .2s, box-shadow .2s; }
+.bc:hover, .card:hover { border-color: color-mix(in srgb, var(--accent) 34%, var(--line)); box-shadow: inset 0 1px 0 var(--nd-edge), 0 18px 40px -28px #000, 0 0 26px -16px var(--glow); }
+
+/* ===== Equipo de agentes ===== */
+.tm-wrap{display:grid;grid-template-columns:280px 1fr 320px;gap:16px;padding:4px 0}
+.tm-wrap .card{padding:16px}
+.tm-char{display:grid;justify-items:center;gap:10px;align-content:start;text-align:center}
+.tm-char .eyebrow{justify-self:start}
+.tm-name{width:100%;text-align:center;background:transparent;border:1px solid transparent;font:600 15px Sora,sans-serif;color:var(--text)}
+.tm-name.sub{font:12px "IBM Plex Sans",sans-serif;color:var(--muted)}
+.tm-name:hover,.tm-name:focus{border-color:var(--line)}
+.tm-sw{display:flex;gap:6px;justify-content:center}
+.tm-sw i{width:22px;height:22px;border-radius:5px;border:1px solid var(--line);cursor:pointer}
+.tm-sw i.on{outline:2px solid var(--accent);outline-offset:2px}
+.tm-opts{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.tm-edit .tm-opts{justify-content:flex-start}
+.tm-opts button,.tm-deco button{border:1px solid var(--line);border-radius:4px;padding:2px 8px;font-size:12px;color:var(--muted);background:transparent;cursor:pointer}
+.tm-opts button.on,.tm-deco button.on{border-color:var(--accent);color:var(--accent)}
+.tm-deco{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.tm-deco button{font-size:16px;padding:4px 9px}
+.tm-edit label{display:block;margin:12px 0 4px;font-size:12px;color:var(--muted)}
+.tm-edit textarea,.tm-edit input{width:100%}
+.tm-edit textarea{min-height:112px;font:12px/1.5 "IBM Plex Mono",monospace;resize:vertical}
+.tm-row{display:flex;gap:8px;margin-top:6px}
+.tm-reply{margin-top:12px;padding:10px;border:1px solid var(--line);border-radius:6px;background:var(--code,#07080c);white-space:pre-wrap;font:12px/1.5 "IBM Plex Mono",monospace;max-height:260px;overflow:auto}
+.tm-empty{color:var(--muted);padding:20px 0}
+/* sala */
+.tm-room{position:relative;height:300px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:linear-gradient(180deg,var(--over,#141729) 0 62%,var(--panel2) 62%)}
+.tm-room::before{content:"";position:absolute;left:0;right:0;top:62%;height:1px;background:var(--line)}
+.tm-win{position:absolute;top:24px;left:50%;transform:translateX(-50%);width:200px;height:84px;border:2px solid var(--line);border-radius:6px;background:linear-gradient(180deg,#1b2140,#2a2447 60%,#46304a)}
+.tm-lamp{position:absolute;top:0;left:70px;width:2px;height:56px;background:var(--line)}
+.tm-lamp::after{content:"";position:absolute;left:-12px;top:56px;width:26px;height:14px;border-radius:14px 14px 0 0;background:#ffb868;box-shadow:0 14px 40px 8px rgba(255,184,104,.35)}
+.tm-shelf{position:absolute;top:36px;right:20px;display:flex;gap:6px;font-size:18px;border-bottom:3px solid var(--line);padding-bottom:2px}
+.tm-floor{position:absolute;left:16px;bottom:10px;display:flex;gap:14px;font-size:24px}
+.tm-desk{position:absolute;bottom:44px;width:120px;height:14px;transform:translateX(-50%);border-radius:4px;background:var(--panel2);border:1px solid var(--line)}
+.tm-mon{position:absolute;left:38px;bottom:12px;width:44px;height:30px;border:2px solid var(--line);border-radius:4px;background:var(--bg);box-shadow:0 0 18px -4px var(--c)}
+.tm-bot{position:absolute;left:43px;bottom:46px;width:34px;text-align:center}
+.tm-bot b{display:grid;place-items:center;width:34px;height:34px;border-radius:10px 10px 6px 6px;border:2px solid var(--c);background:color-mix(in srgb,var(--c) 22%,var(--bg));font-size:16px}
+.tm-bot small{display:block;margin-top:2px;font:9px "IBM Plex Mono",monospace;color:var(--muted);white-space:nowrap;transform:translateX(-30%)}
+.tm-me{position:absolute;bottom:6px;transform:translateX(-50%)}
+/* lista de agentes */
+.tm-agent{display:grid;grid-template-columns:44px 1fr auto;gap:10px;align-items:center;width:100%;text-align:left;margin-top:8px;padding:10px;position:relative;border:1px solid var(--line);border-radius:6px;background:var(--panel2);color:var(--text);cursor:pointer}
+.tm-agent::before{content:"";position:absolute;left:-1px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--c);box-shadow:0 0 10px var(--c)}
+.tm-agent.on{border-color:var(--c)}
+.tm-agent .ic{width:44px;height:44px;border-radius:8px;display:grid;place-items:center;font-size:22px;background:color-mix(in srgb,var(--c) 18%,var(--bg));border:1px solid color-mix(in srgb,var(--c) 50%,transparent)}
+.tm-agent .sk{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap}
+.tm-agent .sk span{font:10.5px "IBM Plex Mono",monospace;border:1px solid var(--line);border-radius:4px;padding:0 6px;color:var(--muted)}
+.tm-agent .st{font:11px "IBM Plex Mono",monospace;color:var(--muted)}
+@media (max-width:1100px){.tm-wrap{grid-template-columns:1fr}}

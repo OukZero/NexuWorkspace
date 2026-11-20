@@ -1,10 +1,10 @@
 import { app, BrowserWindow, globalShortcut } from 'electron'
-import * as chat from './chat'
+import * as chat from './features/ai/chat'
 import { commit } from './db'
 import { killTracked, lifecycle } from './lifecycle'
-import { killPtysOf } from './pty'
-import { stop as stopTelegram } from './telegram'
-import { stopActive } from './timer'
+import { killPtysOf } from './features/dev/pty'
+import { stop as stopTelegram } from './features/telegram/service'
+import { stopActive } from './features/time/timer'
 import { destroyTray } from './tray'
 
 /** Detiene todo lo que la app deja corriendo fuera de su ventana: chats, terminales, procesos de apoyo, timer y servicios. */

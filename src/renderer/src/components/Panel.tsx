@@ -317,6 +317,9 @@ export function Panel({ compact }: { compact?: boolean }): ReactNode {
               </div>
             </div>
             <div className="hm-chips">
+              <span className="hm-clock" title="Hora actual">
+                {new Date(now).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+              </span>
               <span className="chip ok">
                 {todayEntries.length} {todayEntries.length === 1 ? 'sesión' : 'sesiones'}
               </span>

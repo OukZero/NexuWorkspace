@@ -3,16 +3,10 @@ import type { ReactNode } from 'react'
 import type { IpcChannels, Task } from '../../shared/types'
 import { workFolder } from '../../shared/util'
 import { AddEntryModal } from './components/AddEntryModal'
-import { Board } from './components/Board'
 import { ChatView } from './components/Chat'
 import { DiffModal } from './components/DiffModal'
-import { Groups } from './components/Groups'
-import { History } from './components/History'
-import { RedmineView } from './components/RedmineView'
-import { Hours } from './components/Hours'
 import { NewTabModal } from './components/NewTabModal'
-import { SettingsView } from './components/SettingsView'
-import { TopNav } from './components/Sidebar'
+import { Rail, TopTools } from './components/Sidebar'
 import { StatusBar } from './components/StatusBar'
 import { ConvTabs, TaskTabs, type TaskMode } from './components/TabBar'
 import { G } from './components/glyphs'
@@ -31,20 +25,13 @@ import { TaskInfoModal } from './components/TaskInfoModal'
 import type { ConfirmRequest } from './components/ConfirmDialog'
 import { HelpModal } from './components/HelpModal'
 import { TaskModal } from './components/TaskModal'
-import { MusicView } from './components/MusicView'
-import { WhatsAppView } from './components/WhatsAppView'
-import { NotesView } from './components/NotesView'
-import { MeetingsView } from './components/MeetingsView'
-import { WebView } from './components/WebView'
 import { addTab } from './webTabs'
 import { WebHost } from './components/webHost'
 import { PANEL_LABEL } from './components/TabBar'
 import { Panel } from './components/Panel'
 import { ConvPane } from './components/ConvPane'
-import { Workspace } from './components/Workspace'
+import { VIEWS } from './views'
 import { toggleFullscreen, useFullscreen } from './fullscreen'
-import { Usage } from './components/Usage'
-import { Dashboard } from './components/Dashboard'
 import { openConvs } from './conversations'
 import { activeEntry, call, findTask, peek, useDB } from './store'
 import { UiContext, type Ui, type View } from './ui'
@@ -533,6 +520,7 @@ export function App(): ReactNode {
     web: 'Pestañas integradas para webs de trabajo',
     notes: 'Se guardan como archivos Markdown en tu equipo',
     meetings: 'Graba la voz, transcribe en tu equipo y obtén el resumen',
+    team: 'Agentes especializados con su propio prompt y skills; tu personaje decora la sala',
     music: 'Spotify: reproduce, pausa y cambia de pista sin salir de la app',
     groups: 'Conjuntos de carpetas a los que la IA puede acceder',
     settings: 'Preferencias de la aplicación'
@@ -546,52 +534,11 @@ export function App(): ReactNode {
         ? { title: `${hello}${myName ? ', ' + myName : ''}`, sub: `${new Date().toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })} · ${openTasks} ${openTasks === 1 ? 'tarea activa' : 'tareas activas'}` }
         : { title: PANEL_LABEL[view] ?? 'Panel', sub: SUBS[view] ?? '' }
 
+const Registered = VIEWS[view]
   let content: ReactNode
-  switch (view) {
-    case 'board':
-      content = <Board />
-      break
-    case 'workspace':
-      content = <Workspace />
-      break
-    case 'hours':
-      content = <Hours />
-      break
-    case 'dashboard':
-      content = <Dashboard />
-      break
-    case 'usage':
-      content = <Usage />
-      break
-    case 'history':
-      content = <History />
-      break
-    case 'redmine':
-      content = <RedmineView />
-      break
-    case 'music':
-      content = <MusicView />
-      break
-    case 'notes':
-      content = <NotesView />
-      break
-    case 'meetings':
-      content = <MeetingsView />
-      break
-    case 'web':
-      content = <WebView />
-      break
-    case 'whatsapp':
-      content = <WhatsAppView />
-      break
-    case 'groups':
-      content = <Groups />
-      break
-    case 'settings':
-      content = <SettingsView />
-      break
-    case 'chat':
-      content =
+  if (Registered) content = <Registered />
+  else if (view === 'chat') {
+    content =
         active && mode === 'design' ? <DesignView key={active} taskId={active} /> : active && mode === 'files' ? <FilesView key={active} taskId={active} request={fileReq} /> : active && mode === 'git' ? <GitView key={active} taskId={active} /> : activeConv ? (
           <div className={`wb${popTask ? ' solo' : ''}`}>
             {!popTask && active && <ConvPane taskId={active} active={activeConv} unread={unreadConvs} onSelect={(id) => showConv(active, id)} onClose={(id) => void closeConv(id)} onNew={() => void newConversation(active)} onMore={ui.openNewTab} />}
@@ -600,16 +547,13 @@ export function App(): ReactNode {
         ) : (
           <Panel />
         )
-      break
-    default:
-      content = <Panel />
-  }
+  } else content = <Panel />
 
   return (
     <UiContext.Provider value={ui}>
+      {!popTask && <Rail onSearch={() => setModal({ kind: 'palette' })} />}
       <main>
         <div className="topstack">
-          {!popTask && <TopNav onSearch={() => setModal({ kind: 'palette' })} fullscreen={fullscreen} onFullscreen={() => void toggleFullscreen()} />}
           {!popTask && (
             <header className="topbar">
               <button className="tb-back" title="Volver atrás (Alt+←)" aria-label="Volver atrás" disabled={!canBack && !modal} onClick={goBack}>
@@ -619,6 +563,7 @@ export function App(): ReactNode {
                 <h1>{heading.title}</h1>
                 <small>{heading.sub}</small>
               </div>
+              <TopTools onSearch={() => setModal({ kind: 'palette' })} fullscreen={fullscreen} onFullscreen={() => void toggleFullscreen()} />
             </header>
           )}
           {(!popTask && view === 'chat' && (tabs.length > 0 || active)) || (popTask && active) ? (

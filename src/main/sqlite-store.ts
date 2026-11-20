@@ -10,7 +10,7 @@ const LISTS = ['tasks', 'entries', 'groups', 'usage', 'notifications', 'focusBlo
 /** Chats: una fila por clave (id de la tarea). */
 const CHATS = 'chats'
 /** Campos sueltos del estado (ajustes, recordatorios, límites…). */
-const KV = ['settings', 'lastReminderDay', 'paused', 'commands', 'limits', 'heartbeat', 'lastDailyDay'] as const
+const KV = ['settings', 'lastReminderDay', 'paused', 'commands', 'limits', 'heartbeat', 'lastDailyDay', 'agentTeam'] as const
 const TABLES = [...LISTS, CHATS, 'kv'] as const
 type Table = (typeof TABLES)[number]
 

@@ -773,6 +773,34 @@ export interface SpotifySearchResult {
 /** Proyecto de Redmine (por nombre) con su id y las tareas conocidas. */
 export type RedmineCatalog = Record<string, { id: string; issues: Array<{ id: string; label: string }> }>
 
+/** Agente del equipo: un Claude con su propio prompt de sistema, modelo y skills. */
+export interface TeamAgent {
+  id: string
+  name: string
+  emoji: string
+  color: string
+  model: 'haiku' | 'sonnet' | 'opus'
+  prompt: string
+  skills: string[]
+}
+
+/** Personaje del usuario: rasgos que el avatar dibuja en capas. */
+export interface TeamCharacter {
+  name: string
+  role: string
+  skin: string
+  hair: 'corto' | 'rizado' | 'gorro'
+  gear: 'lentes' | 'audifonos' | 'barba'
+  outfit: 'sudadera' | 'camisa' | 'bata'
+}
+
+/** Equipo de agentes + personaje + adornos de la sala (ids de adorno, en orden de colocación). */
+export interface AgentTeam {
+  character: TeamCharacter
+  agents: TeamAgent[]
+  decor: string[]
+}
+
 export interface DB {
   tasks: Task[]
   entries: Entry[]
@@ -791,6 +819,7 @@ export interface DB {
   lastDailyDay?: string
   /** Centro de notificaciones: lo que la app avisó (también lo que no llegó a mostrarse como aviso del sistema). */
   notifications?: AppNotification[]
+  agentTeam?: AgentTeam
   /** Bloques de tiempo reservados para una tarea (solo locales, no se escriben en el calendario). */
   focusBlocks?: FocusBlock[]
 }
@@ -935,6 +964,9 @@ export interface IpcChannels {
   'files:find': { args: [string, string, string]; ret: string[] }
   'notif:read': { args: [string]; ret: void }
   'notif:clear': { args: []; ret: void }
+  'team:get': { args: []; ret: AgentTeam }
+  'team:save': { args: [AgentTeam]; ret: void }
+  'team:ask': { args: [string, string]; ret: string } // id del agente y mensaje -> respuesta
   'telegram:status': { args: []; ret: TelegramStatus }
   'telegram:save': { args: [{ token: string; on: boolean; details: boolean }]; ret: TelegramStatus }
   'telegram:link': { args: []; ret: string }
