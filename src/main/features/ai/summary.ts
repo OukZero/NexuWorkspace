@@ -95,9 +95,10 @@ function localSummary(d: Digest): string {
 
 // ejecuta `claude -p` con el prompt por stdin y devuelve la salida de texto
 // Por defecto usa Haiku: son tareas de redacción corta en segundo plano. Quien necesite más calidad pasa 'sonnet'.
-export function askClaude(prompt: string, cmd: string, timeoutMs = 120000, model: string | null = 'haiku'): Promise<string> {
+export function askClaude(prompt: string, cmd: string, timeoutMs = 120000, model: string | null = 'haiku', dirs?: { cwd: string; extra: string[] }): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(`${cmd}${model ? ` --model ${model}` : ''} -p`, { shell: true, cwd: os.tmpdir(), windowsHide: true })
+    const add = (dirs?.extra ?? []).map((d) => ` --add-dir "${d}"`).join('')
+    const child = spawn(`${cmd}${model ? ` --model ${model}` : ''}${add} -p`, { shell: true, cwd: dirs?.cwd ?? os.tmpdir(), windowsHide: true })
     let out = ''
     let err = ''
     const timer = setTimeout(() => {

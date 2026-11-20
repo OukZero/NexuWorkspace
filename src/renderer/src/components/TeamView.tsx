@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as RPointerEvent, ReactNode } from 'react'
 import type { AgentTeam, RobotLook, TeamAgent, TeamCharacter, TeamChatMsg, TeamProp } from '../../../shared/types'
 import { useUi } from '../ui'
+import { useDB } from '../store'
+import { DEFAULT_ESTIMATE_TEMPLATES, ESTIMATE_LEVELS } from '../../../shared/estimateTemplates'
 import { ASSETS, ASSET_BY_KEY, EMOJI_TO_ASSET } from './teamAssets'
 
 type Opt<T> = Array<[T, string]>
@@ -238,6 +240,7 @@ function withProps(t0: AgentTeam): AgentTeam {
 
 export function TeamView(): ReactNode {
   const ui = useUi()
+  const db = useDB()
   const [team, setTeam] = useState<AgentTeam | null>(null)
   const [sel, setSel] = useState<string>('')
   const [selProp, setSelProp] = useState('')
@@ -248,6 +251,17 @@ export function TeamView(): ReactNode {
   const [tab, setTab] = useState<'chat' | 'edit'>('chat')
   const [charTab, setCharTab] = useState<'cara' | 'pelo' | 'ropa'>('cara')
   const [draft, setDraft] = useState('')
+  const [gpOpen, setGpOpen] = useState(false)
+  const gpRef = useRef<HTMLDivElement>(null)
+  // cierra el selector de grupo al hacer clic fuera o con Esc
+  useEffect(() => {
+    if (!gpOpen) return
+    const down = (e: MouseEvent): void => { if (!gpRef.current?.contains(e.target as Node)) setGpOpen(false) }
+    const key = (e: KeyboardEvent): void => { if (e.key === 'Escape') setGpOpen(false) }
+    document.addEventListener('mousedown', down)
+    document.addEventListener('keydown', key)
+    return () => { document.removeEventListener('mousedown', down); document.removeEventListener('keydown', key) }
+  }, [gpOpen])
   const [routing, setRouting] = useState(false)
   const [chatWork, setChatWork] = useState('')
   const [since, setSince] = useState(0)
@@ -541,10 +555,41 @@ export function TeamView(): ReactNode {
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send() } }}
               />
               <div className="tc-comp-f">
-                <span>{mentioned(draft) ? `Irá a ${mentioned(draft)?.name}` : 'Se asigna automáticamente · Mayús+Enter: nueva línea'}</span>
+                {(() => {
+                  const cur = db.groups.find((g) => g.id === team.chatGroupId)
+                  const pick = (id?: string): void => { update({ ...team, chatGroupId: id }); setGpOpen(false) }
+                  return (
+                    <div className={`tc-gp${gpOpen ? ' open' : ''}${cur ? ' on' : ''}`} ref={gpRef}>
+                      <button type="button" className="tc-gp-b" aria-haspopup="listbox" aria-expanded={gpOpen} title="Grupo de carpetas en el que trabajan los agentes" onClick={() => setGpOpen((o) => !o)}>
+                        <span className="ic" aria-hidden>🗂</span>
+                        <b>{cur ? cur.name : 'Sin carpetas'}</b>
+                        {cur && <em>{cur.folders.length}</em>}
+                        <i className="chev" aria-hidden>▾</i>
+                      </button>
+                      {gpOpen && (
+                        <div className="tc-gp-m" role="listbox" aria-label="Grupo de carpetas">
+                          <div className="tc-gp-h">Carpetas de trabajo</div>
+                          <button type="button" role="option" aria-selected={!cur} className={!cur ? 'sel' : ''} onClick={() => pick(undefined)}>
+                            <span className="ic" aria-hidden>∅</span>
+                            <span><b>Sin carpetas</b><small>Los agentes no tocan tus archivos</small></span>
+                          </button>
+                          {db.groups.map((g) => (
+                            <button key={g.id} type="button" role="option" aria-selected={g.id === cur?.id} className={g.id === cur?.id ? 'sel' : ''} onClick={() => pick(g.id)}>
+                              <span className="ic" aria-hidden>🗂</span>
+                              <span><b>{g.name}</b><small>{g.folders.length} carpeta{g.folders.length === 1 ? '' : 's'}{g.folders.some((f) => f.access === 'write') ? ' · escritura' : ' · solo lectura'}</small></span>
+                            </button>
+                          ))}
+                          {!db.groups.length && <p className="tc-gp-e">Aún no hay grupos. Créalos en Carpetas.</p>}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
+                <span className="tc-sp" />
                 {log.length > 0 && <button className="btn sm" disabled={!!(routing || chatWork)} onClick={() => update({ ...team, chat: [] })}>Limpiar</button>}
                 <button className="btn primary sm" disabled={!draft.trim() || routing || !!chatWork || !team.agents.length} onClick={() => void send()}>Enviar</button>
               </div>
+              <p className="tc-hint">{mentioned(draft) ? `Irá a ${mentioned(draft)?.name}` : 'Se asigna automáticamente · Mayús+Enter: nueva línea'}</p>
             </div>
           </div>
         ) : agent ? (
@@ -569,6 +614,29 @@ export function TeamView(): ReactNode {
             <textarea value={agent.prompt} onChange={(e) => setAgent({ prompt: e.target.value })} />
             <label>Skills asignadas</label>
             <div className="tm-opts">{SKILLS.map((s) => <button key={s} className={agent.skills.includes(s) ? 'on' : ''} onClick={() => setAgent({ skills: agent.skills.includes(s) ? agent.skills.filter((x) => x !== s) : [...agent.skills, s] })}>{s}</button>)}</div>
+            {(agent.id === 'estimador' || agent.skills.includes('cubicación')) && (
+              <details className="tm-look" open>
+                <summary>Plantillas de estimación</summary>
+                <small>El agente usa la técnica o la comercial según lo que pidas (escribe «técnica» o «comercial» en el encargo).</small>
+                {ESTIMATE_LEVELS.map(([lvl, label]) => {
+                  const custom = team.estimateTemplates?.[lvl]
+                  const setTpl = (v: string | undefined): void => update({ ...team, estimateTemplates: { ...team.estimateTemplates, [lvl]: v } })
+                  return (
+                    <div key={lvl}>
+                      <label>{label} {custom?.trim() ? '(personalizada)' : '(por defecto)'}</label>
+                      <textarea value={custom ?? DEFAULT_ESTIMATE_TEMPLATES[lvl]} style={{ minHeight: 120 }} onChange={(e) => setTpl(e.target.value)} />
+                      <div className="tm-row">
+                        <label className="btn sm">
+                          Cargar archivo…
+                          <input type="file" accept=".md,.txt,.csv,text/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void f.text().then(setTpl) }} />
+                        </label>
+                        <button className="btn sm" disabled={!custom?.trim()} onClick={() => setTpl(undefined)}>Restaurar por defecto</button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </details>
+            )}
             <label>Probar</label>
             <textarea value={msg} placeholder="Escribe un encargo para este agente…" onChange={(e) => setMsg(e.target.value)} style={{ minHeight: 64 }} />
             <div className="tm-row">
