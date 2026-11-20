@@ -23,11 +23,20 @@ export const getState = (): UpdateState => state
 /** Mensaje comprensible para los fallos típicos (repositorio privado, sin red, sin publicaciones). */
 function explain(e: Error): string {
   const m = e.message || String(e)
-  if (/404|Not Found/i.test(m)) return 'No hay publicaciones accesibles en GitHub (¿el repositorio es privado o todavía no se publicó una versión con «npm run release»?).'
+  if (/401|403|Bad credentials/i.test(m)) return 'GitHub rechazó el token de actualizaciones: revísalo en Ajustes (debe tener permiso de lectura de Contents en el repositorio).'
+  if (/404|Not Found/i.test(m)) return 'No hay publicaciones accesibles en GitHub. Si el repositorio es privado, pon un token de solo lectura en Ajustes → Actualizaciones; si no, aún no se ha publicado ninguna versión.'
   if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ENETUNREACH|net::|getaddrinfo/i.test(m)) return 'Sin conexión con GitHub: se reintentará más tarde.'
   if (/latest\.yml/i.test(m)) return 'La publicación no incluye latest.yml: usa «npm run release» para publicarla.'
   if (/app-update\.yml/i.test(m)) return 'Esta copia no trae la configuración de actualizaciones. Instala la versión con el instalador (Nexu-Workspace-Setup) para que se actualice sola.'
   return clip(m.split('\n')[0], 220)
+}
+
+/** Token de solo lectura para repos privados: el de Ajustes, o GH_TOKEN del equipo. Nunca va en el instalador. */
+function applyToken(): void {
+  const t = (getDb().settings.updateToken || process.env.GH_TOKEN || '').trim()
+  if (!t) return
+  process.env.GH_TOKEN = t // electron-updater lo usa para pedir los assets privados
+  autoUpdater.addAuthHeader(`token ${t}`)
 }
 
 function wire(): void {
@@ -52,6 +61,7 @@ export async function check(): Promise<UpdateState> {
   wire()
   if (['checking', 'downloading', 'ready'].includes(state.status)) return state
   autoUpdater.autoDownload = auto()
+  applyToken()
   try {
     await autoUpdater.checkForUpdates()
   } catch (e) {
@@ -63,6 +73,7 @@ export async function check(): Promise<UpdateState> {
 export async function download(): Promise<void> {
   if (!app.isPackaged || state.status !== 'available') return
   set({ status: 'downloading', percent: 0 })
+  applyToken()
   try {
     await autoUpdater.downloadUpdate()
   } catch (e) {

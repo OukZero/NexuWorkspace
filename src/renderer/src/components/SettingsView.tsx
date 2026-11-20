@@ -213,6 +213,7 @@ export function SettingsView(): ReactNode {
       githubToken: (s.githubToken || '').trim(),
       baseBranch: (s.baseBranch || '').trim(),
       autoUpdate: s.autoUpdate !== false,
+      updateToken: (s.updateToken ?? '').trim(),
       autocompactTokens: Number(s.autocompactTokens) >= 100_000 ? Math.min(1_000_000, Math.round(Number(s.autocompactTokens))) : 0,
       defaultChatModel: (s.defaultChatModel || '').trim(),
       contextWarnTokens: Math.max(10_000, Number(s.contextWarnTokens) || 100_000),
@@ -679,6 +680,13 @@ export function SettingsView(): ReactNode {
                   <input type="checkbox" style={{ width: 'auto' }} checked={s.autoUpdate !== false} onChange={(e) => set('autoUpdate', e.target.checked)} />
                   Buscar y descargar versiones nuevas automáticamente (al abrir y cada 4 horas)
                 </label>
+                <label style={{ display: 'block', marginTop: 10 }}>
+                  Token de GitHub (solo lectura, para repositorio privado)
+                  <input type="password" autoComplete="off" placeholder="github_pat_… (opcional; también vale la variable GH_TOKEN)" value={s.updateToken ?? ''} onChange={(e) => set('updateToken', e.target.value)} />
+                </label>
+                <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                  Créalo en GitHub → Settings → Developer settings → Fine-grained tokens, solo para este repositorio y con «Contents: Read-only». Se guarda en este equipo, no en el instalador.
+                </div>
                 <div style={{ marginTop: 10 }}>
                   <RestartApp />
                 </div>

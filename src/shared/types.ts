@@ -677,6 +677,8 @@ export interface Settings {
   baseBranch?: string
   /** Buscar y descargar versiones nuevas sola (por defecto sí). */
   autoUpdate?: boolean
+  /** Token de GitHub de solo lectura para actualizar desde un repositorio privado (si no, se usa GH_TOKEN). */
+  updateToken?: string
   /** Copia de la apariencia (temas, tipografía, menú…); la interfaz la valida al leerla. */
   appearance?: Record<string, unknown>
 }
