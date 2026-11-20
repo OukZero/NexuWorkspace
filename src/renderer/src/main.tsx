@@ -16,6 +16,7 @@ import './styles/style.css'
 import './styles/extra.css'
 import './styles/cockpit.css'
 import './styles/nuevo-diseno.css'
+import './styles/equipo.css'
 
 initTheme()
 const root = createRoot(document.getElementById('root') as HTMLElement)
