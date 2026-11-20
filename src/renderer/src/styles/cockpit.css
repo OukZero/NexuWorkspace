@@ -91,7 +91,7 @@ html h3 { text-transform: uppercase; letter-spacing: 1px; font-weight: 600; font
 html .empty { border: 1px dashed var(--ln2); border-radius: 16px; }
 
 /* ---------- dock flotante ---------- */
-html .side.rail-side { position: relative; z-index: 8; flex: none; width: 62px; margin: 14px 0 14px 14px; height: calc(100% - 28px); padding: 12px 0; border: 1px solid var(--ln); border-radius: 24px; background: var(--gl); backdrop-filter: blur(18px); display: flex; flex-direction: column; align-items: center; gap: 4px; }
+html .side.rail-side { position: relative; z-index: 8; flex: none; width: 62px; margin: 14px 0 14px 14px; align-self: stretch; height: auto; max-height: calc(100vh - 28px); padding: 12px 0; border: 1px solid var(--ln); border-radius: 24px; background: var(--gl); backdrop-filter: blur(18px); display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .rail-side #nav, .rail-side .nav-group { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .rail-side .sp { flex: 1; }
 .rail-logo { width: 38px; height: 38px; border-radius: 12px; background: var(--grad); color: #fff; border: 0; padding: 0; display: grid; place-items: center; margin-bottom: 10px; box-shadow: 0 6px 22px var(--glow); position: relative; }
@@ -269,7 +269,7 @@ html .row.done .title { color: var(--muted); }
 
 /* ---------- tablero ---------- */
 html .board { gap: 14px; margin-top: 4px; }
-html .col { background: var(--gl); border: 1px solid var(--ln); border-radius: var(--r-card); padding: 12px; min-height: 240px; backdrop-filter: blur(14px); }
+html .col { background: var(--gl); border: 1px solid var(--ln); border-radius: var(--r-card); padding: 12px; min-height: 240px; max-height: calc(100vh - 200px); overflow-y: auto; scrollbar-width: thin; backdrop-filter: blur(14px); }
 html .col.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--gl)); }
 html .col h4 { margin: 4px 6px 12px; padding: 0; border: 0; text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 650; color: var(--text); display: flex; align-items: center; gap: 8px; }
 html .col h4 span:last-child { margin-left: auto; background: var(--gl2); padding: 0 8px; border-radius: 99px; color: var(--muted); font-weight: 500; }
@@ -1768,13 +1768,17 @@ html[data-preset="nexoclaro"] .bc { border-color: var(--line); box-shadow: 0 1px
 .hm-line .card-h { align-items: flex-start; }
 .hm-line .upd { margin-top: 4px; text-transform: capitalize; }
 .hm-th { display: flex; align-items: center; gap: 12px; margin: 2px 2px 10px; }
-.hm-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
-.hm-col { background: var(--gl2); border: 1px solid var(--line); border-radius: 14px; padding: 10px; min-width: 0; transition: border-color .15s, background .15s; }
+/* altura fija = pantalla: 3 columnas arriba y «Rutinas» a todo el ancho abajo; cada bloque hace scroll interno */
+.hm-tasks { display: flex; flex-direction: column; height: max(480px, calc(100vh - 310px)); min-height: 0; }
+.hm-cols { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr) minmax(104px, 32%); gap: 12px; }
+.hm-col { display: flex; flex-direction: column; min-height: 0; background: var(--gl2); border: 1px solid var(--line); border-radius: 14px; padding: 10px; min-width: 0; transition: border-color .15s, background .15s; }
+.hm-col.wide { grid-column: 1 / -1; }
+.hm-col.wide .hm-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); align-content: start; }
 .hm-col.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--gl2)); }
 .hm-col > header { display: flex; align-items: center; gap: 8px; padding: 2px 4px 10px; font-size: 12.5px; }
 .hm-col > header .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .hm-col > header .n { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
-.hm-cards { display: flex; flex-direction: column; gap: 8px; }
+.hm-cards { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
 .hm-card { background: var(--gl); border: 1px solid var(--ln); border-radius: 12px; padding: 10px 12px; cursor: grab; transition: border-color .15s, transform .15s; }
 .hm-card:hover { border-color: var(--ln2); transform: translateY(-1px); }
 .hm-card:active { cursor: grabbing; }
@@ -1816,10 +1820,13 @@ html[data-preset="nexoclaro"] .bc { border-color: var(--line); box-shadow: 0 1px
 .hm-timer { font: 600 12.5px var(--mono, ui-monospace, Consolas, monospace); color: var(--ok); padding: 3px 9px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent); background: color-mix(in srgb, var(--ok) 10%, transparent); }
 
 @container (max-width: 1100px) { .bento.home { grid-template-columns: minmax(250px, 300px) minmax(0, 1fr); } .home-r { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@container (max-width: 760px) { .bento.home { grid-template-columns: 1fr; } .home-r { grid-template-columns: 1fr; } .hm-cols { grid-template-columns: 1fr; } }
+@container (max-width: 900px) { .hm-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) minmax(104px, 32%); } }
+@container (max-width: 760px) { .bento.home { grid-template-columns: 1fr; } .home-r { grid-template-columns: 1fr; } .hm-tasks { height: auto; } .hm-cols { display: flex; flex-direction: column; } .hm-cards { max-height: 320px; } }
 .bento.home.compact { grid-template-columns: 1fr; padding-bottom: 20px; }
 .bento.home.compact .home-r { grid-template-columns: 1fr; }
-.bento.home.compact .hm-cols { grid-template-columns: 1fr; }
+.bento.home.compact .hm-tasks { height: auto; }
+.bento.home.compact .hm-cols { display: flex; flex-direction: column; }
+.bento.home.compact .hm-cards { max-height: 320px; }
 .bento.home.compact .addin.hm-add { position: static; transform: none; width: auto; }
 
 /* ---------- Barra superior (reemplaza el menú lateral) ---------- */

@@ -184,7 +184,7 @@ export function Panel({ compact }: { compact?: boolean }): ReactNode {
 
   const column = (key: string, name: string, dot: string, list: Task[], drop?: 'going' | 'next', hint?: string): ReactNode => (
     <div
-      className={`hm-col${over === key ? ' over' : ''}`}
+      className={`hm-col${key === 'rout' ? ' wide' : ''}${over === key ? ' over' : ''}`}
       onDragOver={drop ? (e) => { e.preventDefault(); setOver(key) } : undefined}
       onDragLeave={() => setOver((o) => (o === key ? null : o))}
       onDrop={drop ? () => dropIn(drop) : undefined}
@@ -343,6 +343,7 @@ export function Panel({ compact }: { compact?: boolean }): ReactNode {
           <div className="hm-cols">
             {column('going', 'En marcha', 'var(--ok)', going, 'going', 'Arrastra una tarea aquí para empezar su timer')}
             {column('next', 'Siguientes', 'var(--accent)', upNext, 'next')}
+            {column('done', 'Completadas', 'var(--muted)', todays.filter((t) => t.status === 'done'), undefined, 'Aún no has completado tareas hoy.')}
             {column('rout', 'Rutinas y pendientes', 'var(--warn)', routines)}
           </div>
         </div>

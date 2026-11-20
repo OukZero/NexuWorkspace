@@ -2,6 +2,8 @@ import type { AgentTeam } from '../../../shared/types'
 import { api } from '../../api'
 import { commit, getDb } from '../../db'
 import { askClaude } from '../ai/summary'
+import { DEFAULT_ESTIMATE_TEMPLATES, detectLevel } from '../../../shared/estimateTemplates'
+import type { EstimateLevel } from '../../../shared/estimateTemplates'
 
 /** Equipo inicial: tres agentes de ejemplo y un personaje base, para que la pantalla no empiece vacía. */
 const DEFAULT_TEAM: AgentTeam = {
@@ -28,8 +30,22 @@ export function registerTeamIpc(): void {
     if (!a) throw new Error('Agente no encontrado.')
     if (!message.trim()) throw new Error('Escribe un mensaje.')
     // solo se llama a petición del usuario; el modelo lo elige cada agente
-    const prompt = `${a.prompt}\n\nSkills activas: ${a.skills.join(', ') || 'ninguna'}.\n\n---\n${message}`
-    return askClaude(prompt, getDb().settings.claudeCmd, 180000, MODELS.includes(a.model) ? a.model : 'sonnet')
+    // si tiene grupo de carpetas, trabaja en la primera carpeta y ve el resto con --add-dir
+    const group = (getDb().groups ?? []).find((g) => g.id === team.chatGroupId)
+    const folders = (group?.folders ?? []).filter((f) => f.path)
+    const scope = folders.length ? `\n\nCarpetas del grupo «${group?.name}»:\n${folders.map((f) => `- ${f.path} (${f.access === 'write' ? 'lectura y escritura' : 'solo lectura: no la modifiques'})`).join('\n')}` : ''
+    // el estimador recibe la plantilla del nivel pedido (técnica/comercial); si no se distingue, ambas
+    let tpl = ''
+    if (a.id === 'estimador' || a.skills.includes('cubicación')) {
+      const level = detectLevel(message)
+      const get = (l: EstimateLevel): string => team.estimateTemplates?.[l]?.trim() || DEFAULT_ESTIMATE_TEMPLATES[l]
+      tpl = level
+        ? `\n\nEstimación ${level === 'technical' ? 'técnica' : 'comercial'}. Entrega el resultado siguiendo EXACTAMENTE esta plantilla:\n${get(level)}`
+        : `\n\nSegún lo que pida el usuario, usa la plantilla técnica o la comercial (si no está claro, usa la técnica y dilo):\n--- PLANTILLA TÉCNICA ---\n${get('technical')}\n--- PLANTILLA COMERCIAL ---\n${get('commercial')}`
+    }
+    const prompt = `${a.prompt}\n\nSkills activas: ${a.skills.join(', ') || 'ninguna'}.${scope}${tpl}\n\n---\n${message}`
+    const dirs = folders.length ? { cwd: folders[0].path, extra: folders.slice(1).map((f) => f.path) } : undefined
+    return askClaude(prompt, getDb().settings.claudeCmd, 180000, MODELS.includes(a.model) ? a.model : 'sonnet', dirs)
   })
   // decide qué agente atiende una solicitud del chat general: una llamada corta a Haiku y, si falla, por palabras clave
   api('team:route', async (message) => {

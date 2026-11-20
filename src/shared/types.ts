@@ -822,6 +822,10 @@ export interface AgentTeam {
   props?: TeamProp[]
   /** Chat general del equipo: cada solicitud y la respuesta del agente al que se asignó (últimos 60). */
   chat?: TeamChatMsg[]
+  /** Grupo de carpetas (Carpetas) en el que trabajan los agentes; se elige en el chat del equipo. Sin grupo, no ven ninguna carpeta. */
+  chatGroupId?: string
+  /** Plantillas de estimación que reemplazan a las de por defecto (vacío = usar la de por defecto). */
+  estimateTemplates?: { technical?: string; commercial?: string }
 }
 
 export interface TeamChatMsg {
