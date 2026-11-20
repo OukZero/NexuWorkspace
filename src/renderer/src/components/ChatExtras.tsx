@@ -1,9 +1,11 @@
 import * as Popover from '@radix-ui/react-popover'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { ContextKind, ContextPreview, PromptTemplate } from '../../../shared/types'
+import type { ChatUsage, ContextKind, ContextPreview, PromptTemplate, RateLimits, Settings } from '../../../shared/types'
+import { contextAdvice, fmtTokens } from '../../../shared/advice'
 import { ALL_CONTEXT, CONTEXT_HINT, CONTEXT_LABEL } from '../../../shared/templates'
 import { findTask, useDB } from '../store'
+import { G } from './glyphs'
 import { Menu } from './Menu'
 
 /**
@@ -54,7 +56,9 @@ export function ContextBar({ taskId, kinds, onChange, terminalText }: { taskId: 
     <Popover.Root open={pop} onOpenChange={setPop}>
       <Popover.Trigger asChild>
         <button type="button" className={`ctx-trigger${on.length ? ' on' : ''}`} title={on.length ? `Se anexa a tu próximo mensaje: ${on.map((k) => CONTEXT_LABEL[k].toLowerCase()).join(', ')}` : 'Elegir qué contexto se anexa a tu próximo mensaje'} aria-label="Contexto del mensaje">
-          Contexto{on.length ? ` · ${on.length}` : ''}
+          <G n="files" size={13} />
+          Contexto
+          {on.length > 0 && <em>{on.length}</em>}
         </button>
       </Popover.Trigger>
       <Popover.Portal>
@@ -104,6 +108,115 @@ export function ContextBar({ taskId, kinds, onChange, terminalText }: { taskId: 
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+  )
+}
+
+/**
+ * Tokens de la conversación junto al botón de contexto: un anillo con el porcentaje de la ventana y, al abrirlo,
+ * el detalle (barra con umbrales, desglose y compactar) sin tener que abrir el panel lateral.
+ */
+export function TokenMeter({ usage, settings, canCompact, onCompact, onPanel }: { usage?: ChatUsage; settings: Settings; canCompact: boolean; onCompact: () => void; onPanel: () => void }): ReactNode {
+  const [open, setOpen] = useState(false)
+  if (!usage?.contextTokens) return null
+  const adv = contextAdvice(usage, settings)
+  const win = usage.contextWindow || 0
+  const used = usage.contextTokens
+  const pct = Math.min(100, adv.pct)
+  const mark = (t: number): number => (win ? Math.min(100, (t / win) * 100) : 0)
+  const C = 2 * Math.PI * 8
+  const rows: [string, string][] = [
+    ['Entrada', fmtTokens(usage.inputTokens)],
+    ['Salida', fmtTokens(usage.outputTokens)],
+    ['Desde caché', fmtTokens(usage.cacheReadTokens)],
+    ['Turnos', String(usage.turns)]
+  ]
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger asChild>
+        <button type="button" className={`tk-chip ${adv.level}`} title={`${adv.title}: ${adv.text}`} aria-label={`Tokens de la conversación: ${fmtTokens(used)}${win ? ` de ${fmtTokens(win)}` : ''}`}>
+          <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden>
+            <circle cx="10" cy="10" r="8" className="tk-track" />
+            <circle cx="10" cy="10" r="8" className="tk-arc" strokeDasharray={`${(C * pct) / 100} ${C}`} transform="rotate(-90 10 10)" />
+          </svg>
+          <b>{fmtTokens(used)}</b>
+          {win > 0 && <span>{Math.round(adv.pct)}%</span>}
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content className={`ctx-pop tk-pop ${adv.level}`} side="top" align="start" sideOffset={8} collisionPadding={12}>
+          <div className="tk-head">
+            <div className="tk-big">
+              <b>{fmtTokens(used)}</b>
+              {win > 0 && <span> / {fmtTokens(win)} tokens</span>}
+            </div>
+            <span className="tk-badge">{adv.title}</span>
+          </div>
+          {usage.model && (
+            <div className="tk-model" title="Modelo que respondió en el último turno (lo informa Claude Code)">
+              Modelo en uso: <code>{usage.model}</code>
+            </div>
+          )}
+          <div className="tk-bar">
+            <i style={{ width: `${pct}%` }} />
+            {win > 0 && <u className="mk warn" style={{ left: `${mark(settings.contextWarnTokens)}%` }} />}
+            {win > 0 && <u className="mk crit" style={{ left: `${mark(settings.contextCriticalTokens)}%` }} />}
+          </div>
+          <p className="tk-text">{adv.text}</p>
+          <div className="tk-grid">
+            {rows.map(([k, v]) => (
+              <div key={k}>
+                <span>{k}</span>
+                <b>{v}</b>
+              </div>
+            ))}
+          </div>
+          <div className="ctx-pop-f">
+            <button type="button" className="ctx-link" onClick={() => { setOpen(false); onPanel() }}>
+              Ver más consumo
+            </button>
+            <span className="grow" />
+            <button type="button" className={`tk-compact${adv.level === 'warn' || adv.level === 'critical' ? ' hot' : ''}`} disabled={!canCompact} onClick={() => { setOpen(false); onCompact() }}>
+              Compactar
+            </button>
+          </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  )
+}
+
+/** Tiempo que falta para un reinicio (epoch en segundos), en forma corta: «2 h 10 min», «35 min», «3 d 4 h». */
+function untilShort(at: number): string {
+  const left = at - Date.now() / 1000
+  if (left <= 0) return 'ya se reinició'
+  if (left < 3600) return `${Math.max(1, Math.ceil(left / 60))} min`
+  if (left < 86400) return `${Math.floor(left / 3600)} h ${Math.round((left % 3600) / 60)} min`
+  return `${Math.floor(left / 86400)} d ${Math.round((left % 86400) / 3600)} h`
+}
+
+/** Ventana de sesión de la cuenta (5 h): cuánto llevas gastado y en cuánto se reinicia, siempre a la vista. */
+export function SessionLimit({ limits }: { limits?: RateLimits }): ReactNode {
+  const [, tick] = useState(0)
+  // el texto de «en cuánto se reinicia» se refresca cada minuto (sin llamadas: solo repinta)
+  useEffect(() => {
+    const t = setInterval(() => tick((n) => n + 1), 60_000)
+    return () => clearInterval(t)
+  }, [])
+  const w = limits?.fiveHour
+  if (!w || w.resetsAt * 1000 < Date.now()) return null
+  const pct = Math.round(Math.max(0, Math.min(1, w.utilization)) * 100)
+  const level = pct >= 90 ? 'critical' : pct >= 70 ? 'warn' : 'ok'
+  const when = new Date(w.resetsAt * 1000).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+  const C = 2 * Math.PI * 8
+  return (
+    <span className={`tk-chip static ${level}`} title={`Ventana de sesión (5 h): ${pct} % usado. Se reinicia a las ${when}`} role="status" aria-label={`Ventana de sesión: ${pct} por ciento usado, se reinicia en ${untilShort(w.resetsAt)}`}>
+      <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden>
+        <circle cx="10" cy="10" r="8" className="tk-track" />
+        <circle cx="10" cy="10" r="8" className="tk-arc" strokeDasharray={`${(C * pct) / 100} ${C}`} transform="rotate(-90 10 10)" />
+      </svg>
+      <b>{pct}%</b>
+      <span>↻ {untilShort(w.resetsAt)}</span>
+    </span>
   )
 }
 

@@ -1,16 +1,86 @@
 /* ===== Equipo: sala, personajes y objetos ===== */
-.tm-wrap { align-items: stretch; }
+/* ocupa todo el alto disponible; la sala es la que crece */
+.tm-wrap { align-items: stretch; min-height: calc(100vh - 150px); grid-template-columns: 290px minmax(0, 1fr) 340px; }
 .tm-wrap > .card { height: 100%; }
+.tm-wrap .eyebrow { display: flex; align-items: center; gap: 6px; }
+.tm-mid { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.tm-mid > .eyebrow { margin-bottom: 10px; }
 /* sin efecto al pasar el cursor por los paneles (el tema los levanta/gira y brilla): la sala se arrastra y distrae */
 :root:root:root .tm-wrap > .card:hover { transform: none; box-shadow: none; border-color: var(--line); }
 :root:root:root .tm-wrap > .card { transition: none; }
 .tm-hint { margin-left: 8px; text-transform: none; letter-spacing: 0; color: var(--muted); font-weight: 400; }
-.tm-stage { display: grid; place-items: center; padding: 14px 0 6px; width: 100%; border-radius: 14px; background: radial-gradient(ellipse at 50% 85%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 70%); }
-.tm-agents { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
-.tm-agents .tm-agent { margin-top: 0; }
-.tr-room { position: relative; height: clamp(360px, 52vh, 520px); border-radius: 16px; overflow: hidden; border: 1px solid var(--line); background: #0d1024; user-select: none; touch-action: none; }
-.tr-wall { position: absolute; inset: 0 0 42% 0; background: linear-gradient(180deg, #1b2050, #2a2a66 70%, #2e2c6c); }
-.tr-wall::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 10px; background: #14173a; border-top: 2px solid #3a3d7a; }
+.tm-hint { font-size: 11px; opacity: .8; }
+/* escenario del personaje: foco de luz y una sombra en el suelo */
+.tm-stage { position: relative; display: grid; place-items: center; padding: 18px 0 10px; width: 100%; border-radius: 14px; border: 1px solid var(--line); background: radial-gradient(ellipse at 50% 92%, rgba(0, 0, 0, .35) 0 18%, transparent 19%), radial-gradient(ellipse at 50% 85%, color-mix(in srgb, var(--accent) 24%, transparent), transparent 70%), linear-gradient(180deg, color-mix(in srgb, var(--accent) 6%, transparent), transparent); }
+.tm-char .tm-name { border-radius: 8px; padding: 4px 8px; }
+.tm-char .tm-name:not(.sub) { font-size: 17px; margin-top: 2px; }
+.tm-char .tm-name.sub { margin-top: -6px; }
+.tm-field { width: 100%; display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); text-align: left; }
+.tm-lbl { font: 600 10.5px "IBM Plex Sans", sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.tm-field .tm-sw, .tm-field .tm-opts { justify-content: flex-start; }
+.tm-wrap .tm-sw > i, .tm-wrap .tm-sw > button, .tm-wrap .tm-sw-custom { width: 24px; height: 24px; padding: 0; flex: none; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .12); cursor: pointer; transition: transform .14s var(--ease-out); }
+.tm-wrap .tm-sw > i:hover, .tm-wrap .tm-sw > button:hover, .tm-wrap .tm-sw-custom:hover { transform: scale(1.1); }
+.tm-wrap .tm-sw > .on, .tm-wrap .tm-sw > button:focus-visible, .tm-wrap .tm-sw-custom:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* muestra «personalizado»: arcoíris hasta que se elige un color propio */
+.tm-wrap .tm-sw-custom { position: relative; overflow: hidden; background: conic-gradient(#ff7a9c, #ffd166, #5fe3b4, #5ad1ff, #8fa4ff, #c39bff, #ff7a9c); }
+.tm-sw-custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.tm-wrap .tm-sw { flex-wrap: wrap; gap: 7px; }
+/* pestañas del editor del personaje */
+.tm-subtabs { display: flex; gap: 2px; width: 100%; padding: 3px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line); }
+.tm-subtabs button { flex: 1; padding: 5px 4px; border: 0; border-radius: 7px; background: none; color: var(--muted); font-size: 12px; cursor: pointer; transition: background-color .15s ease, color .15s ease; }
+.tm-subtabs button:hover { color: var(--text); }
+.tm-subtabs button.on { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text); font-weight: 600; }
+.tm-subtabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* apariencia del robot en el editor del agente */
+.tm-look { margin: 8px 0 2px; padding: 4px 12px 10px; border-radius: 12px; border: 1px solid var(--line); background: color-mix(in srgb, var(--c, var(--accent)) 5%, transparent); }
+.tm-look > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; cursor: pointer; font-weight: 600; font-size: 13px; list-style: none; }
+.tm-look > summary::-webkit-details-marker { display: none; }
+.tm-look > summary::before { content: '▸'; color: var(--muted); transition: transform .15s var(--ease-out); }
+.tm-look[open] > summary::before { transform: rotate(90deg); }
+.tm-look > summary .btn { margin-left: auto; }
+.tm-edit-h .ic.bot-prev { width: 58px; height: 62px; overflow: hidden; }
+.bot-prop { transform-box: fill-box; transform-origin: center; animation: bot-prop .35s linear infinite; }
+.bot-work .bot-prop { animation-duration: .15s; }
+@keyframes bot-prop { 50% { transform: scaleX(.15); } }
+/* chips de opciones con forma de píldora y estado activo relleno */
+.tm-wrap .tm-opts button { border-radius: 99px; padding: 4px 11px; font-size: 12px; transition: border-color .15s ease, background-color .15s ease, color .15s ease; }
+.tm-wrap .tm-opts button:hover { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); color: var(--text); }
+.tm-wrap .tm-opts button.on { background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: var(--accent); color: var(--text); }
+.tm-wrap .tm-opts button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tm-rand { width: 100%; margin-top: 6px; }
+/* agentes: cabecera con contador y el botón a la derecha */
+.tm-agents-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 16px 0 10px; }
+.tm-agents-h .eyebrow { margin: 0; }
+.tm-count { min-width: 18px; padding: 0 6px; border-radius: 99px; background: var(--line); color: var(--text); font: 600 10.5px "IBM Plex Mono", monospace; text-align: center; letter-spacing: 0; }
+.tm-agents { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.tm-wrap .tm-agents .tm-agent { margin-top: 0; padding: 10px 12px; border-radius: 12px; background: linear-gradient(135deg, color-mix(in srgb, var(--c) 8%, var(--panel2)), var(--panel2) 60%); transition: border-color .15s ease, background-color .15s ease; }
+.tm-wrap .tm-agent:hover { border-color: color-mix(in srgb, var(--c) 55%, var(--line)); }
+.tm-wrap .tm-agent.on { border-color: var(--c); box-shadow: 0 0 0 1px var(--c), 0 8px 24px -14px var(--c); }
+.tm-wrap .tm-agent:focus-visible { outline: 2px solid var(--c); outline-offset: 2px; }
+.tm-wrap .tm-agent::before { display: none; }
+.tm-wrap .tm-agent .ic { border-radius: 12px; }
+.tm-wrap .tm-agent b { font: 600 13.5px "IBM Plex Sans", sans-serif; }
+.tm-wrap .tm-agent .sk span { border-radius: 99px; }
+.tm-wrap .tm-agent .st { padding: 2px 8px; border-radius: 99px; border: 1px solid color-mix(in srgb, var(--c) 45%, var(--line)); color: var(--text); text-transform: capitalize; }
+/* panel de edición: tarjeta de identidad del agente arriba */
+.tm-edit-h { display: flex; align-items: center; gap: 12px; margin: 10px 0 4px; padding: 12px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--c) 45%, var(--line)); background: linear-gradient(135deg, color-mix(in srgb, var(--c) 14%, transparent), transparent 70%); }
+.tm-edit-h .ic { width: 46px; height: 46px; flex: none; display: grid; place-items: center; font-size: 24px; border-radius: 12px; background: color-mix(in srgb, var(--c) 20%, var(--bg)); border: 1px solid color-mix(in srgb, var(--c) 55%, transparent); }
+.tm-edit-h b { display: block; font: 600 15px Sora, sans-serif; overflow-wrap: anywhere; }
+.tm-edit-h small { color: var(--muted); font-size: 12px; text-transform: capitalize; }
+.tm-wrap .tm-edit label { margin: 14px 0 6px; font: 600 10.5px "IBM Plex Sans", sans-serif; letter-spacing: .08em; text-transform: uppercase; }
+.tm-wrap .tm-edit textarea { border-radius: 10px; }
+.tm-wrap .tm-edit .tm-row { margin-top: 8px; }
+.tm-wrap .tm-edit .tm-row .btn:last-child:not(.primary) { margin-left: auto; }
+.tm-wrap .tm-reply { border-radius: 10px; border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); }
+.tm-wrap .tm-empty { display: grid; justify-items: center; gap: 8px; text-align: center; padding: 48px 12px; }
+.tm-empty > span { font-size: 40px; opacity: .8; }
+.tm-empty b { color: var(--text); font-size: 14px; }
+.tm-empty p { margin: 0 0 6px; font-size: 12.5px; max-width: 240px; }
+/* la sala crece con la ventana (antes quedaba media pantalla vacía debajo) */
+.tr-room { position: relative; flex: 1 1 auto; min-height: 380px; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); background: #0d1024; user-select: none; touch-action: none; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .03), 0 18px 40px -24px rgba(0, 0, 0, .7); }
+.tr-room::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 70; background: radial-gradient(120% 80% at 50% 20%, transparent 55%, rgba(4, 5, 14, .45)); }
+.tr-wall { position: absolute; inset: 0 0 42% 0; background: radial-gradient(60% 90% at 50% 30%, rgba(143, 164, 255, .14), transparent 70%), repeating-linear-gradient(90deg, transparent 0 46px, rgba(255, 255, 255, .025) 46px 48px), linear-gradient(180deg, #1b2050, #2a2a66 70%, #2e2c6c); }
+.tr-wall::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 12px; background: linear-gradient(180deg, #1d2048, #14173a); border-top: 2px solid #4a4d8e; }
 .tr-win { position: absolute; left: 50%; top: 12%; width: min(34%, 260px); aspect-ratio: 16 / 10; transform: translateX(-50%); border: 6px solid #3a3d7a; border-radius: 8px; background: linear-gradient(180deg, #0b1233, #2a2f6e 70%, #5a4a9a); overflow: hidden; box-shadow: 0 0 40px -6px rgba(143, 164, 255, .35); }
 .tr-win::before, .tr-win::after { content: ""; position: absolute; background: #3a3d7a; }
 .tr-win::before { left: 50%; top: 0; bottom: 0; width: 4px; margin-left: -2px; }
@@ -20,9 +90,10 @@
 .tr-star.s1 { left: 16%; top: 24%; }
 .tr-star.s2 { left: 36%; top: 62%; animation-delay: 1s; }
 .tr-star.s3 { left: 70%; top: 70%; animation-delay: 2s; }
-.tr-floor { position: absolute; inset: 58% 0 0 0; background: repeating-linear-gradient(90deg, #232648 0 64px, #1e2142 64px 128px); box-shadow: inset 0 24px 40px -20px rgba(0, 0, 0, .5); }
-.tr-floor::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 0, 0, .25), transparent 40%, rgba(255, 255, 255, .03)); }
-.tr-rug { position: absolute; left: 50%; top: 80%; width: 56%; height: 14%; transform: translateX(-50%); border-radius: 50%; background: radial-gradient(ellipse, color-mix(in srgb, var(--accent) 34%, transparent), transparent 72%); }
+/* tablones con juntas horizontales y luz de la ventana sobre el piso */
+.tr-floor { position: absolute; inset: 58% 0 0 0; background: radial-gradient(40% 70% at 50% 0, rgba(143, 164, 255, .12), transparent 70%), repeating-linear-gradient(180deg, transparent 0 34px, rgba(0, 0, 0, .22) 34px 36px), repeating-linear-gradient(90deg, #262a50 0 96px, #20234a 96px 192px); box-shadow: inset 0 24px 40px -20px rgba(0, 0, 0, .5); }
+.tr-floor::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 0, 0, .3), transparent 45%, rgba(255, 255, 255, .03)); }
+.tr-rug { position: absolute; left: 50%; top: 74%; width: 70%; height: 20%; transform: translateX(-50%); border-radius: 50%; background: radial-gradient(ellipse, color-mix(in srgb, var(--accent) 26%, transparent) 0 52%, color-mix(in srgb, var(--accent) 12%, transparent) 53% 62%, transparent 72%); }
 .tr-desk { position: absolute; top: 79%; width: 150px; transform: translate(-50%, -100%); display: grid; justify-items: center; z-index: 40; }
 .tr-desk .bot { position: relative; z-index: 1; margin-bottom: -22px; }
 .tr-top { position: relative; z-index: 2; width: 150px; height: 16px; border-radius: 6px; background: linear-gradient(180deg, #6b5a8e, #4a3f6e); box-shadow: 0 6px 12px -4px rgba(0, 0, 0, .6); }
@@ -31,8 +102,14 @@
 .tr-lap span:nth-child(2) { width: 70%; }
 .tr-lap span:nth-child(3) { width: 45%; }
 .tr-legs { display: flex; justify-content: space-between; width: 132px; }
+/* sombra de contacto: el escritorio se apoya en el piso en vez de flotar */
+.tr-legs { position: relative; }
+.tr-legs::after { content: ""; position: absolute; left: -10px; right: -10px; bottom: -6px; height: 12px; border-radius: 50%; background: radial-gradient(closest-side, rgba(0, 0, 0, .5), transparent); z-index: -1; }
 .tr-legs i { width: 8px; height: 26px; background: #3a3260; border-radius: 0 0 3px 3px; }
-.tr-tag { margin-top: 4px; font: 10px "IBM Plex Mono", monospace; color: #c9cfe6; background: rgba(8, 10, 24, .6); padding: 1px 7px; border-radius: 99px; white-space: nowrap; }
+/* placa con el color del agente: el nombre se lee de un vistazo */
+.tr-tag { margin-top: 6px; font: 600 11.5px "IBM Plex Sans", sans-serif; color: #eef1fb; background: color-mix(in srgb, var(--c, var(--accent)) 22%, rgba(8, 10, 24, .82)); border: 1px solid color-mix(in srgb, var(--c, var(--accent)) 55%, transparent); padding: 2px 10px; border-radius: 99px; white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 4px 10px -4px rgba(0, 0, 0, .6); }
+.tr-tag::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: var(--c, var(--accent)); vertical-align: 1px; }
+.tr-desk.work .tr-tag::before { box-shadow: 0 0 6px var(--c); }
 .tr-me { position: absolute; top: 96%; transform: translate(-50%, -100%); display: grid; justify-items: center; z-index: 60; }
 .tr-bubble { position: absolute; top: -26px; z-index: 5; padding: 4px 10px; border-radius: 10px; background: #fff; color: #1a1c28; font: 600 11px "IBM Plex Sans", sans-serif; display: flex; gap: 3px; animation: mv-pop .2s var(--ease-out); }
 .tr-bubble::after { content: ""; position: absolute; left: 50%; bottom: -4px; width: 8px; height: 8px; background: #fff; transform: translateX(-50%) rotate(45deg); }
@@ -47,8 +124,8 @@
 .tr-prop:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 8px; }
 .tr-pal button:focus-visible, .tr-tools button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .tr-prop.on { outline: 2px dashed var(--accent); outline-offset: 4px; border-radius: 8px; }
-.tr-pal { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.tr-pal button { display: grid; justify-items: center; gap: 3px; width: 62px; padding: 6px 4px; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--muted); cursor: pointer; transition: border-color .15s ease, background-color .15s ease, transform .14s var(--ease-out); }
+.tr-pal { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding: 8px; border: 1px solid var(--line); border-radius: 14px; background: color-mix(in srgb, var(--panel2) 60%, transparent); }
+.tr-pal button { display: grid; justify-items: center; gap: 3px; width: 64px; padding: 6px 4px; border: 1px solid transparent; border-radius: 10px; background: var(--panel2); color: var(--muted); cursor: pointer; transition: border-color .15s ease, background-color .15s ease, transform .14s var(--ease-out); }
 .tr-pal button:hover { border-color: var(--accent); background: var(--gl2); color: var(--text); }
 .tr-pal button:active { transform: scale(.95); }
 .tr-pal .pv { display: block; width: 36px; height: 36px; }
@@ -105,7 +182,97 @@
 .as-hand { transform-box: view-box; transform-origin: 32px 32px; animation: as-spin 60s linear infinite; }
 .as-hand.slow { animation-duration: 720s; }
 .as-glow { animation: as-glow 4s ease-in-out infinite; }
+/* muebles nuevos: leds del servidor, neón, burbujas del dispensador y globo */
+@keyframes as-led { 0%, 100% { opacity: 1; } 45% { opacity: .25; } }
+@keyframes as-flicker { 0%, 100%, 8%, 12%, 60% { opacity: 1; } 10%, 61% { opacity: .55; } }
+@keyframes as-bubble { 0% { transform: translateY(0); opacity: 0; } 30% { opacity: .9; } 100% { transform: translateY(-12px); opacity: 0; } }
+@keyframes as-turn { 0%, 100% { transform: translateX(-2px); } 50% { transform: translateX(3px); } }
+.as-led { animation: as-led 1.4s steps(2, jump-none) infinite; }
+.as-led.l1 { animation-duration: 0.9s; } .as-led.l2 { animation-duration: 2.1s; } .as-led.l3 { animation-duration: 1.2s; animation-delay: .4s; }
+.as-flicker { animation: as-flicker 5s linear infinite; }
+.as-bubble { transform-box: fill-box; animation: as-bubble 2.6s ease-in infinite; }
+.as-bubble.b2 { animation-delay: 1.3s; }
+.as-turn { animation: as-turn 6s ease-in-out infinite; }
+
+/* lámparas colgantes con cono de luz cálida */
+.tr-pend { position: absolute; top: 34px; width: 36px; height: 14px; transform: translateX(-50%); border-radius: 18px 18px 4px 4px; background: linear-gradient(180deg, #3d4468, #262b48); z-index: 3; pointer-events: none; box-shadow: inset 0 -3px 0 #ffe7b0; }
+.tr-pend.p1 { left: 18%; } .tr-pend.p2 { left: 82%; }
+.tr-pend::before { content: ""; position: absolute; left: 50%; bottom: 100%; width: 2px; height: 34px; margin-left: -1px; background: #4a4f78; }
+.tr-pend::after { content: ""; position: absolute; left: 50%; top: 100%; width: 240px; height: 300px; transform: translateX(-50%); background: linear-gradient(180deg, rgba(255, 220, 150, .2), rgba(255, 220, 150, 0) 85%); clip-path: polygon(46% 0, 54% 0, 100% 100%, 0 100%); mix-blend-mode: screen; }
+
+/* agente trabajando: foco, anillo en el suelo y símbolos que salen del portátil */
+@keyframes tr-beam { 0%, 100% { opacity: .55; } 50% { opacity: .9; } }
+@keyframes tr-ping { 0% { transform: translateX(-50%) scale(.55); opacity: .9; } 100% { transform: translateX(-50%) scale(1.25); opacity: 0; } }
+@keyframes tr-fx { 0% { transform: translate(0, 0) scale(.8); opacity: 0; } 15% { opacity: 1; } 100% { transform: translate(var(--dx), -70px) scale(1.05); opacity: 0; } }
+.tr-beam { position: absolute; left: 50%; bottom: 34px; width: 190px; height: 340px; transform: translateX(-50%); background: linear-gradient(0deg, color-mix(in srgb, var(--c) 34%, transparent), transparent 90%); clip-path: polygon(42% 0, 58% 0, 100% 100%, 0 100%); z-index: 0; pointer-events: none; mix-blend-mode: screen; animation: tr-beam 2s ease-in-out infinite; }
+.tr-ping { position: absolute; left: 50%; bottom: 18px; width: 170px; height: 30px; border: 2px solid var(--c); border-radius: 50%; z-index: 0; pointer-events: none; animation: tr-ping 1.6s cubic-bezier(.2, .7, .3, 1) infinite; }
+.tr-fx { position: absolute; left: 50%; top: 66px; width: 0; height: 0; z-index: 4; pointer-events: none; }
+.tr-fx i { position: absolute; left: -10px; font: 700 12px "IBM Plex Mono", monospace; font-style: normal; color: var(--c); text-shadow: 0 0 8px var(--c); opacity: 0; animation: tr-fx 1.8s ease-out infinite; }
+.tr-fx i:nth-child(1) { --dx: -38px; }
+.tr-fx i:nth-child(2) { --dx: 30px; animation-delay: .45s; }
+.tr-fx i:nth-child(3) { --dx: -14px; animation-delay: .9s; }
+.tr-fx i:nth-child(4) { --dx: 44px; animation-delay: 1.35s; }
+.tr-desk.work .tr-top { box-shadow: 0 6px 12px -4px rgba(0, 0, 0, .6), 0 0 22px -4px var(--c); }
+.tr-bubble.think { white-space: nowrap; font-size: 11.5px; animation: mv-pop .2s var(--ease-out), tr-think 1.2s ease-in-out .2s infinite; }
+@keyframes tr-think { 50% { transform: translateY(-3px); } }
+
+/* ===== Panel derecho: pestañas Chat / Editar ===== */
+.tm-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel2); margin-bottom: 12px; }
+.tm-tabs button { position: relative; border: 0; border-radius: 9px; padding: 7px 8px; background: transparent; color: var(--muted); font: 600 12.5px "IBM Plex Sans", sans-serif; cursor: pointer; transition: background-color .15s ease, color .15s ease; }
+.tm-tabs button:hover { color: var(--text); }
+.tm-tabs button.on { background: color-mix(in srgb, var(--accent) 18%, var(--panel)); color: var(--text); box-shadow: 0 1px 0 rgba(255, 255, 255, .05) inset, 0 4px 12px -6px rgba(0, 0, 0, .6); }
+.tm-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@keyframes tm-live { 50% { transform: scale(1.5); opacity: .4; } }
+.tm-live { display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: var(--accent); vertical-align: 1px; animation: tm-live 1s ease-in-out infinite; }
+.tm-edit.is-chat { display: flex; flex-direction: column; }
+
+/* chat del equipo */
+.tc { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.tc-log { flex: 1 1 0; min-height: 260px; max-height: calc(100vh - 360px); overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 2px 8px; scroll-behavior: smooth; }
+.tc-empty { margin: auto; display: grid; justify-items: center; gap: 6px; text-align: center; color: var(--muted); padding: 20px 8px; }
+.tc-empty > span { font-size: 38px; }
+.tc-empty b { color: var(--text); font-size: 14px; }
+.tc-empty p { margin: 0; font-size: 12.5px; line-height: 1.5; max-width: 260px; }
+.tc-empty code { color: var(--accent); }
+@keyframes tc-in { from { transform: translateY(6px); opacity: 0; } }
+.tc-msg, .tc-route, .tc-status { animation: tc-in .22s var(--ease-out); }
+.tc-msg p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12.5px; line-height: 1.55; }
+.tc-msg.me { align-self: flex-end; max-width: 85%; padding: 8px 12px; border-radius: 14px 14px 4px 14px; background: color-mix(in srgb, var(--accent) 22%, var(--panel2)); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+.tc-msg.bot { display: grid; grid-template-columns: 30px 1fr; gap: 8px; align-items: start; max-width: 100%; }
+.tc-msg.bot > div { padding: 8px 12px; border-radius: 4px 14px 14px 14px; background: var(--panel2); border: 1px solid var(--line); border-left: 3px solid var(--c); min-width: 0; }
+.tc-msg.bot b { display: block; margin-bottom: 3px; font-size: 11.5px; color: var(--c); }
+.tc-av { width: 30px; height: 30px; display: grid; place-items: center; font-size: 16px; border-radius: 10px; background: color-mix(in srgb, var(--c) 20%, var(--bg)); border: 1px solid color-mix(in srgb, var(--c) 55%, transparent); }
+.tc-route { align-self: center; display: grid; justify-items: center; gap: 1px; padding: 4px 12px; border-radius: 99px; border: 1px dashed color-mix(in srgb, var(--c) 60%, var(--line)); background: color-mix(in srgb, var(--c) 8%, transparent); font-size: 11.5px; color: var(--text); text-align: center; }
+.tc-route small { color: var(--muted); font-size: 10.5px; }
+.tc-status { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+.tc-status.work { position: relative; overflow: hidden; border-color: color-mix(in srgb, var(--c) 55%, var(--line)); color: var(--text); background: color-mix(in srgb, var(--c) 8%, transparent); }
+.tc-status.work::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--c) 18%, transparent) 50%, transparent 70%); transform: translateX(-100%); animation: tc-shine 1.8s ease-in-out infinite; pointer-events: none; }
+@keyframes tc-shine { to { transform: translateX(100%); } }
+.tc-status.work code { margin-left: auto; font-size: 11px; color: var(--muted); }
+.tc-av.spin { animation: tc-bob .7s ease-in-out infinite; }
+@keyframes tc-bob { 50% { transform: translateY(-3px) rotate(-6deg); } }
+.tc-dots { display: inline-flex; gap: 3px; }
+.tc-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); animation: tr-dot 1s ease-in-out infinite; }
+.tc-dots i:nth-child(2) { animation-delay: .15s; } .tc-dots i:nth-child(3) { animation-delay: .3s; }
+.tc-mentions { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+.tc-mentions button { flex: none; border: 1px solid color-mix(in srgb, var(--c) 45%, var(--line)); border-radius: 99px; padding: 3px 10px; background: color-mix(in srgb, var(--c) 8%, transparent); color: var(--text); font-size: 11.5px; cursor: pointer; transition: background-color .15s ease; }
+.tc-mentions button:hover { background: color-mix(in srgb, var(--c) 20%, transparent); }
+.tc-mentions button:focus-visible { outline: 2px solid var(--c); outline-offset: 1px; }
+.tc-comp { border: 1px solid var(--line); border-radius: 14px; background: var(--panel2); padding: 8px; transition: border-color .15s ease; }
+.tc-comp:focus-within { border-color: var(--accent); }
+.tm-wrap .tc-comp textarea { width: 100%; min-height: 58px; border: 0; background: transparent; resize: none; font: 13px/1.5 "IBM Plex Sans", sans-serif; outline: none; padding: 2px 4px; }
+.tc-comp-f { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.tc-comp-f span { margin-right: auto; font-size: 11px; color: var(--muted); }
+
+/* tarjeta del agente que trabaja */
+@keyframes tm-busy { 50% { box-shadow: 0 0 0 1px var(--c), 0 0 22px -4px var(--c); } }
+.tm-wrap .tm-agent.busy { border-color: var(--c); animation: tm-busy 1.2s ease-in-out infinite; }
+.tm-wrap .tm-agent.busy .st { background: color-mix(in srgb, var(--c) 22%, transparent); }
+
 @media (prefers-reduced-motion: reduce) {
-  .av-body, .av-eyes, .av-arm, .bot-body, .bot-ant, .bot-eyes, .as-sway, .as-tail, .as-eyes, .as-steam path, .as-hand, .as-glow, .tr-star, .tr-bubble i, .tr-lap span { animation: none !important; }
+  .av-body, .av-eyes, .av-arm, .bot-body, .bot-ant, .bot-eyes, .as-sway, .as-tail, .as-eyes, .as-steam path, .as-hand, .as-glow, .tr-star, .tr-bubble i, .tr-lap span,
+  .as-led, .as-flicker, .as-bubble, .as-turn, .tr-beam, .tr-ping, .tr-fx i, .tr-bubble.think, .tm-live, .tc-msg, .tc-route, .tc-status, .tc-status.work::after, .tc-av.spin, .tc-dots i, .tm-agent.busy, .bot-prop { animation: none !important; }
+  .tr-fx { display: none; }
 }
-@media (max-width: 1100px) { .tm-wrap > .card { height: auto; } }
+@media (max-width: 1100px) { .tm-wrap { grid-template-columns: 1fr; min-height: 0; } .tm-wrap > .card { height: auto; } }
+@media (min-width: 1101px) and (max-width: 1400px) { .tm-wrap { grid-template-columns: 250px minmax(0, 1fr) 300px; } }

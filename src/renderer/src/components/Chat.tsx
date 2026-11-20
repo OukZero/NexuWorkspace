@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ClipboardEvent, DragEvent, KeyboardEvent, ReactNode } from 'react'
 import type { Attachment, ChatMode, ContextKind, Provider, PromptTemplate } from '../../../shared/types'
-import { contextAdvice, fmtTokens } from '../../../shared/advice'
 import { DEFAULT_CONTEXT, templatesOf } from '../../../shared/templates'
 import { workFolder } from '../../../shared/util'
 import { convLabel, openConvs } from '../conversations'
@@ -10,7 +9,7 @@ import { findTask, useDB } from '../store'
 import { readTerminal } from '../terminals'
 import { baseName, hhmm } from '../utils'
 import { useUi } from '../ui'
-import { ContextBar, TemplateMenu } from './ChatExtras'
+import { ContextBar, SessionLimit, TemplateMenu, TokenMeter } from './ChatExtras'
 import { ChecksButton, LimitBanner, ProfileSelect, WorktreeBar } from './ChatSafety'
 import { IconStop } from './icons'
 import { G } from './glyphs'
@@ -22,7 +21,6 @@ import { useTaskSlot } from '../taskSlot'
 import { Markdown } from './Markdown'
 import { Menu, type MenuItem } from './Menu'
 import { Select, type SelectOption } from './Select'
-import { ContextMeter } from './SessionPanel'
 import { SidePanel } from './SidePanel'
 
 // atajos fijos que no son plantillas: comandos / de Claude Code
@@ -338,9 +336,14 @@ export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string
         ]
         : [
           { value: '', label: 'Modelo: predeterminado' },
-          { value: 'sonnet', label: 'sonnet' },
-          { value: 'opus', label: 'opus' },
-          { value: 'haiku', label: 'haiku' }
+          // los alias (sonnet, opus, haiku) apuntan a la última versión que resuelva el CLI; los id fijan una versión concreta
+          { value: 'sonnet', label: 'sonnet (alias: la última)' },
+          { value: 'opus', label: 'opus (alias: la última)' },
+          { value: 'haiku', label: 'haiku (alias: la última)' },
+          { value: 'claude-fable-5-2', label: 'Fable 5.2 · claude-fable-5-2' },
+          { value: 'claude-opus-5-5', label: 'Opus 5.5 · claude-opus-5-5' },
+          { value: 'claude-sonnet-5-5', label: 'Sonnet 5.5 · claude-sonnet-5-5' },
+          { value: 'claude-haiku-5-5', label: 'Haiku 5.5 · claude-haiku-5-5' }
         ]
   if (chat?.model && !modelOptions.some((o) => o.value === chat.model)) modelOptions.push({ value: chat.model, label: chat.model })
 
@@ -390,28 +393,24 @@ export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string
     ui.toast('Abriendo Claude Desktop (sesión nueva)')
   }
 
-  const ctxPill = chat?.usage?.contextTokens ? (
-    <button className="pill ctx-pill" title="Sesión y contexto: consumo, compactar y resumir" onClick={() => setLayout({ sideOpen: !(lay.sideOpen && lay.sideTab === 'session'), sideTab: 'session' })}>
-      <ContextMeter usage={chat.usage} settings={db.settings} />
-    </button>
-  ) : null
+  // arriba a la derecha, junto a los tres puntos: ventana de sesión (5 h) y tokens de la conversación
+  const ctxPill = (
+    <>
+      <SessionLimit limits={db.limits} />
+      <TokenMeter
+        usage={chat?.usage}
+        settings={db.settings}
+        canCompact={!running && messages.some((m) => m.role === 'assistant')}
+        onCompact={() => void ui.run('chat:send', convId, '/compact')}
+        onPanel={() => setLayout({ sideOpen: true, sideTab: 'session' })}
+      />
+    </>
+  )
   const summarizeBtn = (
     <button className="ib" disabled={summarizing} onClick={summarize} title={summarizing ? 'Resumiendo…' : 'Resumir: agrega lo hecho a «Lo realizado» de la tarea'} aria-label="Resumir la conversación">
       <G n="sparkle" />
     </button>
   )
-  const adv = contextAdvice(chat?.usage, db.settings)
-  const tokenPill = chat?.usage?.contextTokens ? (
-    <button className={`ctx-tokens ${adv.level}`} title={`${adv.title}: ${adv.text}`} onClick={() => setLayout({ sideOpen: !(lay.sideOpen && lay.sideTab === 'session'), sideTab: 'session' })}>
-      <span>
-        {fmtTokens(chat.usage.contextTokens)}
-        {chat.usage.contextWindow ? ` / ${fmtTokens(chat.usage.contextWindow)}` : ''} tokens
-      </span>
-      <i>
-        <b style={{ width: `${Math.min(100, adv.pct)}%` }} />
-      </i>
-    </button>
-  ) : null
   const checksBtn = chat?.kind !== 'review' ? <ChecksButton taskId={taskId} convId={convId} /> : null
   const baseItems: MenuItem[] = [
             { label: 'Editar tarea', icon: '✎', onSelect: () => task && ui.editTask(task) },
@@ -467,7 +466,7 @@ export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string
             {task?.project && task.project !== (folder ? baseName(folder) : '') && <span className="chip ai">{task.project}</span>}
           </div>
           <span className="ch-sp" />
-          {tokenPill}
+          {ctxPill}
           {!taskSlot && checksBtn}
           {moreMenu}
         </div>
@@ -500,43 +499,52 @@ export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string
               </div>
             )}
             {messages.map((m, i) => (
-              <div key={i} className={`msg ${m.role}`} data-ai={m.role === 'assistant' ? provider : undefined}>
+              <div key={i} className={`mrow ${m.role}`}>
                 {m.role === 'assistant' && (
-                  <div className="mhead">
-                    <span className="mav" aria-hidden>
-                      <G n="sparkle" size={15} />
-                    </span>
-                    <b className="mwho">{ai}</b>
-                    {m.ts > 0 && <span className="time">{hhmm(m.ts)}</span>}
-                  </div>
+                  <span className="ch-av ai" aria-hidden>
+                    <G n="sparkle" size={14} />
+                  </span>
                 )}
+                <div className={`msg ${m.role}`} data-ai={m.role === 'assistant' ? provider : undefined}>
+                  {m.role === 'assistant' && (
+                    <div className="mhead">
+                      <b className="mwho">{ai}</b>
+                      {m.ts > 0 && <span className="time">{hhmm(m.ts)}</span>}
+                    </div>
+                  )}
+                  {m.role === 'user' && (
+                    <div className="mhead">
+                      <b className="mwho">Tú</b>
+                      {m.ts > 0 && <span className="time">{hhmm(m.ts)}</span>}
+                    </div>
+                  )}
+                  {m.attachments?.length ? <AttachmentList items={m.attachments} /> : null}
+                  {m.role === 'user' ? <UserText text={m.text} /> : <Markdown text={m.text} />}
+                  {m.context?.length ? (
+                    <div className="msg-ctx" title="Datos que se anexaron automáticamente a este mensaje">
+                      📎 {m.context.join(' · ')}
+                    </div>
+                  ) : null}
+                  {m.action === 'login' && (
+                    <div className="foot" style={{ marginTop: 8 }}>
+                      <button className="btn sm primary" onClick={login}>
+                        Abrir terminal: claude auth login
+                      </button>
+                      <button className="btn sm" onClick={retry}>
+                        Reintentar mensaje
+                      </button>
+                    </div>
+                  )}
+                  {m.role === 'user' && chat?.checkpoints?.some((c) => c.msgTs === m.ts) && !running && (
+                    <button className="rewind" title="Devuelve los archivos a como estaban justo antes de este mensaje" onClick={() => void rewind(m.ts)}>
+                      ↩ Volver a antes de esto
+                    </button>
+                  )}
+                </div>
                 {m.role === 'user' && (
-                  <div className="mhead">
-                    <b className="mwho">Tú</b>
-                    {m.ts > 0 && <span className="time">{hhmm(m.ts)}</span>}
-                  </div>
-                )}
-                {m.attachments?.length ? <AttachmentList items={m.attachments} /> : null}
-                {m.role === 'user' ? <UserText text={m.text} /> : <Markdown text={m.text} />}
-                {m.context?.length ? (
-                  <div className="msg-ctx" title="Datos que se anexaron automáticamente a este mensaje">
-                    📎 {m.context.join(' · ')}
-                  </div>
-                ) : null}
-                {m.action === 'login' && (
-                  <div className="foot" style={{ marginTop: 8 }}>
-                    <button className="btn sm primary" onClick={login}>
-                      Abrir terminal: claude auth login
-                    </button>
-                    <button className="btn sm" onClick={retry}>
-                      Reintentar mensaje
-                    </button>
-                  </div>
-                )}
-                {m.role === 'user' && chat?.checkpoints?.some((c) => c.msgTs === m.ts) && !running && (
-                  <button className="rewind" title="Devuelve los archivos a como estaban justo antes de este mensaje" onClick={() => void rewind(m.ts)}>
-                    ↩ Volver a antes de esto
-                  </button>
+                  <span className="ch-av me" aria-hidden>
+                    TU
+                  </span>
                 )}
               </div>
             ))}
@@ -563,24 +571,26 @@ export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string
               </div>
             ))}
             {running && (
-              <div className="msg assistant live" data-ai={provider}>
-                <div className="mhead">
-                  <span className="mav" aria-hidden>
-                    <G n="sparkle" size={15} />
-                  </span>
-                  <b className="mwho">{ai}</b>
-                  {live && <span className="time">escribiendo…</span>}
+              <div className="mrow assistant">
+                <span className="ch-av ai" aria-hidden>
+                  <G n="sparkle" size={14} />
+                </span>
+                <div className="msg assistant live" data-ai={provider}>
+                  <div className="mhead">
+                    <b className="mwho">{ai}</b>
+                    {live && <span className="time">escribiendo…</span>}
+                  </div>
+                  {live ? (
+                    <Markdown text={live} />
+                  ) : (
+                    <span className="typing">
+                      <i />
+                      <i />
+                      <i />
+                      &nbsp;Trabajando…
+                    </span>
+                  )}
                 </div>
-                {live ? (
-                  <Markdown text={live} />
-                ) : (
-                  <span className="typing">
-                    <i />
-                    <i />
-                    <i />
-                    &nbsp;Trabajando…
-                  </span>
-                )}
               </div>
             )}
           </div>
