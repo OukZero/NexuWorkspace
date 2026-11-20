@@ -5,9 +5,17 @@ import { Login } from './components/Login'
 import { SkillsWindow } from './components/SkillsWindow'
 import { initStore, peek } from './store'
 import { hydrate, initTheme } from './theme'
+import '@fontsource/sora/600.css'
+import '@fontsource/sora/700.css'
+import '@fontsource/ibm-plex-sans/400.css'
+import '@fontsource/ibm-plex-sans/500.css'
+import '@fontsource/ibm-plex-sans/600.css'
+import '@fontsource/ibm-plex-mono/400.css'
+import '@fontsource/ibm-plex-mono/500.css'
 import './styles/style.css'
 import './styles/extra.css'
 import './styles/cockpit.css'
+import './styles/nuevo-diseno.css'
 
 initTheme()
 const root = createRoot(document.getElementById('root') as HTMLElement)

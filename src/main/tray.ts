@@ -4,7 +4,7 @@ import path from 'path'
 import { withDot } from './badge'
 import { commit, getDb } from './db'
 import { quitApp } from './quit'
-import { stopActive } from './timer'
+import { stopActive } from './features/time/timer'
 import { showWin } from './windows'
 
 let tray: Tray | null = null

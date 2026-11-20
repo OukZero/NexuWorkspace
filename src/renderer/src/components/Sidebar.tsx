@@ -239,12 +239,20 @@ function useBadges(): Record<string, number> {
 }
 
 
-/** Barra superior: logo, lo fijado por el usuario, «+» con el resto, búsqueda, timer y utilidades. */
-export function TopNav({ onSearch, fullscreen, onFullscreen }: { onSearch: () => void; fullscreen: boolean; onFullscreen: () => void }): ReactNode {
+/** Estado compartido por el riel lateral y las utilidades de la barra superior. */
+function useNavModel(): {
+  ui: ReturnType<typeof useUi>
+  chatTip: (label: string) => string
+  closeApp: () => Promise<void>
+  badgeOf: (v: string) => { n: number; need: boolean; dot: boolean }
+  isOn: (v: string) => boolean
+  pinned: { id: View; label: string; group: string }[]
+  rest: { id: View; label: string; group: string }[]
+  restBadge: number
+} {
   const ui = useUi()
   const db = useDB()
   const badges = useBadges()
-  const [more, setMore] = useState(false)
   const app = useAppearance() // repinta al fijar, reordenar u ocultar secciones
   const ca = ui.chatAlerts
   const chatN = ca.waiting + ca.unread
@@ -278,10 +286,16 @@ export function TopNav({ onSearch, fullscreen, onFullscreen }: { onSearch: () =>
   const isOn = (v: string): boolean => ui.view === v || (v === 'chat' && ui.view === 'history')
   const restBadge = rest.reduce((n, x) => n + badgeOf(x.id).n, 0)
 
+  return { ui, chatTip, closeApp, badgeOf, isOn, pinned, rest, restBadge }
+}
+
+/** Riel lateral: logo, secciones fijadas, «+» con el resto y perfil. */
+export function Rail({ onSearch }: { onSearch: () => void }): ReactNode {
+  const { ui, chatTip, badgeOf, isOn, pinned, rest, restBadge } = useNavModel()
+  const [more, setMore] = useState(false)
   return (
-    <nav className="topnav" id="nav" aria-label="Principal">
-      <div className="tn-start">
-      <button className="tn-logo"title="Nexu Workspace · Ctrl+K" aria-label="Búsqueda global" onClick={onSearch}>
+    <nav className="navrail" id="nav" aria-label="Principal">
+      <button className="tn-logo" title="Nexu Workspace · Ctrl+K" aria-label="Búsqueda global" onClick={onSearch}>
         N
       </button>
       <div className="tn-items">
@@ -304,7 +318,7 @@ export function TopNav({ onSearch, fullscreen, onFullscreen }: { onSearch: () =>
               </button>
             </Popover.Trigger>
             <Popover.Portal>
-              <Popover.Content className="pmenu tn-more" side="bottom" align="start" sideOffset={8} collisionPadding={12}>
+              <Popover.Content className="pmenu tn-more" side="right" align="end" sideOffset={10} collisionPadding={12}>
                 {NAV_GROUPS.map((g) => {
                   const items = rest.filter((x) => x.group === g.title)
                   if (!items.length) return null
@@ -337,16 +351,24 @@ export function TopNav({ onSearch, fullscreen, onFullscreen }: { onSearch: () =>
           </Popover.Root>
         )}
       </div>
-      </div>
-      {/* reproductor y timer en el centro de la barra; la lupa va con las utilidades */}
-      <div className="tn-mid">
-        <MiniPlayer />
-        <TimerBar />
-      </div>
-      <div className="tn-end">
-      <button className="ib" title="Buscar o ejecutar (Ctrl K)" aria-label="Búsqueda global" onClick={onSearch}>
-        <G n="search" size={16} />
+      <span className="nr-sp" />
+      <Profile />
+    </nav>
+  )
+}
+
+/** Utilidades de la barra superior: búsqueda, reproductor, timer, avisos, pantalla completa y salir. */
+export function TopTools({ onSearch, fullscreen, onFullscreen }: { onSearch: () => void; fullscreen: boolean; onFullscreen: () => void }): ReactNode {
+  const { closeApp } = useNavModel()
+  return (
+    <div className="tb-tools">
+      <button className="tb-search" title="Buscar o ejecutar (Ctrl K)" aria-label="Búsqueda global" onClick={onSearch}>
+        <G n="search" size={15} />
+        <span>Buscar o ejecutar…</span>
+        <kbd>Ctrl K</kbd>
       </button>
+      <MiniPlayer />
+      <TimerBar />
       <NotificationBell variant="top" />
       <UpdateChip />
       <button className="ib" title={fullscreen ? 'Salir de pantalla completa (F11)' : 'Pantalla completa (F11)'} aria-label={fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'} aria-pressed={fullscreen} onClick={onFullscreen}>
@@ -355,8 +377,6 @@ export function TopNav({ onSearch, fullscreen, onFullscreen }: { onSearch: () =>
       <button className="ib tn-quit" title="Cerrar Nexu por completo" aria-label="Cerrar la aplicación" onClick={() => void closeApp()}>
         <G n="x" size={16} />
       </button>
-      <Profile />
-      </div>
-    </nav>
+    </div>
   )
 }

@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nexu Workspace · Mockup nuevo diseño</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --base:#0a0b10;
+    --surface:#11131b;
+    --raised:#181b26;
+    --edge:#262b3a;
+    --ink:#e8ebf4;
+    --ink-2:#9aa1b4;
+    --ink-3:#5d6478;
+    --accent:#8fa4ff;
+    --accent-glow:rgba(143,164,255,.35);
+    --live:#5fe3b4;
+    --warm:#ffb868;
+    --r:6px;
+    --r-lg:8px;
+    --cut:14px;
+    --rail:64px;
+    --ui:"IBM Plex Sans",system-ui,sans-serif;
+    --display:"Sora",system-ui,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font:400 13px/1.45 var(--ui);
+    color:var(--ink);
+    background:
+      radial-gradient(1200px 700px at 78% -10%, rgba(143,164,255,.12), transparent 60%),
+      radial-gradient(900px 600px at -10% 110%, rgba(95,227,180,.06), transparent 60%),
+      var(--base);
+    overflow:hidden;
+  }
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* ---------- shell ---------- */
+  .app{display:grid;grid-template-columns:var(--rail) 1fr;height:100vh}
+
+  .rail{
+    display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 0;
+    background:linear-gradient(180deg,var(--surface),var(--base));
+    border-right:1px solid var(--edge);
+  }
+  .logo{
+    width:36px;height:36px;display:grid;place-items:center;border-radius:var(--r);
+    font:700 15px var(--display);color:var(--base);
+    background:linear-gradient(135deg,#b7c4ff,var(--accent));
+    box-shadow:0 0 22px var(--accent-glow);
+    margin-bottom:12px;
+  }
+  .rail button{
+    position:relative;width:40px;height:40px;display:grid;place-items:center;
+    border-radius:var(--r);color:var(--ink-3);transition:color .15s, background .15s;
+  }
+  .rail button:hover{color:var(--ink);background:var(--raised)}
+  .rail button[aria-current="page"]{color:var(--ink);background:var(--raised)}
+  .rail button[aria-current="page"]::before{
+    content:"";position:absolute;left:-14px;top:9px;bottom:9px;width:3px;border-radius:0 3px 3px 0;
+    background:var(--accent);box-shadow:0 0 12px var(--accent-glow);
+  }
+  .rail .sep{width:28px;height:1px;background:var(--edge);margin:6px 0}
+  .rail .spacer{flex:1}
+  .badge{
+    position:absolute;top:4px;right:3px;min-width:15px;height:15px;padding:0 4px;
+    border-radius:4px;font:600 9px/15px var(--mono);text-align:center;color:var(--base);background:var(--warm);
+  }
+  .me{
+    width:32px;height:32px;border-radius:var(--r);display:grid;place-items:center;
+    font:600 12px var(--display);background:var(--raised);border:1px solid var(--edge);
+  }
+
+  .main{display:grid;grid-template-rows:auto auto 1fr auto;min-width:0;height:100vh}
+
+  /* ---------- top bar: timer as the spine of the app ---------- */
+  .topbar{
+    display:flex;align-items:center;gap:18px;padding:12px 22px;
+    border-bottom:1px solid var(--edge);
+    background:rgba(17,19,27,.7);backdrop-filter:blur(10px);
+  }
+  .crumb h1{font:600 18px var(--display);letter-spacing:-.01em}
+  .crumb p{color:var(--ink-2);font-size:12px;margin-top:2px}
+  .search{
+    margin-left:auto;display:flex;align-items:center;gap:8px;width:260px;height:34px;padding:0 12px;
+    border:1px solid var(--edge);border-radius:var(--r);background:var(--base);color:var(--ink-3);
+  }
+  .search kbd{margin-left:auto;font:500 10px var(--mono);color:var(--ink-3);border:1px solid var(--edge);border-radius:4px;padding:1px 5px}
+
+  .live{
+    position:relative;display:flex;align-items:center;gap:12px;height:44px;padding:0 6px 0 14px;
+    border-radius:var(--r);border:1px solid rgba(95,227,180,.35);
+    background:linear-gradient(90deg,rgba(95,227,180,.12),rgba(95,227,180,.02));
+    box-shadow:0 0 0 1px rgba(0,0,0,.4), 0 0 28px rgba(95,227,180,.12);
+  }
+  .live .dot{width:7px;height:7px;border-radius:50%;background:var(--live);box-shadow:0 0 0 4px rgba(95,227,180,.18),0 0 10px var(--live)}
+  .live .name{font-weight:500;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .live .clock{font:500 16px var(--mono);font-variant-numeric:tabular-nums;letter-spacing:.02em;color:var(--live)}
+  .ctrl{width:30px;height:30px;display:grid;place-items:center;border-radius:5px;color:var(--ink-2)}
+  .ctrl:hover{background:var(--raised);color:var(--ink)}
+  .ctrl.stop{color:#ff8a8a}
+
+  .media{display:flex;align-items:center;gap:8px;height:44px;padding:0 10px;border:1px solid var(--edge);border-radius:var(--r);background:var(--surface);color:var(--ink-2)}
+  .media .eq{display:flex;gap:2px;align-items:flex-end;height:14px}
+  .media .eq i{display:block;width:2px;background:var(--live);border-radius:1px}
+  .media .eq i:nth-child(1){height:6px}.media .eq i:nth-child(2){height:12px}.media .eq i:nth-child(3){height:9px}
+
+  .btn{
+    height:34px;padding:0 14px;border-radius:var(--r);border:1px solid var(--edge);
+    background:var(--raised);font-weight:500;display:inline-flex;align-items:center;gap:8px;color:var(--ink);
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .btn:hover{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-s)}
+  .btn.primary{
+    background:linear-gradient(180deg,#a7b6ff,#7d91f5);color:#0b0d16;border-color:transparent;
+    box-shadow:0 6px 24px -6px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,.4);
+  }
+  .btn.primary:hover{box-shadow:0 8px 28px -6px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,.4)}
+  .btn.ghost{background:transparent}
+  .btn .k{font:500 10px var(--mono);color:var(--ink-3)}
+
+  /* ---------- content grid ---------- */
+  .stage{
+    display:grid;gap:14px;padding:16px 22px;min-height:0;
+    grid-template-columns:minmax(260px,300px) minmax(0,1fr) minmax(260px,300px);
+    grid-template-rows:auto minmax(0,1fr) auto;
+  }
+  .stage > .col{grid-row:1 / -1;min-height:0}
+  .stage > .col.right{grid-column:3}
+  .stage > .col:first-child{grid-column:1}
+  .col{display:flex;flex-direction:column;gap:14px;min-height:0}
+
+  .panel{
+    position:relative;min-height:0;display:flex;flex-direction:column;
+    background:linear-gradient(180deg,rgba(24,27,38,.9),rgba(17,19,27,.95));
+    border:1px solid var(--edge);border-radius:var(--r-lg);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.04), 0 18px 40px -24px #000;
+    overflow:hidden;
+  }
+  .panel-h{display:flex;align-items:center;gap:10px;padding:14px 16px 0}
+  .panel-h h2{font:600 13px var(--display);letter-spacing:-.005em}
+  .panel-h .meta{margin-left:auto;font:500 11px var(--mono);color:var(--ink-3)}
+  .panel-b{padding:14px 16px 16px;min-height:0;overflow:auto}
+
+  /* Focus card: the one memorable element. Chamfered corner + halo */
+  .focus{
+    clip-path:polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, 0 100%);
+    border-radius:var(--r-lg);
+    background:
+      radial-gradient(360px 260px at 50% 0%, rgba(143,164,255,.22), transparent 70%),
+      linear-gradient(180deg,#181c2b,#0f1119);
+    border-color:rgba(143,164,255,.28);
+  }
+  .focus::after{ /* light-edge along the top */
+    content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+    background:linear-gradient(180deg,rgba(255,255,255,.14),transparent 30%);
+    -webkit-mask:linear-gradient(#000,#000) content-box, linear-gradient(#000,#000);
+  }
+  .focus .panel-b{display:flex;flex-direction:column;align-items:center;gap:18px;padding-top:6px}
+  .ring{position:relative;width:208px;height:208px}
+  .ring svg{width:100%;height:100%;transform:rotate(-90deg);filter:drop-shadow(0 0 10px var(--accent-glow))}
+  .ring .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .ring .time{font:500 40px var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .ring .state{font-size:11px;color:var(--live);letter-spacing:.04em;margin-top:2px}
+  .task-title{font:600 16px var(--display);text-align:center}
+  .tags{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+  .tag{font:500 11px var(--mono);padding:3px 7px;border-radius:4px;background:rgba(255,255,255,.04);border:1px solid var(--edge);color:var(--ink-2)}
+  .tag.warm{color:var(--warm);border-color:rgba(255,184,104,.35);background:rgba(255,184,104,.07)}
+  .tag.live{color:var(--live);border-color:rgba(95,227,180,.35);background:rgba(95,227,180,.07)}
+  .focus-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%}
+  .focus-actions .btn{justify-content:center}
+  .focus-actions .wide{grid-column:1/-1}
+
+  /* Day line */
+  .dayline{grid-column:2;grid-row:1}
+  .track{position:relative;height:44px;margin-top:10px;border-radius:4px;
+    border:1px solid var(--edge);background-color:var(--base);
+    background-image:repeating-linear-gradient(90deg,var(--edge) 0 1px,transparent 1px calc(100%/18))}
+  .track .seg{position:absolute;top:6px;bottom:6px;border-radius:3px;background:linear-gradient(90deg,rgba(95,227,180,.85),rgba(95,227,180,.35));box-shadow:0 0 14px rgba(95,227,180,.35)}
+  .track .now{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--warm);box-shadow:0 0 10px var(--warm)}
+  .scale{display:flex;justify-content:space-between;font:400 10px var(--mono);color:var(--ink-3);margin-top:6px}
+
+  /* Tasks */
+  .tasks{grid-column:2;grid-row:2;display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:14px;min-height:0}
+  .task{
+    display:block;width:100%;text-align:left;padding:11px 12px;border-radius:var(--r);
+    background:var(--base);border:1px solid var(--edge);transition:border-color .15s, background .15s;
+  }
+  .task:hover{border-color:var(--ink-3);background:#0d0f16}
+  .task.on{border-color:rgba(95,227,180,.45);box-shadow:0 0 22px -8px rgba(95,227,180,.4)}
+  .task .t{font-weight:500}
+  .task .m{display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap}
+  .task .m span{font:400 11px var(--mono);color:var(--ink-3)}
+  .pill{font:500 10px var(--mono);padding:2px 6px;border-radius:4px;background:rgba(95,227,180,.1);color:var(--live)}
+  .lane-h{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-weight:600;font-size:12px}
+  .lane-h i{width:6px;height:6px;border-radius:2px;background:var(--accent);box-shadow:0 0 8px var(--accent-glow)}
+  .lane-h b{margin-left:auto;font:500 11px var(--mono);color:var(--ink-3)}
+  .lane-empty{border:1px dashed var(--edge);border-radius:var(--r);padding:18px;text-align:center;color:var(--ink-3);font-size:12px}
+  .lane-h.warm i{background:var(--warm);box-shadow:0 0 8px rgba(255,184,104,.5)}
+  .lane-h.live i{background:var(--live);box-shadow:0 0 8px rgba(95,227,180,.5)}
+
+  /* Quick capture */
+  .capture{
+    grid-column:2;grid-row:3;align-self:end;justify-self:center;width:min(640px,100%);
+    display:flex;align-items:center;gap:10px;height:50px;padding:0 10px 0 16px;
+    border-radius:var(--r-lg);border:1px solid rgba(143,164,255,.3);
+    background:rgba(17,19,27,.85);backdrop-filter:blur(12px);
+    box-shadow:0 20px 50px -20px #000, 0 0 40px -12px var(--accent-glow);
+    margin-bottom:0;
+  }
+  .capture input{flex:1;background:none;border:0;outline:0;color:var(--ink);font:inherit}
+  .capture input::placeholder{color:var(--ink-3)}
+  .capture .plus{color:var(--accent);font:500 18px var(--mono)}
+
+  /* Right column widgets */
+  .usage{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .gauge{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 4px;border-radius:var(--r);background:var(--base);border:1px solid var(--edge)}
+  .gauge svg{width:72px;height:72px;transform:rotate(-90deg)}
+  .gauge strong{font:500 15px var(--mono)}
+  .gauge small{color:var(--ink-3);font-size:11px}
+  .week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+  .day{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 0;border-radius:var(--r);background:var(--base);border:1px solid var(--edge);font:400 11px var(--mono);color:var(--ink-3)}
+  .day b{font-weight:500;color:var(--ink);font-size:12px}
+  .day i{display:block;width:3px;height:26px;border-radius:2px;background:var(--edge);position:relative;overflow:hidden}
+  .day i::after{content:"";position:absolute;left:0;right:0;bottom:0;height:var(--h);background:var(--accent);box-shadow:0 0 8px var(--accent-glow)}
+  .day.today{border-color:rgba(143,164,255,.5);color:var(--ink)}
+  .git-list{list-style:none;display:flex;flex-direction:column;gap:12px;position:relative}
+  .git-list li{position:relative;padding-left:18px;font-size:12px;color:var(--ink-2)}
+  .git-list li::before{content:"";position:absolute;left:0;top:5px;width:8px;height:8px;border-radius:2px;background:var(--base);border:1px solid var(--ink-3)}
+  .git-list li:first-child::before{background:var(--accent);border-color:var(--accent);box-shadow:0 0 8px var(--accent-glow)}
+  .git-list code{font:500 11px var(--mono);color:var(--accent)}
+  .git-list span{display:block;color:var(--ink);margin-top:1px}
+  .git-list time{font-size:11px;color:var(--ink-3)}
+  .sync{font:500 10px var(--mono);color:var(--live);border:1px solid rgba(95,227,180,.35);padding:2px 6px;border-radius:4px}
+  .link{display:inline-block;margin-top:12px;color:var(--accent);font-weight:500;font-size:12px}
+
+  .jornada-bar{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;margin:10px 0 8px}
+  .jornada-bar i{height:8px;border-radius:2px;background:var(--edge)}
+  .jornada-bar i.done{background:linear-gradient(90deg,var(--accent),#b7c4ff);box-shadow:0 0 8px var(--accent-glow)}
+  .big{font:600 26px var(--display);letter-spacing:-.02em}
+  .big small{font:400 13px var(--ui);color:var(--ink-2)}
+
+  @media (prefers-reduced-motion: reduce){*{transition:none!important}}
+  @media (max-width:1200px){
+    .stage{grid-template-columns:minmax(240px,280px) minmax(0,1fr)}
+    .stage .right{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Rail: navegación compacta, solo iconos -->
+  <nav class="rail" aria-label="Principal">
+    <div class="logo" aria-label="Nexu">N</div>
+    <button aria-current="page" title="Inicio">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>
+    </button>
+    <button title="Tablero">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="5" height="16"/><rect x="10" y="4" width="5" height="10"/><rect x="17" y="4" width="4" height="13"/></svg>
+    </button>
+    <button title="Chats">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v11H9l-5 4z"/></svg>
+      <span class="badge">3</span>
+    </button>
+    <button title="Horas">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg>
+    </button>
+    <button title="Notas">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l4 4v14H6z M15 3v4h4"/></svg>
+    </button>
+    <button title="Reuniones">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 9v6h4l5 4V5L8 9z M16 8a5 5 0 0 1 0 8"/></svg>
+    </button>
+    <div class="sep"></div>
+    <button title="Git">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 7v10M18 10c0 5-12 2-12 7"/></svg>
+    </button>
+    <div class="spacer"></div>
+    <button title="Ajustes">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>
+    </button>
+    <div class="me" title="Martín">M</div>
+  </nav>
+
+  <div class="main">
+    <!-- Top bar: timer y reproducción siempre visibles -->
+    <header class="topbar">
+      <div class="crumb">
+        <h1>Buenos días, Martín</h1>
+        <p>Viernes 20 de noviembre · 1 sesión · 0,09 h hoy</p>
+      </div>
+      <div class="search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+        Buscar tareas, notas…
+        <kbd>Ctrl K</kbd>
+      </div>
+
+      <div class="media" aria-label="Reproductor">
+        <div class="eq" aria-hidden="true"><i></i><i></i><i></i></div>
+        <span>Spotify</span>
+        <button class="ctrl" aria-label="Anterior">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg>
+        </button>
+        <button class="ctrl" aria-label="Reproducir">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8z"/></svg>
+        </button>
+        <button class="ctrl" aria-label="Siguiente">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5l11 7-11 7z"/></svg>
+        </button>
+      </div>
+
+      <div class="live" role="status" aria-label="Timer activo">
+        <span class="dot"></span>
+        <span class="name">cambio de arquitectura</span>
+        <span class="clock">00:05:31</span>
+        <button class="ctrl" aria-label="Pausar">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+        </button>
+        <button class="ctrl stop" aria-label="Detener">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M5 5h14v14H5z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Escenario: 3 columnas + línea del día y tareas en el centro -->
+    <section class="stage">
+
+      <!-- Columna izquierda: foco actual -->
+      <div class="col">
+        <article class="panel focus">
+          <div class="panel-h">
+            <h2>Enfoque ahora</h2>
+            <span class="meta">en curso</span>
+          </div>
+          <div class="panel-b">
+            <div class="ring">
+              <svg viewBox="0 0 200 200" aria-hidden="true">
+                <defs>
+                  <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color="#b7c4ff"/><stop offset="1" stop-color="#5fe3b4"/>
+                  </linearGradient>
+                </defs>
+                <circle cx="100" cy="100" r="88" fill="none" stroke="#262b3a" stroke-width="6"/>
+                <circle cx="100" cy="100" r="88" fill="none" stroke="url(#g)" stroke-width="6" stroke-linecap="butt"
+                        stroke-dasharray="110 553" />
+                <circle cx="100" cy="100" r="76" fill="none" stroke="#1d2130" stroke-width="1" stroke-dasharray="2 6"/>
+              </svg>
+              <div class="center">
+                <span class="time">05:31</span>
+                <span class="state">● EN CURSO</span>
+              </div>
+            </div>
+            <div class="task-title">cambio de arquitectura</div>
+            <div class="tags">
+              <span class="tag warm">Prioridad media</span>
+              <span class="tag">0,09 h</span>
+              <span class="tag">NexuWorkspace</span>
+              <span class="tag live">activo</span>
+            </div>
+            <div class="focus-actions">
+              <button class="btn primary wide">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v11H9l-5 4z"/></svg>
+                Abrir chat de la tarea <span class="k">Ctrl J</span>
+              </button>
+              <button class="btn">Pausar</button>
+              <button class="btn">Detener</button>
+              <button class="btn ghost">Terminal</button>
+              <button class="btn ghost">Código</button>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-h">
+            <h2>Jornada</h2>
+            <span class="meta">Faltan 7,91 h</span>
+          </div>
+          <div class="panel-b">
+            <div class="big">0,09 <small>h de 8 h</small></div>
+            <div class="jornada-bar"><i class="done"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="scale" style="margin-top:0"><span>1 %</span><span>Cierre est. 08:26</span></div>
+            <button class="link" style="background:none">Ver horas →</button>
+          </div>
+        </article>
+      </div>
+
+      <!-- Centro: línea del día, tareas, captura rápida -->
+      <div class="col" style="display:contents">
+        <article class="panel dayline">
+          <div class="panel-h">
+            <h2>Línea del día</h2>
+            <span class="meta">1 sesión · 0,09 h</span>
+          </div>
+          <div class="panel-b">
+            <div class="track" aria-hidden="true">
+              <div class="seg" style="left:3.5%;width:2%"></div>
+              <div class="now" style="left:5.6%"></div>
+            </div>
+            <div class="scale"><span>00</span><span>04</span><span>08</span><span>12</span><span>16</span></div>
+          </div>
+        </article>
+
+        <div class="tasks" style="grid-column:2;grid-row:2">
+          <section class="panel">
+            <div class="panel-h">
+              <i class="lane-h live" style="display:flex;gap:8px;align-items:center;font-style:normal"><i></i>En marcha</i>
+              <b class="meta" style="margin-left:auto">2</b>
+            </div>
+            <div class="panel-b" style="display:flex;flex-direction:column;gap:10px">
+              <button class="task">
+                <div class="t">tarea 1</div>
+                <div class="m"><span class="pill">Shutoki-main</span><span>0,01 h</span></div>
+              </button>
+              <button class="task on">
+                <div class="t">cambio de arquitectura</div>
+                <div class="m"><span class="pill">NexuWorkspace</span><span>0,09 h</span><span class="pill">activo</span></div>
+              </button>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-h">
+              <i class="lane-h" style="display:flex;gap:8px;align-items:center;font-style:normal"><i></i>Siguientes</i>
+              <b class="meta" style="margin-left:auto">1</b>
+            </div>
+            <div class="panel-b" style="display:flex;flex-direction:column;gap:10px">
+              <button class="task">
+                <div class="t">tengo que corregir un bug</div>
+                <div class="m"><span>sin tiempo</span></div>
+              </button>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-h">
+              <i class="lane-h warm" style="display:flex;gap:8px;align-items:center;font-style:normal"><i></i>Rutinas</i>
+              <b class="meta" style="margin-left:auto">0</b>
+            </div>
+            <div class="panel-b">
+              <div class="lane-empty">Nada por aquí.<br>Añade una rutina para verla cada día.</div>
+            </div>
+          </section>
+        </div>
+
+        <label class="capture" style="grid-column:2;grid-row:3">
+          <span class="plus">+</span>
+          <input type="text" placeholder="Escribe una tarea y pulsa Enter: queda en «Para hoy»">
+          <button class="btn ghost" style="height:30px">Con detalles</button>
+          <span class="tag live">00:05:31</span>
+        </label>
+      </div>
+
+      <!-- Columna derecha: IA, semana, Git -->
+      <div class="col right">
+        <article class="panel">
+          <div class="panel-h">
+            <h2>Uso de la IA</h2>
+            <span class="meta">00:31</span>
+          </div>
+          <div class="panel-b" style="display:flex;flex-direction:column;gap:10px">
+            <div class="usage">
+              <div class="gauge">
+                <svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="32" fill="none" stroke="#262b3a" stroke-width="6"/><circle cx="40" cy="40" r="32" fill="none" stroke="#8fa4ff" stroke-width="6" stroke-dasharray="6 201" stroke-linecap="round"/></svg>
+                <strong>3 %</strong><small>Sesión · 5 h</small>
+              </div>
+              <div class="gauge">
+                <svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="32" fill="none" stroke="#262b3a" stroke-width="6"/><circle cx="40" cy="40" r="32" fill="none" stroke="#8fa4ff" stroke-width="6" stroke-dasharray="95 201" stroke-linecap="round"/></svg>
+                <strong>47 %</strong><small>Semana · 7 d</small>
+              </div>
+            </div>
+            <div class="tag warm" style="text-align:center;font-family:var(--ui);font-size:12px">Cerrarás la semana en 74 %</div>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-h">
+            <h2>Semana</h2>
+            <span class="meta">0,47 / 40 h</span>
+          </div>
+          <div class="panel-b">
+            <div class="week">
+              <div class="day" style="--h:30%"><i style="--h:30%"></i>L<b>0,2</b></div>
+              <div class="day" style="--h:0%"><i></i>M<b>0</b></div>
+              <div class="day" style="--h:30%"><i></i>X<b>0,2</b></div>
+              <div class="day" style="--h:0%"><i></i>J<b>0</b></div>
+              <div class="day today" style="--h:45%"><i></i>V<b>0,1</b></div>
+              <div class="day" style="--h:0%"><i></i>S<b>0</b></div>
+              <div class="day" style="--h:0%"><i></i>D<b>0</b></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel" style="min-height:0">
+          <div class="panel-h">
+            <h2>Git</h2>
+            <span class="sync">al día</span>
+          </div>
+          <div class="panel-b">
+            <div class="meta" style="font:500 11px var(--mono);color:var(--accent);margin-bottom:12px">feat/26-se-agrega-cambios-gemini</div>
+            <ul class="git-list">
+              <li><code>d7a96e1</code><span>feat(chat): añade proveedor Gemini y renombra la app a Nexu</span><time>hace 4 días</time></li>
+              <li><code>f384445</code><span>Merge pull request #25 de OukZero/feat/24-mejoramiento-visual</span><time>hace 4 días</time></li>
+              <li><code>165f77b</code><span>Feature - mejoras visuales y funcionamiento</span><time>hace 4 días</time></li>
+              <li><code>505fbe0</code><span>Merge pull request #23 de OukZero/feat/19-prueba-de-app</span><time>hace 7 días</time></li>
+            </ul>
+            <a class="link" href="#">Abrir Git →</a>
+          </div>
+        </article>
+      </div>
+    </section>
+  </div>
+</div>
+</body>
+</html>

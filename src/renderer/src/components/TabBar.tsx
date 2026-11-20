@@ -19,6 +19,7 @@ export const PANEL_LABEL: Record<string, string> = {
   web: 'Navegador',
   notes: 'Notas',
   meetings: 'Reuniones',
+  team: 'Equipo',
   whatsapp: 'WhatsApp',
   settings: 'Ajustes'
 }
