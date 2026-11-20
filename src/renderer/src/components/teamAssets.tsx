@@ -149,6 +149,76 @@ export const ASSETS: Asset[] = [
       <circle cx="46" cy="32" r="2.8" fill="#ff7a9c" /><circle cx="52" cy="36.5" r="2.8" fill="#5fe3b4" /><circle cx="46" cy="40.5" r="2.8" fill="#8fa4ff" /><circle cx="40" cy="36.5" r="2.8" fill="#ffd27a" />
       <circle cx="25" cy="43" r="1.6" fill="#8a92aa" /><circle cx="39" cy="43" r="1.6" fill="#8a92aa" />
     </svg>
+  ) },
+  { k: 'shelf', label: 'Estantería', wall: false, w: 96, el: (
+    <svg viewBox="0 0 64 64"><defs>{lin('g-sh-wood', '#8a6a9e', '#5a4278')}{lin('g-sh-in', '#2a2348', '#3a3060')}</defs>
+      <ellipse cx="32" cy="61" rx="26" ry="2.6" fill="#000" opacity=".3" />
+      <rect x="8" y="4" width="48" height="56" rx="3" fill="url(#g-sh-wood)" /><rect x="11" y="7" width="42" height="50" rx="1.5" fill="url(#g-sh-in)" />
+      <path d="M11 22 h42 M11 39 h42" stroke="#7a5c90" strokeWidth="2.6" /><rect x="8" y="4" width="48" height="2.4" rx="1.2" fill="#fff" opacity=".22" />
+      <rect x="14" y="10" width="4" height="11" rx="1" fill="#6f86ff" /><rect x="18.5" y="11" width="3.5" height="10" rx="1" fill="#ff7a9c" /><rect x="22.5" y="9" width="4" height="12" rx="1" fill="#ffd27a" /><rect x="27" y="12" width="3.2" height="9" rx="1" fill="#5fe3b4" transform="rotate(12 28 16)" />
+      <circle cx="44" cy="16" r="4.5" fill="#46d49c" /><rect x="41" y="17" width="6" height="4" rx="1" fill="#e8956a" />
+      <rect x="14" y="30" width="12" height="8" rx="1.5" fill="#b8bfd4" /><rect x="15.5" y="31.5" width="9" height="5" rx="1" fill="#8fa4ff" opacity=".7" />
+      <rect x="34" y="26" width="3.5" height="12" rx="1" fill="#ff9ab4" /><rect x="38" y="27" width="3.5" height="11" rx="1" fill="#8fa4ff" /><rect x="42" y="25" width="4" height="13" rx="1" fill="#7af0c4" /><rect x="46.5" y="28" width="3.5" height="10" rx="1" fill="#ffb868" />
+      <rect x="14" y="47" width="16" height="8" rx="1.5" fill="#5a4278" /><rect x="14" y="47" width="16" height="2" fill="#fff" opacity=".2" /><circle cx="44" cy="51" r="4" fill="#ffe0a0" /><path d="M42 51 l2 -2 l2 2" stroke="#b9803f" strokeWidth="1" fill="none" />
+    </svg>
+  ) },
+  { k: 'board', label: 'Pizarra', wall: true, w: 120, el: (
+    <svg viewBox="0 0 64 40"><defs>{lin('g-bd-frame', '#b8bfd4', '#7a83a0')}</defs>
+      <rect x="2" y="2" width="60" height="34" rx="2.5" fill="url(#g-bd-frame)" /><rect x="4.5" y="4.5" width="55" height="29" rx="1.5" fill="#f4f6fc" />
+      <path d="M8 10 h14 M8 14 h10 M8 18 h12" stroke="#5b73f0" strokeWidth="1.3" strokeLinecap="round" />
+      <rect x="27" y="8" width="11" height="7" rx="1.5" fill="#ffd27a" /><rect x="40" y="8" width="11" height="7" rx="1.5" fill="#7af0c4" /><rect x="27" y="17" width="11" height="7" rx="1.5" fill="#ff9ab4" />
+      <path d="M8 29 l6 -5 l5 3 l7 -7 l6 4" stroke="#ff7a9c" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="47" cy="25" r="4" fill="none" stroke="#5fe3b4" strokeWidth="1.3" /><path d="M45 25 l1.5 1.5 l3 -3" stroke="#5fe3b4" strokeWidth="1.3" fill="none" />
+      <rect x="18" y="35" width="28" height="2.6" rx="1.3" fill="#7a83a0" /><rect x="22" y="33.5" width="6" height="2" rx="1" fill="#ff7a9c" /><rect x="30" y="33.5" width="6" height="2" rx="1" fill="#5b73f0" />
+    </svg>
+  ) },
+  { k: 'server', label: 'Servidor', wall: false, w: 58, el: (
+    <svg viewBox="0 0 64 64"><defs>{lin('g-sv-body', '#3d4468', '#1d2238', false)}</defs>
+      <ellipse cx="32" cy="61" rx="18" ry="2.4" fill="#000" opacity=".3" />
+      <rect x="16" y="4" width="32" height="56" rx="3" fill="url(#g-sv-body)" /><rect x="16" y="4" width="32" height="2" rx="1" fill="#fff" opacity=".2" />
+      {[10, 22, 34, 46].map((y, i) => (
+        <g key={y}>
+          <rect x="19" y={y} width="26" height="9" rx="1.5" fill="#0b0d1c" />
+          <path d={`M22 ${y + 4.5} h10`} stroke="#3a4060" strokeWidth="1.6" strokeLinecap="round" />
+          <circle className={`as-led l${i}`} cx="38" cy={y + 4.5} r="1.6" fill="#5fe3b4" /><circle className={`as-led l${(i + 2) % 4}`} cx="42" cy={y + 4.5} r="1.6" fill={i % 2 ? '#8fa4ff' : '#ffd27a'} />
+        </g>
+      ))}
+    </svg>
+  ) },
+  { k: 'cooler', label: 'Dispensador', wall: false, w: 46, el: (
+    <svg viewBox="0 0 64 64"><defs>{lin('g-wc-water', '#bfe8ff', '#5aa8f0')}{lin('g-wc-body', '#f4f6fc', '#b8bfd4', false)}</defs>{shade}
+      <path d="M22 4 h20 a3 3 0 0 1 3 3 v14 a6 6 0 0 1 -6 6 h-14 a6 6 0 0 1 -6 -6 v-14 a3 3 0 0 1 3 -3z" fill="url(#g-wc-water)" opacity=".85" />
+      <path d="M24 8 v12" stroke="#fff" strokeOpacity=".6" strokeWidth="2" strokeLinecap="round" />
+      <circle className="as-bubble" cx="34" cy="20" r="1.4" fill="#fff" opacity=".8" /><circle className="as-bubble b2" cx="38" cy="22" r="1" fill="#fff" opacity=".8" />
+      <rect x="18" y="27" width="28" height="31" rx="3" fill="url(#g-wc-body)" /><rect x="24" y="33" width="16" height="9" rx="2" fill="#3d4468" />
+      <rect x="27" y="35" width="3" height="4" rx="1" fill="#5aa8f0" /><rect x="34" y="35" width="3" height="4" rx="1" fill="#ff7a9c" /><rect x="24" y="44" width="16" height="2" rx="1" fill="#8a92aa" />
+    </svg>
+  ) },
+  { k: 'beanbag', label: 'Puf', wall: false, w: 66, el: (
+    <svg viewBox="0 0 64 64"><defs><radialGradient id="g-bb" cx=".35" cy=".3" r=".8"><stop offset="0" stopColor="#ffb3c6" /><stop offset="1" stopColor="#d9467a" /></radialGradient></defs>
+      <ellipse cx="32" cy="59" rx="26" ry="3.4" fill="#000" opacity=".3" />
+      <path d="M8 52 C4 34 16 18 32 18 C48 18 60 34 56 52 C50 60 14 60 8 52Z" fill="url(#g-bb)" />
+      <path d="M18 40 C24 34 40 34 46 40" stroke="#b03462" strokeWidth="2" fill="none" strokeLinecap="round" opacity=".6" />
+      <path d="M20 26 C24 22 30 21 34 22" stroke="#fff" strokeOpacity=".45" strokeWidth="2.4" fill="none" strokeLinecap="round" />
+    </svg>
+  ) },
+  { k: 'neon', label: 'Neón', wall: true, w: 90, el: (
+    <svg viewBox="0 0 64 32"><defs><filter id="g-ne-blur" x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation="1.8" /></filter></defs>
+      <rect x="2" y="2" width="60" height="28" rx="5" fill="#0b0d1c" opacity=".55" stroke="#2a2f55" />
+      <g className="as-flicker" fill="none" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 10 l-7 6 l7 6 M47 10 l7 6 l-7 6 M36 8 l-8 16" stroke="#ff4fd8" strokeWidth="3.4" filter="url(#g-ne-blur)" opacity=".9" />
+        <path d="M17 10 l-7 6 l7 6 M47 10 l7 6 l-7 6 M36 8 l-8 16" stroke="#ffd1f5" strokeWidth="1.5" />
+      </g>
+    </svg>
+  ) },
+  { k: 'globe', label: 'Globo', wall: false, w: 44, el: (
+    <svg viewBox="0 0 64 64"><defs><radialGradient id="g-gl" cx=".35" cy=".3" r=".8"><stop offset="0" stopColor="#9fd0ff" /><stop offset="1" stopColor="#2f5fc0" /></radialGradient></defs>{shade}
+      <path d="M14 28 a18 18 0 0 0 30 13" stroke="#c9a46a" strokeWidth="2.6" fill="none" strokeLinecap="round" />
+      <circle cx="32" cy="26" r="15" fill="url(#g-gl)" />
+      <g className="as-turn"><path d="M24 18 q5 -3 8 1 q-2 4 2 6 q-3 4 -8 2 q-4 -4 -2 -9z M36 30 q5 -1 6 3 q-2 4 -6 3z" fill="#5fe3b4" opacity=".9" /></g>
+      <path d="M22 16 a12 12 0 0 1 8 -4" stroke="#fff" strokeOpacity=".6" strokeWidth="2" fill="none" strokeLinecap="round" />
+      <rect x="30.5" y="41" width="3" height="10" fill="#8a6a3c" /><ellipse cx="32" cy="54" rx="11" ry="3.4" fill="#6e4328" /><ellipse cx="32" cy="53" rx="11" ry="3" fill="#b07a52" />
+    </svg>
   ) }
 ]
 

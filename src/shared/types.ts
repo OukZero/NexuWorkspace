@@ -784,16 +784,32 @@ export interface TeamAgent {
   model: 'haiku' | 'sonnet' | 'opus'
   prompt: string
   skills: string[]
+  /** Apariencia del robot (opcional: los agentes antiguos usan los valores por defecto). */
+  look?: RobotLook
 }
 
-/** Personaje del usuario: rasgos que el avatar dibuja en capas. */
+export interface RobotLook {
+  head?: 'redonda' | 'cuadrada' | 'tv' | 'domo'
+  eyes?: 'pixel' | 'redondos' | 'visor' | 'felices'
+  antenna?: 'bola' | 'doble' | 'helice' | 'ninguna'
+  acc?: 'ninguno' | 'gorro' | 'sombrero' | 'corona' | 'audifonos' | 'lentes'
+}
+
+/** Personaje del usuario: rasgos que el avatar dibuja en capas. Los opcionales se añadieron después. */
 export interface TeamCharacter {
   name: string
   role: string
   skin: string
-  hair: 'corto' | 'rizado' | 'gorro'
-  gear: 'lentes' | 'audifonos' | 'barba'
-  outfit: 'sudadera' | 'camisa' | 'bata'
+  hair: 'corto' | 'rizado' | 'gorro' | 'largo' | 'mono' | 'rapado' | 'cresta' | 'calvo'
+  /** 'barba' es heredado: ahora va en `facial`. */
+  gear: 'ninguno' | 'lentes' | 'sol' | 'audifonos' | 'gorra' | 'aretes' | 'barba'
+  outfit: 'sudadera' | 'camisa' | 'bata' | 'polera' | 'chaqueta' | 'traje'
+  hairColor?: string
+  eyeColor?: string
+  outfitColor?: string
+  mouth?: 'sonrisa' | 'grande' | 'neutral' | 'sorpresa'
+  face?: 'normal' | 'pecas' | 'rubor'
+  facial?: 'ninguno' | 'barba' | 'bigote' | 'perilla'
 }
 
 /** Equipo de agentes + personaje + adornos de la sala (ids de adorno, en orden de colocación). */
@@ -804,6 +820,19 @@ export interface AgentTeam {
   decor: string[]
   /** Objetos colocados libremente en la sala (x/y en % de la sala, anclados por el centro). */
   props?: TeamProp[]
+  /** Chat general del equipo: cada solicitud y la respuesta del agente al que se asignó (últimos 60). */
+  chat?: TeamChatMsg[]
+}
+
+export interface TeamChatMsg {
+  id: string
+  role: 'user' | 'agent' | 'system'
+  text: string
+  at: number
+  /** Agente que respondió (role 'agent') o al que se asignó la solicitud. */
+  agentId?: string
+  /** Por qué se eligió ese agente (lo explica el enrutador). */
+  reason?: string
 }
 
 export interface TeamProp {
@@ -983,6 +1012,7 @@ export interface IpcChannels {
   'team:get': { args: []; ret: AgentTeam }
   'team:save': { args: [AgentTeam]; ret: void }
   'team:ask': { args: [string, string]; ret: string } // id del agente y mensaje -> respuesta
+  'team:route': { args: [string]; ret: { agentId: string; reason: string } } // solicitud -> agente que debe atenderla
   'telegram:status': { args: []; ret: TelegramStatus }
   'telegram:save': { args: [{ token: string; on: boolean; details: boolean }]; ret: TelegramStatus }
   'telegram:link': { args: []; ret: string }
