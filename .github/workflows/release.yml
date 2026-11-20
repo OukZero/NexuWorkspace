@@ -26,7 +26,7 @@ jobs:
         shell: bash
         run: |
           base=$(node -p "require('./package.json').version.split('.').slice(0,2).join('.')")
-          npm version "$base.${{ github.run_number }}" --no-git-tag-version
+          npm version "$base.${{ github.run_number }}" --no-git-tag-version --allow-same-version
       - name: Compilar y publicar
         run: npx electron-vite build && npx electron-builder --win --publish always
         env:
