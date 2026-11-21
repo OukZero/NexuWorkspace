@@ -784,6 +784,11 @@ export interface TeamAgent {
   model: 'haiku' | 'sonnet' | 'opus'
   prompt: string
   skills: string[]
+  /** Puede leer y modificar archivos de `workdir` (agente desarrollador). Sin carpeta elegida no se ejecuta. */
+  canEdit?: boolean
+  workdir?: string
+  /** Documentos de referencia fijos (p. ej. una estimación previa para el estimador): se le pasan en cada encargo. */
+  refs?: Attachment[]
   /** Apariencia del robot (opcional: los agentes antiguos usan los valores por defecto). */
   look?: RobotLook
 }
@@ -822,10 +827,26 @@ export interface AgentTeam {
   props?: TeamProp[]
   /** Chat general del equipo: cada solicitud y la respuesta del agente al que se asignó (últimos 60). */
   chat?: TeamChatMsg[]
-  /** Grupo de carpetas (Carpetas) en el que trabajan los agentes; se elige en el chat del equipo. Sin grupo, no ven ninguna carpeta. */
-  chatGroupId?: string
   /** Plantillas de estimación que reemplazan a las de por defecto (vacío = usar la de por defecto). */
   estimateTemplates?: { technical?: string; commercial?: string }
+  /** Varias conversaciones; si existe, sustituye a `chat` (que se migra a la primera). */
+  chats?: TeamConv[]
+  activeChat?: string
+}
+
+/** Línea de progreso en vivo de un agente (herramienta que usa o fase del plan). */
+export interface TeamProgress {
+  agentId: string
+  text: string
+}
+
+/** Una conversación del chat de equipo. */
+export interface TeamConv {
+  id: string
+  name: string
+  msgs: TeamChatMsg[]
+  /** Carpeta del proyecto de esta conversación: la usan todos los agentes. */
+  workdir?: string
 }
 
 export interface TeamChatMsg {
@@ -837,6 +858,8 @@ export interface TeamChatMsg {
   agentId?: string
   /** Por qué se eligió ese agente (lo explica el enrutador). */
   reason?: string
+  /** Archivos adjuntos a la solicitud (role 'user'). */
+  attachments?: Attachment[]
 }
 
 export interface TeamOrchestration {
@@ -1020,9 +1043,10 @@ export interface IpcChannels {
   'notif:clear': { args: []; ret: void }
   'team:get': { args: []; ret: AgentTeam }
   'team:save': { args: [AgentTeam]; ret: void }
-  'team:ask': { args: [string, string]; ret: string } // id del agente y mensaje -> respuesta
-  'team:orchestrate': { args: [string]; ret: TeamOrchestration } // el orquestador reparte la solicitud entre los agentes y integra el resultado
-  'team:route': { args: [string]; ret: { agentId: string; reason: string } } // solicitud -> agente que debe atenderla
+  'team:ask': { args: [string, string, Attachment[]?, string?, string?]; ret: string } // id del agente, mensaje y adjuntos -> respuesta
+  'team:orchestrate': { args: [string, Attachment[]?, string?, string?]; ret: TeamOrchestration } // el orquestador reparte la solicitud entre los agentes y integra el resultado
+  'team:cancel': { args: []; ret: void } // detiene los agentes que se estén ejecutando
+  'team:route': { args: [string, string?]; ret: { agentId: string; reason: string } } // solicitud -> agente que debe atenderla
   'telegram:status': { args: []; ret: TelegramStatus }
   'telegram:save': { args: [{ token: string; on: boolean; details: boolean }]; ret: TelegramStatus }
   'telegram:link': { args: []; ret: string }
@@ -1226,4 +1250,6 @@ export interface Api {
   onFullscreen(cb: (on: boolean) => void): Unsubscribe
   /** Mensajes sin leer por servicio de mensajería (id de la vista → número). */
   onBadges(cb: (b: Record<string, number>) => void): Unsubscribe
+  /** Qué está haciendo ahora el agente que ejecuta una solicitud del chat de equipo. */
+  onTeamProgress(cb: (p: TeamProgress) => void): Unsubscribe
 }

@@ -95,26 +95,81 @@ function localSummary(d: Digest): string {
 
 // ejecuta `claude -p` con el prompt por stdin y devuelve la salida de texto
 // Por defecto usa Haiku: son tareas de redacción corta en segundo plano. Quien necesite más calidad pasa 'sonnet'.
-export function askClaude(prompt: string, cmd: string, timeoutMs = 120000, model: string | null = 'haiku', dirs?: { cwd: string; extra: string[] }): Promise<string> {
+/** Opciones de ejecución: `signal` para detenerlo y `onProgress` para ver en vivo qué herramienta usa (activa stream-json). */
+export interface AskRun {
+  signal?: AbortSignal
+  onProgress?: (line: string) => void
+  /** Carpeta del proyecto: el agente la lee (Read/Glob/Grep) pero no puede editar. */
+  cwd?: string
+}
+
+/** En Windows `child.kill()` solo mata el shell: hay que terminar el árbol entero. */
+function killTree(child: ReturnType<typeof spawn>): void {
+  if (process.platform === 'win32' && child.pid) spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true })
+  else child.kill()
+}
+
+const TOOL_LABEL: Record<string, string> = { Read: 'Leyendo', Edit: 'Editando', Write: 'Escribiendo', Glob: 'Buscando archivos', Grep: 'Buscando en el código', Bash: 'Ejecutando' }
+
+/** Texto corto de lo que hace una herramienta, p. ej. «Leyendo src/app.ts». */
+function toolLine(name: string, input: Record<string, unknown>): string {
+  const target = String(input.file_path ?? input.path ?? input.pattern ?? input.command ?? '')
+  return `${TOOL_LABEL[name] ?? name}${target ? ' ' + clip(target.replace(/\\/g, '/').split('/').slice(-2).join('/'), 60) : ''}`
+}
+
+export function askClaude(prompt: string, cmd: string, timeoutMs = 120000, model: string | null = 'haiku', edit?: { cwd: string }, readDir?: string, run?: AskRun): Promise<string> {
   return new Promise((resolve, reject) => {
-    const add = (dirs?.extra ?? []).map((d) => ` --add-dir "${d}"`).join('')
-    const child = spawn(`${cmd}${model ? ` --model ${model}` : ''}${add} -p`, { shell: true, cwd: dirs?.cwd ?? os.tmpdir(), windowsHide: true })
+    if (run?.signal?.aborted) return reject(new Error('Cancelado'))
+    // con `edit`, Claude trabaja dentro de esa carpeta y puede editar archivos; el shell queda limitado a git de lectura y al typecheck
+    let perms = edit ? ' --permission-mode acceptEdits --allowedTools "Read" "Edit" "Write" "Glob" "Grep" "Bash(git status*)" "Bash(git diff*)" "Bash(npm run typecheck*)"' : ''
+    // con `readDir` (adjuntos / documentos de referencia) puede leer esa carpeta, y solo leer
+    if (!edit && run?.cwd) perms += ' --allowedTools "Read" "Glob" "Grep"'
+    if (readDir) perms += `${edit || run?.cwd ? '' : ' --allowedTools "Read"'} --add-dir "${readDir}"`
+    const stream = !!run?.onProgress
+    const child = spawn(`${cmd}${model ? ` --model ${model}` : ''}${perms}${stream ? ' --output-format stream-json --verbose' : ''} -p`, { shell: true, cwd: edit?.cwd ?? run?.cwd ?? os.tmpdir(), windowsHide: true })
     let out = ''
     let err = ''
+    let buf = ''
+    let final = ''
+    let finished = false
+    const end = (fn: () => void): void => {
+      if (finished) return
+      finished = true
+      clearTimeout(timer)
+      run?.signal?.removeEventListener('abort', onAbort)
+      fn()
+    }
     const timer = setTimeout(() => {
-      child.kill()
-      reject(new Error('timeout'))
+      killTree(child)
+      end(() => reject(new Error('timeout')))
     }, timeoutMs)
-    child.stdout.on('data', (b: Buffer) => (out += b))
-    child.stderr.on('data', (b: Buffer) => (err += b))
-    child.on('error', (e) => {
-      clearTimeout(timer)
-      reject(e)
+    const onAbort = (): void => {
+      killTree(child)
+      end(() => reject(new Error('Cancelado')))
+    }
+    run?.signal?.addEventListener('abort', onAbort)
+    const onLine = (line: string): void => {
+      try {
+        const ev = JSON.parse(line) as { type?: string; result?: string; message?: { content?: Array<{ type: string; name?: string; input?: Record<string, unknown> }> } }
+        if (ev.type === 'result' && typeof ev.result === 'string') final = ev.result
+        else if (ev.type === 'assistant') for (const p of ev.message?.content ?? []) if (p.type === 'tool_use' && p.name) run?.onProgress?.(toolLine(p.name, p.input ?? {}))
+      } catch {
+        /* línea que no es JSON */
+      }
+    }
+    child.stdout.on('data', (b: Buffer) => {
+      if (!stream) return void (out += b)
+      buf += b
+      const lines = buf.split('\n')
+      buf = lines.pop() ?? ''
+      lines.forEach(onLine)
     })
+    child.stderr.on('data', (b: Buffer) => (err += b))
+    child.on('error', (e) => end(() => reject(e)))
     child.on('close', (code) => {
-      clearTimeout(timer)
-      if (out.trim() && code === 0) resolve(out.trim())
-      else reject(new Error(err || 'sin salida'))
+      if (stream && buf.trim()) onLine(buf)
+      const text = (stream ? final : out).trim()
+      end(() => (text && code === 0 ? resolve(text) : reject(new Error(err || 'sin salida'))))
     })
     child.stdin.end(prompt)
   })

@@ -219,6 +219,37 @@ export const ASSETS: Asset[] = [
       <path d="M22 16 a12 12 0 0 1 8 -4" stroke="#fff" strokeOpacity=".6" strokeWidth="2" fill="none" strokeLinecap="round" />
       <rect x="30.5" y="41" width="3" height="10" fill="#8a6a3c" /><ellipse cx="32" cy="54" rx="11" ry="3.4" fill="#6e4328" /><ellipse cx="32" cy="53" rx="11" ry="3" fill="#b07a52" />
     </svg>
+  ) },
+  { k: 'printer', label: 'Impresora', wall: false, w: 64, el: (
+    <svg viewBox="0 0 64 64"><defs>{lin('g-pr-body', '#eef1fa', '#b4bbd2')}{lin('g-pr-top', '#9aa3c0', '#6c7594')}</defs>{shade}
+      <path d="M18 8 h28 l3 14 h-34z" fill="#fff" /><path d="M22 13 h20 M21 17 h22" stroke="#aab" strokeWidth="1.2" strokeLinecap="round" />
+      <rect x="6" y="22" width="52" height="24" rx="5" fill="url(#g-pr-body)" /><rect x="6" y="22" width="52" height="7" rx="3.5" fill="url(#g-pr-top)" />
+      <rect x="12" y="35" width="30" height="3.4" rx="1.7" fill="#2b3150" /><circle cx="48" cy="36" r="2" fill="#5fe3b4" className="as-flicker" /><circle cx="53" cy="36" r="1.5" fill="#ffb868" />
+      <rect x="14" y="44" width="36" height="12" rx="1.5" fill="#fff" /><path d="M18 49 h22 M18 53 h16" stroke="#aab" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  ) },
+  { k: 'monitor', label: 'Monitor', wall: false, w: 62, el: (
+    <svg viewBox="0 0 64 64"><defs>{lin('g-mo-scr', '#243a7a', '#0f1a3f')}{lin('g-mo-frame', '#3a4160', '#1b2036')}</defs>{shade}
+      <rect x="26" y="40" width="12" height="12" fill="#5a6385" /><rect x="17" y="52" width="30" height="5" rx="2.5" fill="url(#g-mo-frame)" />
+      <rect x="4" y="8" width="56" height="35" rx="4" fill="url(#g-mo-frame)" /><rect x="7" y="11" width="50" height="29" rx="2" fill="url(#g-mo-scr)" />
+      <g fill="none" strokeLinecap="round"><path d="M12 17 h14" stroke="#7af0c4" strokeWidth="1.8" /><path d="M16 22 h22" stroke="#7aa8ff" strokeWidth="1.8" /><path d="M16 27 h12" stroke="#ffd84d" strokeWidth="1.8" /><path d="M12 32 h18" stroke="#c792ff" strokeWidth="1.8" /></g>
+      <rect className="as-flicker" x="40" y="29" width="2.4" height="5" fill="#fff" /><path d="M9 13 h20 l-6 12z" fill="#fff" opacity=".07" />
+    </svg>
+  ) },
+  { k: 'cabinet', label: 'Archivador', wall: false, w: 54, el: (
+    <svg viewBox="0 0 64 64"><defs>{lin('g-ab-body', '#aeb7d3', '#7a84a6', false)}</defs>{shade}
+      <rect x="14" y="6" width="36" height="52" rx="3" fill="url(#g-ab-body)" /><rect x="14" y="6" width="36" height="3" rx="1.5" fill="#fff" opacity=".35" />
+      <g fill="#8791b4" stroke="#5a6385" strokeWidth="1"><rect x="17" y="12" width="30" height="13" rx="1.5" /><rect x="17" y="28" width="30" height="13" rx="1.5" /><rect x="17" y="44" width="30" height="11" rx="1.5" /></g>
+      <g fill="#2b3150"><rect x="26" y="16" width="12" height="3" rx="1.5" /><rect x="26" y="32" width="12" height="3" rx="1.5" /><rect x="26" y="48" width="12" height="3" rx="1.5" /></g>
+      <g fill="#fff" opacity=".85"><rect x="28" y="20" width="8" height="2.4" rx=".6" /><rect x="28" y="36" width="8" height="2.4" rx=".6" /></g>
+    </svg>
+  ) },
+  { k: 'coffeemaker', label: 'Cafetera', wall: false, w: 50, el: (
+    <svg viewBox="0 0 64 64"><defs>{lin('g-cm-body', '#4a5272', '#262b42')}{lin('g-cm-pot', '#d6eaff', '#8fb4d8')}</defs>{shade}
+      <rect x="12" y="6" width="34" height="50" rx="5" fill="url(#g-cm-body)" /><rect x="16" y="12" width="26" height="10" rx="2" fill="#12162a" /><circle cx="22" cy="17" r="2" fill="#5fe3b4" className="as-flicker" /><circle cx="29" cy="17" r="2" fill="#ffb868" />
+      <rect x="18" y="26" width="22" height="4" rx="1.5" fill="#12162a" /><path d="M29 30 v6" stroke="#8a5a36" strokeWidth="2" strokeLinecap="round" />
+      <path d="M20 38 h18 l-2 16 h-14z" fill="url(#g-cm-pot)" /><path d="M21 46 h16 l-1 8 h-14z" fill="#6b3f1f" opacity=".85" /><path d="M38 41 h5 a3 3 0 0 1 0 7 h-4" stroke="#8fb4d8" strokeWidth="2" fill="none" />
+    </svg>
   ) }
 ]
 
