@@ -1932,3 +1932,16 @@ html .topnav .ib .bd { position: absolute; top: 7px; right: 8px; width: 8px; hei
 /* Radix posiciona en px de pantalla: se anula el zoom de la raíz en el contenedor y se devuelve al contenido */
 [data-radix-popper-content-wrapper] { zoom: calc(1 / var(--zoom, 1)); }
 [data-radix-popper-content-wrapper] > * { zoom: var(--zoom, 1); }
+
+/* Git y Archivos: la vista ocupa exactamente el alto disponible y el scroll vive dentro de cada panel
+   (diff, árbol, editor, listas), no en la página. La fila de la rejilla debe ser minmax(0,1fr), si no
+   crece con el contenido y nada se desplaza. */
+.scroll:has(.files) { overflow: hidden; }
+#view:has(.files) { height: 100%; max-width: none; padding-bottom: 16px; }
+.gcols { grid-template-rows: minmax(0, 1fr); }
+.gleft { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.gright { min-height: 0; min-width: 0; }
+.gright > .dv { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 0 0 12px; }
+.files-side, .files-main { min-height: 0; }
+.files-tree { min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.code-host .cm-scroller { overflow: auto; }
