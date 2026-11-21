@@ -235,7 +235,15 @@ export function createWindows(): void {
   })
   registerWindow(win)
   autoFit(win)
-  win.once('ready-to-show', () => closeSplash(() => !hidden && win?.show()))
+  let ready = false
+  win.once('ready-to-show', () => {
+    ready = true
+    closeSplash(() => !hidden && win?.show())
+  })
+  // si el renderer no llega a cargar, la ventana no se queda oculta para siempre (pantalla en negro sin nada visible)
+  setTimeout(() => {
+    if (!ready && !hidden && win && !win.isDestroyed()) win.show()
+  }, 15000).unref()
   // Sin esto, al fijar la app en la barra de tareas (o en su menú de salto) Windows usa el icono de electron.exe.
   if (process.platform === 'win32' && fs.existsSync(iconPath)) {
     const launcher = path.join(app.getAppPath(), 'tools', 'launch.ps1')

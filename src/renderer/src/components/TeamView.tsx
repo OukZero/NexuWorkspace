@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as RPointerEvent, ReactNode } from 'react'
 import type { AgentTeam, RobotLook, TeamAgent, TeamCharacter, TeamChatMsg, TeamProp } from '../../../shared/types'
+import { AGENT_TEMPLATES, ORCHESTRATOR_ID } from '../../../shared/teamTemplates'
 import { useUi } from '../ui'
 import { useDB } from '../store'
 import { DEFAULT_ESTIMATE_TEMPLATES, ESTIMATE_LEVELS } from '../../../shared/estimateTemplates'
@@ -178,8 +179,15 @@ function Room({ team, working, routing, done, sel, onSel, onProps, onDrop }: {
       <i className="tr-pend p1" /><i className="tr-pend p2" />
       {team.agents.map((a, i) => {
         const st = a.id === working ? 'work' : a.id === done ? 'done' : 'idle'
+        // hasta 3 agentes: una fila; con más, dos filas más pequeñas para que los escritorios no se pisen
+        const two = n > 3
+        const cols = two ? Math.ceil(n / 2) : n
+        const row = two ? Math.floor(i / cols) : 0
+        const inRow = two ? (row === 0 ? cols : n - cols) : n
+        const left = two ? ((i % cols) + 0.5) / inRow * 74 + 4 : ((i + 0.5) / (n + 1)) * 88 + 4
+        const top = two ? (row === 0 ? 62 : 86) : 79
         return (
-          <div key={a.id} className={`tr-desk ${st}`} style={{ left: `${((i + 0.5) / (n + 1)) * 88 + 4}%`, ['--c' as string]: a.color }}>
+          <div key={a.id} className={`tr-desk ${st}`} style={{ left: `${left}%`, top: `${top}%`, ['--ds' as string]: two ? 0.72 : 1, ['--c' as string]: a.color, zIndex: 40 + row }}>
             {/* al trabajar: foco desde arriba, anillo en el suelo y código que sale del portátil */}
             {st === 'work' && <><i className="tr-beam" /><i className="tr-ping" /><div className="tr-fx" aria-hidden><i>{'{ }'}</i><i>&lt;/&gt;</i><i>01</i><i>✦</i></div></>}
             {st !== 'idle' && <div className="tr-bubble">{st === 'work' ? <><i /><i /><i /></> : '✓ listo'}</div>}
@@ -313,6 +321,14 @@ export function TeamView(): ReactNode {
     setReply('')
     setTab('edit')
   }
+  // plantillas que aún no están en el equipo (el id es fijo, así no se duplican)
+  const missingTpl = AGENT_TEMPLATES.filter((t) => !team.agents.some((a) => a.id === t.id))
+  const addTemplate = (t: TeamAgent): void => {
+    update({ ...team, agents: [...team.agents, { ...t, skills: [...t.skills], look: t.look && { ...t.look } }] })
+    setSel(t.id)
+    setReply('')
+    setTab('edit')
+  }
   const removeAgent = (): void => {
     const agents = team.agents.filter((a) => a.id !== sel)
     update({ ...team, agents })
@@ -385,6 +401,19 @@ export function TeamView(): ReactNode {
     setChatWork(route.agentId)
     setSince(Date.now())
     try {
+      if (route.agentId === ORCHESTRATOR_ID) {
+        // el orquestador reparte el trabajo: cada paso aparece como instrucción + respuesta del agente, y al final su resumen
+        const o = await ui.run('team:orchestrate', body)
+        if (o) {
+          for (const s of o.steps) {
+            pushChat({ role: 'system', text: '', agentId: s.agentId, reason: s.instruction.slice(0, 200) })
+            pushChat({ role: 'agent', text: s.output, agentId: s.agentId })
+          }
+          if (o.summary) pushChat({ role: 'agent', text: o.summary, agentId: ORCHESTRATOR_ID })
+          setDone(ORCHESTRATOR_ID)
+        }
+        return
+      }
       const r = await ui.run('team:ask', route.agentId, body)
       if (typeof r === 'string') {
         pushChat({ role: 'agent', text: r, agentId: route.agentId })
@@ -482,11 +511,21 @@ export function TeamView(): ReactNode {
           {team.agents.map((a) => (
             <button key={a.id} className={`tm-agent ${a.id === sel ? 'on' : ''} ${a.id === working ? 'busy' : ''}`} style={{ ['--c' as string]: a.color }} onClick={() => { setSel(a.id); setReply(''); setTab('edit') }}>
               <span className="ic">{a.emoji}</span>
-              <span><b>{a.name}</b><span className="sk">{a.skills.map((s) => <span key={s}>{s}</span>)}</span></span>
+              <span className="tm-ag-body"><b title={a.name}>{a.name}</b><span className="sk">{a.skills.map((s) => <span key={s}>{s}</span>)}</span></span>
               <span className="st">{a.id === working ? 'trabajando…' : a.model}</span>
             </button>
           ))}
         </div>
+        {missingTpl.length > 0 && (
+          <div className="tm-tpl">
+            <span className="tm-tpl-h">Añadir un agente listo:</span>
+            {missingTpl.map((t) => (
+              <button key={t.id} style={{ ['--c' as string]: t.color }} title={t.prompt} onClick={() => addTemplate(t)}>
+                <span aria-hidden>{t.emoji}</span> {t.name}
+              </button>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className={`card tm-edit ${tab === 'chat' ? 'is-chat' : ''}`}>
@@ -607,7 +646,7 @@ export function TeamView(): ReactNode {
               {field('Accesorio', opts(BOT_ACC, agent.look?.acc ?? 'ninguno', (acc) => setLook({ acc })))}
             </details>
             <label>Nombre y emoji</label>
-            <div className="tm-row"><input value={agent.emoji} style={{ width: 56 }} onChange={(e) => setAgent({ emoji: e.target.value.slice(0, 2) })} /><input value={agent.name} onChange={(e) => setAgent({ name: e.target.value })} /></div>
+            <div className="tm-row"><input className="tm-emoji" aria-label="Emoji" value={agent.emoji} onChange={(e) => setAgent({ emoji: Array.from(e.target.value).slice(0, 2).join('') })} /><input aria-label="Nombre" value={agent.name} maxLength={40} onChange={(e) => setAgent({ name: e.target.value })} /></div>
             <label>Modelo</label>
             {opts(MODELS.map((m) => [m, m[0].toUpperCase() + m.slice(1)] as [TeamAgent['model'], string]), agent.model, (model) => setAgent({ model }))}
             <label>Instrucciones (prompt de sistema)</label>
@@ -638,7 +677,7 @@ export function TeamView(): ReactNode {
               </details>
             )}
             <label>Probar</label>
-            <textarea value={msg} placeholder="Escribe un encargo para este agente…" onChange={(e) => setMsg(e.target.value)} style={{ minHeight: 64 }} />
+            <textarea value={msg} placeholder="Escribe un encargo para este agente…" onChange={(e) => setMsg(e.target.value)} style={{ minHeight: 96 }} />
             <div className="tm-row">
               <button className="btn primary" disabled={busy || !msg.trim()} onClick={() => void ask()}>{busy ? 'Pensando…' : 'Enviar'}</button>
               <button className="btn" onClick={removeAgent}>Eliminar</button>

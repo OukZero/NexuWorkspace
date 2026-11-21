@@ -839,6 +839,11 @@ export interface TeamChatMsg {
   reason?: string
 }
 
+export interface TeamOrchestration {
+  steps: Array<{ agentId: string; instruction: string; output: string }>
+  summary: string
+}
+
 export interface TeamProp {
   id: string
   /** Clave del asset (planta, gato, sofá…). */
@@ -1016,6 +1021,7 @@ export interface IpcChannels {
   'team:get': { args: []; ret: AgentTeam }
   'team:save': { args: [AgentTeam]; ret: void }
   'team:ask': { args: [string, string]; ret: string } // id del agente y mensaje -> respuesta
+  'team:orchestrate': { args: [string]; ret: TeamOrchestration } // el orquestador reparte la solicitud entre los agentes y integra el resultado
   'team:route': { args: [string]; ret: { agentId: string; reason: string } } // solicitud -> agente que debe atenderla
   'telegram:status': { args: []; ret: TelegramStatus }
   'telegram:save': { args: [{ token: string; on: boolean; details: boolean }]; ret: TelegramStatus }

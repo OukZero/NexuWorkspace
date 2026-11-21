@@ -198,7 +198,7 @@ export const ASSETS: Asset[] = [
     <svg viewBox="0 0 64 64"><defs><radialGradient id="g-bb" cx=".35" cy=".3" r=".8"><stop offset="0" stopColor="#ffb3c6" /><stop offset="1" stopColor="#d9467a" /></radialGradient></defs>
       <ellipse cx="32" cy="59" rx="26" ry="3.4" fill="#000" opacity=".3" />
       <path d="M8 52 C4 34 16 18 32 18 C48 18 60 34 56 52 C50 60 14 60 8 52Z" fill="url(#g-bb)" />
-      <path d="M18 40 C24 34 40 34 46 40" stroke="#b03462" strokeWidth="2" fill="none" strokeLinecap="round" opacity=".6" />
+      <path d="M32 19 C28 32 28 46 32 58 M32 19 C38 32 38 46 32 58" stroke="#b03462" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".45" />
       <path d="M20 26 C24 22 30 21 34 22" stroke="#fff" strokeOpacity=".45" strokeWidth="2.4" fill="none" strokeLinecap="round" />
     </svg>
   ) },

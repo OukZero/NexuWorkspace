@@ -32,7 +32,7 @@ export function UpdateChip(): ReactNode {
   }, [s?.status])
   if (!s || !['available', 'downloading', 'ready'].includes(s.status)) return null
   const install = async (): Promise<void> => {
-    if (await ui.confirm('La app se cerrará, instalará la versión nueva y volverá a abrirse. Tus tareas, horas y conversaciones no se tocan. Si hay un timer corriendo, queda registrado hasta este momento.', { title: `Actualizar a ${s.version}`, confirmLabel: 'Reiniciar y actualizar' })) void ui.run('update:install')
+    if (await ui.confirm('La app se cerrará, instalará la versión nueva y volverá a abrirse. Tus tareas, horas y conversaciones no se tocan. Si hay un timer corriendo, queda registrado hasta este momento. Puede tardar unos segundos sin mostrar ninguna ventana.', { title: `Actualizar a ${s.version}`, confirmLabel: 'Reiniciar y actualizar' })) void ui.run('update:install')
   }
   return (
     <button
@@ -84,7 +84,7 @@ export function UpdateCard(): ReactNode {
           <button
             className="btn sm primary"
             onClick={async () => {
-              if (await ui.confirm('La app se cerrará, instalará la versión nueva y volverá a abrirse. Tus datos no se tocan.', { title: `Actualizar a ${s.version}`, confirmLabel: 'Reiniciar y actualizar' })) void ui.run('update:install')
+              if (await ui.confirm('La app se cerrará, instalará la versión nueva y volverá a abrirse. Tus datos no se tocan. Puede tardar unos segundos sin mostrar ninguna ventana.', { title: `Actualizar a ${s.version}`, confirmLabel: 'Reiniciar y actualizar' })) void ui.run('update:install')
             }}
           >
             Reiniciar y actualizar

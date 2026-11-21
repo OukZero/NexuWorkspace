@@ -62,8 +62,9 @@ function ensureStartMenuShortcut(): void {
 }
 
 let gotLock = app.requestSingleInstanceLock()
-// tras «Reiniciar la aplicación», la instancia anterior puede tardar un poco en soltar el bloqueo
-for (let i = 0; !gotLock && process.argv.includes('--restarted') && i < 50; i++) {
+// tras «Reiniciar la aplicación» o tras actualizar (el instalador relanza con --force-run), la instancia anterior puede tardar un poco en soltar el bloqueo
+const relaunched = process.argv.includes('--restarted') || process.argv.includes('--force-run')
+for (let i = 0; !gotLock && relaunched && i < 50; i++) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200)
   gotLock = app.requestSingleInstanceLock()
 }
