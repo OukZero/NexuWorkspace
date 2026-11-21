@@ -1,16 +1,13 @@
-import type { AgentTeam } from '../../../shared/types'
+import type { AgentTeam, TeamOrchestration } from '../../../shared/types'
+import { AGENT_TEMPLATES, ORCHESTRATOR_ID } from '../../../shared/teamTemplates'
 import { api } from '../../api'
 import { commit, getDb } from '../../db'
 import { askClaude } from '../ai/summary'
 
-/** Equipo inicial: tres agentes de ejemplo y un personaje base, para que la pantalla no empiece vacía. */
+/** Equipo inicial: los agentes de plantilla y un personaje base, para que la pantalla no empiece vacía. */
 const DEFAULT_TEAM: AgentTeam = {
   character: { name: 'Tú', role: 'Líder del equipo', skin: '#f2c9a5', hair: 'corto', gear: 'lentes', outfit: 'sudadera' },
-  agents: [
-    { id: 'revisor', name: 'Revisor de código', emoji: '🔎', color: '#5fe3b4', model: 'sonnet', prompt: 'Eres el revisor del equipo. Busca errores, riesgos de seguridad y código innecesario; responde con hallazgos concretos y cómo corregirlos.', skills: ['review', 'seguridad'] },
-    { id: 'estimador', name: 'Estimador', emoji: '📐', color: '#ffb868', model: 'sonnet', prompt: 'Eres el estimador del equipo. Divide el requerimiento en tareas y cubica en horas, usando la estimación de referencia como regla.', skills: ['cubicación'] },
-    { id: 'qa', name: 'QA', emoji: '🧪', color: '#ff7a9c', model: 'haiku', prompt: 'Eres QA. Propón casos de prueba y de regresión para el cambio descrito.', skills: ['tests'] }
-  ],
+  agents: AGENT_TEMPLATES,
   decor: ['🪴', '🐈', '📚']
 }
 
@@ -30,6 +27,40 @@ export function registerTeamIpc(): void {
     // solo se llama a petición del usuario; el modelo lo elige cada agente
     const prompt = `${a.prompt}\n\nSkills activas: ${a.skills.join(', ') || 'ninguna'}.\n\n---\n${message}`
     return askClaude(prompt, getDb().settings.claudeCmd, 180000, MODELS.includes(a.model) ? a.model : 'sonnet')
+  })
+  // el orquestador planifica (hasta 4 pasos), cada agente ejecuta su instrucción con lo anterior como contexto y al final se integra
+  api('team:orchestrate', async (message) => {
+    const team = getDb().agentTeam ?? DEFAULT_TEAM
+    const boss = team.agents.find((x) => x.id === ORCHESTRATOR_ID)
+    const workers = team.agents.filter((x) => x.id !== ORCHESTRATOR_ID)
+    if (!workers.length) throw new Error('El orquestador necesita al menos otro agente.')
+    if (!message.trim()) throw new Error('Escribe una solicitud.')
+    const cmd = getDb().settings.claudeCmd
+    const model = boss && MODELS.includes(boss.model) ? boss.model : 'sonnet'
+    const list = workers.map((a) => `- id: ${a.id} | ${a.name} | skills: ${a.skills.join(', ') || '—'} | ${a.prompt.replace(/\s+/g, ' ').slice(0, 220)}`).join('\n')
+    const plan = `${boss?.prompt ?? ''}\n\nAgentes disponibles:\n${list}\n\nSolicitud:\n${message.slice(0, 3000)}\n\nPlanifica como máximo 4 pasos, en orden, usando solo estos agentes (cada paso recibe los resultados anteriores). Responde SOLO con un array JSON: [{"id":"<id del agente>","task":"<instrucción concreta y autosuficiente>"}]`
+    let steps: Array<{ id: string; task: string }> = []
+    try {
+      const out = await askClaude(plan, cmd, 90000, model)
+      const m = out.match(/\[[\s\S]*\]/)
+      const arr = m ? (JSON.parse(m[0]) as Array<{ id?: string; task?: string }>) : []
+      steps = arr.filter((s) => workers.some((w) => w.id === s.id) && typeof s.task === 'string' && s.task.trim()).slice(0, 4) as typeof steps
+    } catch {
+      /* sin plan válido: se usa un solo agente */
+    }
+    if (!steps.length) steps = [{ id: keywordRoute(workers, message).agentId, task: message }]
+    const done: TeamOrchestration['steps'] = []
+    for (const s of steps) {
+      const a = workers.find((w) => w.id === s.id)!
+      const prev = done.map((d) => `### ${team.agents.find((x) => x.id === d.agentId)?.name}\n${d.output.slice(0, 1500)}`).join('\n\n')
+      const prompt = `${a.prompt}\n\nSkills activas: ${a.skills.join(', ') || 'ninguna'}.\n\nSolicitud original del usuario:\n${message.slice(0, 2000)}\n${prev ? `\nResultados de pasos anteriores:\n${prev}\n` : ''}\n---\nTu instrucción del orquestador:\n${s.task}`
+      done.push({ agentId: a.id, instruction: s.task, output: await askClaude(prompt, cmd, 180000, MODELS.includes(a.model) ? a.model : 'sonnet') })
+    }
+    // con un solo paso no hace falta otra llamada para integrar
+    if (done.length === 1) return { steps: done, summary: '' }
+    const all = done.map((d) => `### ${team.agents.find((x) => x.id === d.agentId)?.name}\n${d.output.slice(0, 3000)}`).join('\n\n')
+    const summary = await askClaude(`${boss?.prompt ?? ''}\n\nSolicitud del usuario:\n${message.slice(0, 2000)}\n\nResultados de los agentes:\n${all}\n\nIntégralos en una respuesta final breve y accionable, indicando qué hacer primero y señalando contradicciones si las hay.`, cmd, 120000, model)
+    return { steps: done, summary }
   })
   // decide qué agente atiende una solicitud del chat general: una llamada corta a Haiku y, si falla, por palabras clave
   api('team:route', async (message) => {

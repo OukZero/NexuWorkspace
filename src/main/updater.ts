@@ -4,8 +4,10 @@ import { app } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import type { UpdateState } from '../shared/types'
 import { clip } from '../shared/util'
-import { broadcast, getDb } from './db'
+import { broadcast, commit, getDb } from './db'
 import { lifecycle } from './lifecycle'
+import { stopActive } from './features/time/timer'
+import { cleanup } from './quit'
 
 const HOUR = 3_600_000
 let state: UpdateState = { status: app.isPackaged ? 'idle' : 'dev', current: app.getVersion() }
@@ -86,7 +88,16 @@ export async function download(): Promise<void> {
 export function install(): void {
   if (state.status !== 'ready') throw new Error('Todavía no hay una actualización descargada.')
   lifecycle.quitting = true // sin esto «cerrar a la bandeja» impediría salir
-  autoUpdater.quitAndInstall(false, true)
+  // el instalador arranca ya, antes del cierre: se para el timer, se guarda y se matan los procesos hijo para que no bloqueen archivos
+  try {
+    stopActive()
+    commit()
+  } catch {
+    /* sin datos que guardar */
+  }
+  cleanup()
+  // isSilent=true: el Setup de NSIS corre con /S (sin asistente); el segundo true reabre la app al terminar
+  autoUpdater.quitAndInstall(true, true)
 }
 
 export function initUpdater(): void {
