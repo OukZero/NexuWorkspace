@@ -253,6 +253,9 @@
 @keyframes tm-live { 50% { transform: scale(1.5); opacity: .4; } }
 .tm-live { display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: var(--accent); vertical-align: 1px; animation: tm-live 1s ease-in-out infinite; }
 .tm-edit.is-chat { display: flex; flex-direction: column; }
+/* editor de agente: no estira la pantalla, hace scroll interno */
+.tm-wrap > .tm-edit:not(.is-chat) { height: auto; align-self: start; max-height: calc(100vh - 150px); overflow-y: auto; scrollbar-width: thin; }
+.tm-edit:not(.is-chat) .tm-tabs { position: sticky; top: 0; z-index: 2; }
 
 /* chat del equipo */
 .tc { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -289,8 +292,32 @@
 .tc-comp { border: 1px solid var(--line); border-radius: 14px; background: var(--panel2); padding: 8px; transition: border-color .15s ease; }
 .tc-comp:focus-within { border-color: var(--accent); }
 .tm-wrap .tc-comp textarea { width: 100%; min-height: 58px; border: 0; background: transparent; resize: none; font: 13px/1.5 "IBM Plex Sans", sans-serif; outline: none; padding: 2px 4px; }
-.tc-comp-f { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
-.tc-comp-f span { margin-right: auto; font-size: 11px; color: var(--muted); }
+.tc-comp-f { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
+.tc-sp { flex: 1; min-width: 0; }
+.tc-comp-f .btn { flex: none; white-space: nowrap; }
+.tc-hint { margin: 6px 2px 0; font-size: 10.5px; line-height: 1.3; color: var(--muted); }
+/* selector de grupo de carpetas */
+.tc-gp { position: relative; flex: none; max-width: 48%; }
+.tc-gp-b { display: flex; align-items: center; gap: 6px; max-width: 100%; border: 1px solid var(--line); border-radius: 99px; padding: 4px 8px 4px 6px; background: transparent; color: var(--muted); font-size: 11.5px; cursor: pointer; transition: border-color .15s ease, background-color .15s ease, color .15s ease; }
+.tc-gp-b:hover, .tc-gp.open .tc-gp-b { border-color: var(--accent); color: var(--text); }
+.tc-gp.on .tc-gp-b { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--text); }
+.tc-gp-b:focus-visible, .tc-gp-m button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tc-gp-b b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-gp-b em { font-style: normal; font-size: 10px; min-width: 16px; text-align: center; padding: 0 5px; border-radius: 99px; background: var(--accent); color: #fff; }
+.tc-gp-b .chev { font-style: normal; font-size: 10px; transition: transform .15s ease; }
+.tc-gp.open .chev { transform: rotate(180deg); }
+.tc-gp-m { position: absolute; left: 0; bottom: calc(100% + 8px); z-index: 30; width: 250px; max-height: 280px; overflow-y: auto; scrollbar-width: thin; padding: 6px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel2); box-shadow: 0 12px 32px rgba(0, 0, 0, .45); transform-origin: bottom left; animation: tc-gp-in .14s ease-out; }
+@keyframes tc-gp-in { from { opacity: 0; transform: translateY(4px) scale(.97); } }
+.tc-gp-h { padding: 4px 8px 6px; font: 600 10px/1 "IBM Plex Mono", monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.tc-gp-m button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border: 0; border-radius: 9px; background: transparent; color: var(--text); text-align: left; cursor: pointer; transition: background-color .12s ease; }
+.tc-gp-m button:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.tc-gp-m button.sel { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.tc-gp-m .ic { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 14%, transparent); font-size: 13px; }
+.tc-gp-m button > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.tc-gp-m b { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-gp-m small { font-size: 10.5px; color: var(--muted); }
+.tc-gp-e { margin: 0; padding: 6px 8px; font-size: 11px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .tc-gp-m { animation: none; } }
 
 /* tarjeta del agente que trabaja */
 @keyframes tm-busy { 50% { opacity: .2; } }

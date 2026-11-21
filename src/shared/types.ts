@@ -827,6 +827,8 @@ export interface AgentTeam {
   props?: TeamProp[]
   /** Chat general del equipo: cada solicitud y la respuesta del agente al que se asignó (últimos 60). */
   chat?: TeamChatMsg[]
+  /** Plantillas de estimación que reemplazan a las de por defecto (vacío = usar la de por defecto). */
+  estimateTemplates?: { technical?: string; commercial?: string }
   /** Varias conversaciones; si existe, sustituye a `chat` (que se migra a la primera). */
   chats?: TeamConv[]
   activeChat?: string

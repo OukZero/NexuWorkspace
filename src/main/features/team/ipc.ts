@@ -6,6 +6,8 @@ import { api } from '../../api'
 import { broadcast, commit, getDb } from '../../db'
 import { notify } from '../../notify'
 import { askClaude, type AskRun } from '../ai/summary'
+import { DEFAULT_ESTIMATE_TEMPLATES, detectLevel } from '../../../shared/estimateTemplates'
+import type { EstimateLevel } from '../../../shared/estimateTemplates'
 
 /** Equipo inicial: los agentes de plantilla y un personaje base, para que la pantalla no empiece vacía. */
 const DEFAULT_TEAM: AgentTeam = {
@@ -75,7 +77,18 @@ export function registerTeamIpc(): void {
     if (!a) throw new Error('Agente no encontrado.')
     if (!message.trim() && !files?.length) throw new Error('Escribe un mensaje.')
     // solo se llama a petición del usuario; el modelo lo elige cada agente
-    const prompt = `${a.prompt}\n\nUsa estas skills cuando la tarea encaje: ${a.skills.join(', ') || 'ninguna'}.\n\n${histBlock(history)}---\n${message || 'Revisa los archivos adjuntos.'}`
+    // el estimador recibe la plantilla del nivel pedido (técnica/comercial); si no se distingue, ambas
+    let tpl = ''
+    if (a.id === 'estimador' || a.skills.includes('cubicación')) {
+      const level = detectLevel(message)
+      const get = (l: EstimateLevel): string => team.estimateTemplates?.[l]?.trim() || DEFAULT_ESTIMATE_TEMPLATES[l]
+      tpl = level
+        ? `\n\nEstimación ${level === 'technical' ? 'técnica' : 'comercial'}. Entrega el resultado siguiendo EXACTAMENTE esta plantilla:\n${get(level)}`
+        : `\n\nSegún lo que pida el usuario, usa la plantilla técnica o la comercial (si no está claro, usa la técnica y dilo):\n--- PLANTILLA TÉCNICA ---\n${get('technical')}\n--- PLANTILLA COMERCIAL ---\n${get('commercial')}`
+    }
+    const prompt = `${a.prompt}\n\nUsa estas skills cuando la tarea encaje: ${a.skills.join(', ') || 'ninguna'}.\n\n${tpl}
+
+${histBlock(history)}---\n${message || 'Revisa los archivos adjuntos.'}`
     return tracked(`${a.name} respondió.`, (signal) => runAgent(a, prompt, files, signal, convDir))
   })
   api('team:cancel', () => {

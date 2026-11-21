@@ -7,6 +7,7 @@ import type { AgentTeam, Attachment, RobotLook, SkillInfo, TeamAgent, TeamCharac
 import { AGENT_TEMPLATES, ORCHESTRATOR_ID } from '../../../shared/teamTemplates'
 import { useUi } from '../ui'
 import { useDB } from '../store'
+import { DEFAULT_ESTIMATE_TEMPLATES, ESTIMATE_LEVELS } from '../../../shared/estimateTemplates'
 import { ASSETS, ASSET_BY_KEY, EMOJI_TO_ASSET } from './teamAssets'
 
 type Opt<T> = Array<[T, string]>
@@ -937,6 +938,7 @@ export function TeamView(): ReactNode {
                 {all.length > 0 && <button className="btn sm" disabled={!!(routing || chatWork)} onClick={() => update(mapConv(team, activeId, (c) => ({ ...c, msgs: [] })))}>Limpiar</button>}
                 <button className="btn primary sm" disabled={(!draft.trim() && !files.length) || routing || !!chatWork || !team.agents.length} onClick={() => void send()}>Enviar</button>
               </div>
+              <p className="tc-hint">{mentioned(draft) ? `Irá a ${mentioned(draft)?.name}` : 'Se asigna automáticamente · Mayús+Enter: nueva línea'}</p>
             </div>
           </div>
         ) : agent ? (
@@ -1033,6 +1035,29 @@ export function TeamView(): ReactNode {
               ))}
             </div>
             <div className="tm-row"><button type="button" className="btn" onClick={() => void window.api.call('window:skills')}>Gestionar skills…</button></div>
+            {(agent.id === 'estimador' || agent.skills.includes('cubicación')) && (
+              <details className="tm-look" open>
+                <summary>Plantillas de estimación</summary>
+                <small>El agente usa la técnica o la comercial según lo que pidas (escribe «técnica» o «comercial» en el encargo).</small>
+                {ESTIMATE_LEVELS.map(([lvl, label]) => {
+                  const custom = team.estimateTemplates?.[lvl]
+                  const setTpl = (v: string | undefined): void => update({ ...team, estimateTemplates: { ...team.estimateTemplates, [lvl]: v } })
+                  return (
+                    <div key={lvl}>
+                      <label>{label} {custom?.trim() ? '(personalizada)' : '(por defecto)'}</label>
+                      <textarea value={custom ?? DEFAULT_ESTIMATE_TEMPLATES[lvl]} style={{ minHeight: 120 }} onChange={(e) => setTpl(e.target.value)} />
+                      <div className="tm-row">
+                        <label className="btn sm">
+                          Cargar archivo…
+                          <input type="file" accept=".md,.txt,.csv,text/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void f.text().then(setTpl) }} />
+                        </label>
+                        <button className="btn sm" disabled={!custom?.trim()} onClick={() => setTpl(undefined)}>Restaurar por defecto</button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </details>
+            )}
             </>}
             {sub === 'test' && <>
             <label>Encargo de prueba</label>
