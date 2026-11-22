@@ -1045,6 +1045,7 @@ export interface IpcChannels {
   'team:save': { args: [AgentTeam]; ret: void }
   'team:ask': { args: [string, string, Attachment[]?, string?, string?]; ret: string } // id del agente, mensaje y adjuntos -> respuesta
   'team:orchestrate': { args: [string, Attachment[]?, string?, string?]; ret: TeamOrchestration } // el orquestador reparte la solicitud entre los agentes y integra el resultado
+  'team:qa': { args: [string?]; ret: string } // el agente QA prueba en la app aislada lo que cambió el último commit/los cambios sin confirmar
   'team:cancel': { args: []; ret: void } // detiene los agentes que se estén ejecutando
   'team:route': { args: [string, string?]; ret: { agentId: string; reason: string } } // solicitud -> agente que debe atenderla
   'telegram:status': { args: []; ret: TelegramStatus }

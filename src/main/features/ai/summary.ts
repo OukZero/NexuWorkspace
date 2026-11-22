@@ -117,11 +117,12 @@ function toolLine(name: string, input: Record<string, unknown>): string {
   return `${TOOL_LABEL[name] ?? name}${target ? ' ' + clip(target.replace(/\\/g, '/').split('/').slice(-2).join('/'), 60) : ''}`
 }
 
-export function askClaude(prompt: string, cmd: string, timeoutMs = 120000, model: string | null = 'haiku', edit?: { cwd: string }, readDir?: string, run?: AskRun): Promise<string> {
+export function askClaude(prompt: string, cmd: string, timeoutMs = 120000, model: string | null = 'haiku', edit?: { cwd: string; qa?: boolean }, readDir?: string, run?: AskRun): Promise<string> {
   return new Promise((resolve, reject) => {
     if (run?.signal?.aborted) return reject(new Error('Cancelado'))
     // con `edit`, Claude trabaja dentro de esa carpeta y puede editar archivos; el shell queda limitado a git de lectura y al typecheck
-    let perms = edit ? ' --permission-mode acceptEdits --allowedTools "Read" "Edit" "Write" "Glob" "Grep" "Bash(git status*)" "Bash(git diff*)" "Bash(npm run typecheck*)"' : ''
+    // QA: además puede ejecutar las pruebas E2E (app aislada con datos temporales) y leer el historial
+    let perms = edit ? ` --permission-mode acceptEdits --allowedTools "Read" "Edit" "Write" "Glob" "Grep" "Bash(git status*)" "Bash(git diff*)" "Bash(npm run typecheck*)"${edit.qa ? ' "Bash(git log*)" "Bash(npx playwright test*)" "Bash(npm run test:e2e*)"' : ''}` : ''
     // con `readDir` (adjuntos / documentos de referencia) puede leer esa carpeta, y solo leer
     if (!edit && run?.cwd) perms += ' --allowedTools "Read" "Glob" "Grep"'
     if (readDir) perms += `${edit || run?.cwd ? '' : ' --allowedTools "Read"'} --add-dir "${readDir}"`
