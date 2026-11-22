@@ -448,6 +448,21 @@ export function TeamView(): ReactNode {
     }
   }
 
+  const runQa = async (): Promise<void> => {
+    if (!agent) return
+    setBusy(true)
+    setReply('')
+    try {
+      const r = await ui.run('team:qa', agent.workdir)
+      if (typeof r === 'string') {
+        setReply(r)
+        setDone(agent.id)
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
   // ---- conversaciones: `chats` guarda varias; el chat antiguo (`chat`) pasa a ser la primera ----
   const convsOf = (t: AgentTeam): TeamConv[] => (t.chats?.length ? t.chats : [{ id: 'main', name: 'Principal', msgs: t.chat ?? [] }])
   const convs = convsOf(team)
@@ -1064,6 +1079,9 @@ export function TeamView(): ReactNode {
             <textarea value={msg} placeholder="Escribe un encargo para este agente…" onChange={(e) => setMsg(e.target.value)} style={{ minHeight: 96 }} />
             <div className="tm-row">
               <button className="btn primary" disabled={busy || !msg.trim()} onClick={() => void ask()}>{busy ? 'Pensando…' : 'Enviar'}</button>
+              {agent.id === 'qa' && (
+                <button className="btn" disabled={busy} title="Prueba en la app aislada lo que cambió (diff). Gasta tokens: solo a petición." onClick={() => void runQa()}>{busy ? 'Probando…' : '🧪 Probar este commit'}</button>
+              )}
             </div>
             {reply && <pre className="tm-reply">{reply}</pre>}
             </>}

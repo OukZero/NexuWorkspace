@@ -12,6 +12,8 @@
     "dev:live": "electron-vite dev --watch",
     "live": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/launch-live.ps1",
     "main": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/launch-main.ps1",
+    "test:app": "electron-vite build && node tools/test-app.js",
+    "test:e2e": "electron-vite build && playwright test",
     "build": "electron-vite build",
     "start": "electron-vite build && electron-vite preview",
     "pack": "electron-vite build && electron-builder --win --dir",
@@ -64,6 +66,7 @@
     }
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

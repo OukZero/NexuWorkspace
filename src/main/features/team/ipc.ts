@@ -2,6 +2,7 @@ import type { AgentTeam, Attachment, TeamOrchestration } from '../../../shared/t
 import { attachRoot, trusted } from '../ai/attachments'
 import { AGENT_TEMPLATES, ORCHESTRATOR_ID } from '../../../shared/teamTemplates'
 import fs from 'fs'
+import { execFileSync } from 'child_process'
 import { api } from '../../api'
 import { broadcast, commit, getDb } from '../../db'
 import { notify } from '../../notify'
@@ -90,6 +91,44 @@ export function registerTeamIpc(): void {
 
 ${histBlock(history)}---\n${message || 'Revisa los archivos adjuntos.'}`
     return tracked(`${a.name} respondió.`, (signal) => runAgent(a, prompt, files, signal, convDir))
+  })
+  // QA bajo demanda (cuesta tokens, nunca automático): recibe el diff y prueba solo lo afectado con la app en modo de pruebas
+  api('team:qa', async (dirArg) => {
+    const team = getDb().agentTeam ?? DEFAULT_TEAM
+    const a = team.agents.find((x) => x.id === 'qa') ?? AGENT_TEMPLATES.find((x) => x.id === 'qa')
+    if (!a) throw new Error('No hay un agente QA en el equipo.')
+    const dir = [dirArg, a.workdir, ...team.agents.map((x) => x.workdir)].find((d) => d && fs.existsSync(d))
+    if (!dir) throw new Error('El agente QA necesita la carpeta del proyecto: elígela en su editor.')
+    const git = (...args: string[]): string => {
+      try {
+        return execFileSync('git', args, { cwd: dir, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, windowsHide: true })
+      } catch {
+        return ''
+      }
+    }
+    // cambios sin confirmar; si no hay, el último commit
+    let from = 'los cambios sin confirmar'
+    let stat = git('diff', 'HEAD', '--stat')
+    let diff = git('diff', 'HEAD')
+    if (!diff.trim()) {
+      from = 'el último commit'
+      stat = git('show', '--stat', '--format=%s', 'HEAD')
+      diff = git('show', '--format=%s', 'HEAD')
+    }
+    if (!diff.trim()) throw new Error('No hay cambios que probar.')
+    const prompt = [
+      a.prompt,
+      `Vas a probar ${from} de este proyecto (${dir}). Resumen:\n${stat.slice(0, 4000)}`,
+      `Diff (recortado):\n${diff.slice(0, 30000)}`,
+      'Cómo probar:',
+      '1. Deduce qué pantallas/componentes toca el diff; prueba solo esas.',
+      '2. La app se prueba aislada con Playwright (carpeta tests/e2e; helpers launchApp/goTo/shot en tests/e2e/app.ts: datos temporales, sin sesión ni integraciones). Si ya hay un spec que cubra el cambio, ejecútalo con `npx playwright test <archivo>`; si no, escribe uno nuevo en tests/e2e/ (rellena formularios, navega, comprueba componentes y haz capturas con shot()). Ejecuta `npm run test:e2e` para compilar y correr todo.',
+      '3. Nunca toques datos reales ni la app abierta del usuario.',
+      'Responde en español con: ✅ lo que pasó, ❌ fallos (con pasos para reproducirlos y archivo probable), rutas de las capturas (test-results/screens) y los specs creados.'
+    ].join('\n\n')
+    return tracked('QA terminó de probar.', (signal) =>
+      askClaude(prompt, getDb().settings.claudeCmd, 900000, MODELS.includes(a.model) ? a.model : 'sonnet', { cwd: dir, qa: true }, undefined, { signal, onProgress: (text) => broadcast('team:progress', { agentId: a.id, text }) })
+    )
   })
   api('team:cancel', () => {
     for (const c of running) c.abort()

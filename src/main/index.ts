@@ -29,6 +29,9 @@ import { initMeetings } from './features/meetings/service'
 
 // La app se llamaba "mis-tareas": se conserva esa carpeta de datos para no perder tareas, horas ni chats al renombrar.
 // SHUTOKI_DATA_DIR permite probar con datos descartables sin tocar los reales.
+// SHUTOKI_TEST=1 (solo sin empaquetar y con SHUTOKI_DATA_DIR): modo de pruebas E2E, sin sesión ni efectos fuera de la app.
+const TEST_MODE = !app.isPackaged && process.env['SHUTOKI_TEST'] === '1' && !!process.env['SHUTOKI_DATA_DIR']
+if (TEST_MODE) process.env['SHUTOKI_AUTH'] = 'off'
 app.setPath('userData', process.env['SHUTOKI_DATA_DIR'] || path.join(app.getPath('appData'), 'mis-tareas'))
 app.setAppUserModelId(APP_ID) // agrupa la app en la barra de tareas de Windows con su propio icono
 registerMockupScheme() // debe registrarse antes de que la app esté lista
@@ -87,8 +90,8 @@ if (!gotLock) {
   }
 
   void app.whenReady().then(async () => {
-    if (!process.argv.includes('--hidden')) showSplash() // primero: lo demás tarda un poco
-    ensureStartMenuShortcut()
+    if (!TEST_MODE && !process.argv.includes('--hidden')) showSplash() // primero: lo demás tarda un poco
+    if (!TEST_MODE) ensureStartMenuShortcut()
     initDb()
     registerMockupProtocol()
     registerNoteProtocol()
@@ -102,6 +105,7 @@ if (!gotLock) {
     if (db.heartbeat) for (const e of db.entries) if (!e.end) e.end = Math.max(e.start, db.heartbeat)
     await auth.initAuth() // sin sesión válida el renderer solo muestra el login y el IPC rechaza todo lo demás
     createWindows()
+    if (TEST_MODE) return // sin bandeja, atajos globales, actualizador, Telegram ni sondeos periódicos
     initTray(openWhatsApp)
     applyLoginItem()
     initUpdater()
