@@ -32,6 +32,10 @@ html[data-bg="image"] {
 }
 
 html, body { font-size: 13.5px; line-height: var(--lh, 1.5); -webkit-font-smoothing: antialiased; }
+/* html lleva `zoom` (escala de texto); con height/width:100% la raíz no cubría la ventana y quedaba un hueco a la derecha/abajo. Anclar el body a la ventana lo evita sea cual sea el zoom o la escala de Windows. */
+/* `vh` no se escala con el zoom de la raíz: 1 «vh de la app» = 1vh / zoom. Úsese calc(N * var(--vh)) en vez de Nvh. */
+html { --vh: calc(1vh / var(--zoom, 1)); }
+html body { position: fixed; top: 0; left: 0; width: calc(100vw / var(--zoom, 1)); height: calc(100vh / var(--zoom, 1)); overflow: hidden; }
 ::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
 * { scrollbar-width: thin; scrollbar-color: var(--ln2) transparent; }
 kbd { font: 11px var(--font-code, Consolas, monospace); color: var(--muted); border: 1px solid var(--ln2); border-radius: 5px; padding: 0 5px; background: none; white-space: nowrap; }
@@ -41,7 +45,7 @@ svg.g { display: block; flex: none; }
 .grow { flex: 1; min-width: 0; }
 
 /* ---------- fondo: aurora (o tu imagen) ---------- */
-html body { position: relative; background-color: var(--bg); background-image: none; }
+html body { background-color: var(--bg); background-image: none; }
 body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0; background: radial-gradient(60% 50% at 85% -5%, var(--g1), transparent 70%), radial-gradient(50% 45% at -5% 100%, var(--g2), transparent 70%), radial-gradient(40% 40% at 60% 110%, var(--g3), transparent 70%); }
 body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: .5; background-image: radial-gradient(var(--ln) 1px, transparent 1px); background-size: 26px 26px; -webkit-mask-image: radial-gradient(70% 60% at 50% 30%, #000, transparent); mask-image: radial-gradient(70% 60% at 50% 30%, #000, transparent); }
 /* con imagen de fondo, body::before y ::after son la imagen y su velo (ver extra.css) */
@@ -91,7 +95,7 @@ html h3 { text-transform: uppercase; letter-spacing: 1px; font-weight: 600; font
 html .empty { border: 1px dashed var(--ln2); border-radius: 16px; }
 
 /* ---------- dock flotante ---------- */
-html .side.rail-side { position: relative; z-index: 8; flex: none; width: 62px; margin: 14px 0 14px 14px; align-self: stretch; height: auto; max-height: calc(100vh - 28px); padding: 12px 0; border: 1px solid var(--ln); border-radius: 24px; background: var(--gl); backdrop-filter: blur(18px); display: flex; flex-direction: column; align-items: center; gap: 4px; }
+html .side.rail-side { position: relative; z-index: 8; flex: none; width: 62px; margin: 14px 0 14px 14px; align-self: stretch; height: auto; padding: 12px 0; border: 1px solid var(--ln); border-radius: 24px; background: var(--gl); backdrop-filter: blur(18px); display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .rail-side #nav, .rail-side .nav-group { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .rail-side .sp { flex: 1; }
 .rail-logo { width: 38px; height: 38px; border-radius: 12px; background: var(--grad); color: #fff; border: 0; padding: 0; display: grid; place-items: center; margin-bottom: 10px; box-shadow: 0 6px 22px var(--glow); position: relative; }
@@ -269,7 +273,7 @@ html .row.done .title { color: var(--muted); }
 
 /* ---------- tablero ---------- */
 html .board { gap: 14px; margin-top: 4px; }
-html .col { background: var(--gl); border: 1px solid var(--ln); border-radius: var(--r-card); padding: 12px; min-height: 240px; max-height: calc(100vh - 200px); overflow-y: auto; scrollbar-width: thin; backdrop-filter: blur(14px); }
+html .col { background: var(--gl); border: 1px solid var(--ln); border-radius: var(--r-card); padding: 12px; min-height: 240px; max-height: calc(calc(100 * var(--vh)) - 200px); overflow-y: auto; scrollbar-width: thin; backdrop-filter: blur(14px); }
 html .col.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--gl)); }
 html .col h4 { margin: 4px 6px 12px; padding: 0; border: 0; text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 650; color: var(--text); display: flex; align-items: center; gap: 8px; }
 html .col h4 span:last-child { margin-left: auto; background: var(--gl2); padding: 0 8px; border-radius: 99px; color: var(--muted); font-weight: 500; }
@@ -425,7 +429,7 @@ html .wsp-h .sel, .wsp-sel { width: auto; flex: 0 1 auto; min-width: 0; padding:
 /* ---------- diálogos, paleta, avisos ---------- */
 html .modal { background: rgba(0, 0, 0, .5); backdrop-filter: blur(6px); }
 html .dialog { background: color-mix(in srgb, var(--panel) 88%, transparent); backdrop-filter: blur(24px); border: 1px solid var(--ln2); border-radius: 22px; box-shadow: var(--shadow); }
-html .dialog.palette { position: fixed; top: 14vh; left: 50%; transform: translateX(-50%); width: min(580px, 92vw); padding: 0; overflow: hidden; border-radius: 20px; background: color-mix(in srgb, var(--bg) 92%, transparent); }
+html .dialog.palette { position: fixed; top: calc(14 * var(--vh)); left: 50%; transform: translateX(-50%); width: min(580px, 92vw); padding: 0; overflow: hidden; border-radius: 20px; background: color-mix(in srgb, var(--bg) 92%, transparent); }
 html .dialog.palette > input { border: 0; border-bottom: 1px solid var(--ln); border-radius: 0; box-shadow: none !important; background: none; font-size: 15px; padding: 17px 22px; }
 html .dialog.palette .plist { padding: 8px; max-height: 360px; }
 html .dialog.palette .pgroup { padding: 8px 12px 4px; font-size: 11px; color: var(--muted); text-transform: none; letter-spacing: 0; }
@@ -671,7 +675,7 @@ html #view:has(> .wsp-host) { height: 100%; padding: 4px 16px 18px 16px; display
 .webv-body { flex: 1; min-height: 0; border-radius: 18px; background: var(--gl); border: 1px solid var(--ln); overflow: hidden; }
 
 /* Asistente (Ctrl+J) */
-html .dialog.assistant { position: fixed; top: 12vh; left: 50%; transform: translateX(-50%); width: min(640px, 94vw); max-height: 76vh; overflow-y: auto; padding: 0; border-radius: 20px; background: color-mix(in srgb, var(--bg) 94%, transparent); display: flex; flex-direction: column; }
+html .dialog.assistant { position: fixed; top: calc(12 * var(--vh)); left: 50%; transform: translateX(-50%); width: min(640px, 94vw); max-height: calc(76 * var(--vh)); overflow-y: auto; padding: 0; border-radius: 20px; background: color-mix(in srgb, var(--bg) 94%, transparent); display: flex; flex-direction: column; }
 .as-head { display: flex; align-items: center; gap: 8px; padding: 14px 18px 4px; }
 .as-head .meta { flex: 1; min-width: 0; }
 .as-in { display: flex; gap: 8px; padding: 8px 18px 10px; align-items: flex-end; }
@@ -682,7 +686,7 @@ html .dialog.assistant { position: fixed; top: 12vh; left: 50%; transform: trans
 .as-say { padding: 4px 18px 8px; font-size: 13.5px; }
 .as-list { padding: 0 18px 8px; display: flex; flex-direction: column; gap: 6px; }
 .as-act { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 10px; background: var(--gl2); border: 1px solid var(--ln); font-size: 13px; color: var(--text); }
-.as-ans { margin: 0 18px 10px; padding: 12px 14px; border-radius: 12px; background: var(--gl2); border: 1px solid var(--ln); font-size: 13.5px; white-space: pre-wrap; max-height: 40vh; overflow-y: auto; }
+.as-ans { margin: 0 18px 10px; padding: 12px 14px; border-radius: 12px; background: var(--gl2); border: 1px solid var(--ln); font-size: 13.5px; white-space: pre-wrap; max-height: calc(40 * var(--vh)); overflow-y: auto; }
 .as-foot { padding: 8px 18px 12px; border-top: 1px solid var(--ln); }
 
 /* Páginas web incrustadas (<webview>): capa por debajo de menús y diálogos, por encima del contenido */
@@ -1145,7 +1149,7 @@ html .wsp-h .wsp-sel.task { color: #d4bfff; border-color: color-mix(in srgb, var
 .hr-strip > div.cur { border-color: var(--accent); color: var(--text); }
 /* tabla: columnas de hora juntas para dar el resto a la nota; con muchos registros se desplaza dentro de la tarjeta */
 .hr-table { padding: 0; overflow: hidden; margin-bottom: 16px; }
-.hr-scroll { max-height: min(46vh, 420px); overflow: auto; }
+.hr-scroll { max-height: min(calc(46 * var(--vh)), 420px); overflow: auto; }
 .hr-tbl { width: 100%; table-layout: fixed; border-collapse: collapse; }
 .hr-tbl th { position: sticky; top: 0; z-index: 1; background: var(--panel2); text-align: left; padding: 10px 12px; }
 .hr-tbl th.r, .hr-tbl td.r { text-align: right; }
@@ -1225,7 +1229,7 @@ html .wsp-h .wsp-sel.task { color: #d4bfff; border-color: color-mix(in srgb, var
 .kz-spark .c em { height: 14px; font: normal 10.5px var(--mono, ui-monospace, Consolas, monospace); color: var(--muted); white-space: nowrap; }
 .kz-tasks { padding: 0; overflow: hidden; }
 .kz-tasks .card-h { padding: 16px 18px 0; margin-bottom: 6px; }
-.kz-scroll { max-height: min(50vh, 420px); overflow: auto; }
+.kz-scroll { max-height: min(calc(50 * var(--vh)), 420px); overflow: auto; }
 .kz-tbl { width: 100%; border-collapse: collapse; }
 .kz-tbl th { position: sticky; top: 0; z-index: 1; background: var(--panel2); text-align: left; padding: 9px 12px; }
 .kz-tbl th.r, .kz-tbl td.r { text-align: right; width: 130px; }
@@ -1501,7 +1505,7 @@ html .chatpane .composer-hint { padding: 6px 6px 0; }
 .tk-compact:disabled { opacity: .45; cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) { .tk-arc, .tk-bar i { transition: none; } }
 .ctx-trigger.on { border-style: solid; color: var(--text); border-color: color-mix(in srgb, var(--accent) 50%, transparent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
-.ctx-pop { z-index: 60; width: 440px; max-width: calc(100vw - 24px); max-height: min(70vh, 520px); overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 14px; background: var(--panel2); border: 1px solid var(--line2); border-radius: calc(12px * var(--rs, 1)); box-shadow: 0 20px 50px rgba(0, 0, 0, .5); }
+.ctx-pop { z-index: 60; width: 440px; max-width: calc(100vw - 24px); max-height: min(calc(70 * var(--vh)), 520px); overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 14px; background: var(--panel2); border: 1px solid var(--line2); border-radius: calc(12px * var(--rs, 1)); box-shadow: 0 20px 50px rgba(0, 0, 0, .5); }
 .ctx-pop-h { display: flex; flex-direction: column; gap: 2px; }
 .ctx-pop-h b { font-size: 13px; font-weight: 650; }
 .ctx-pop-chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -1769,7 +1773,7 @@ html[data-preset="nexoclaro"] .bc { border-color: var(--line); box-shadow: 0 1px
 .hm-line .upd { margin-top: 4px; text-transform: capitalize; }
 .hm-th { display: flex; align-items: center; gap: 12px; margin: 2px 2px 10px; }
 /* altura fija = pantalla: 3 columnas arriba y «Rutinas» a todo el ancho abajo; cada bloque hace scroll interno */
-.hm-tasks { display: flex; flex-direction: column; height: max(480px, calc(100vh - 310px)); min-height: 0; }
+.hm-tasks { display: flex; flex-direction: column; height: max(480px, calc(calc(100 * var(--vh)) - 310px)); min-height: 0; }
 .hm-cols { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr) minmax(104px, 32%); gap: 12px; }
 .hm-col { display: flex; flex-direction: column; min-height: 0; background: var(--gl2); border: 1px solid var(--line); border-radius: 14px; padding: 10px; min-width: 0; transition: border-color .15s, background .15s; }
 .hm-col.wide { grid-column: 1 / -1; }
