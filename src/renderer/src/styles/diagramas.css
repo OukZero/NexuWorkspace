@@ -14,7 +14,7 @@
 .dg-title { font: 600 16px inherit; min-width: 100px; max-width: 360px; flex: 1 1 140px; background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 4px 8px; color: inherit; }
 .dg-title:hover, .dg-title:focus { border-color: var(--ln); outline: none; }
 .dg-work { flex: 1; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(200px, 38%) minmax(0, 1fr); gap: 10px; }
-.dg-work.bpmn { grid-template-columns: minmax(0, 1fr); min-height: calc(100vh - 190px); }
+.dg-work.bpmn { grid-template-columns: minmax(0, 1fr); min-height: calc(calc(100 * var(--vh)) - 190px); }
 .dg-code { resize: none; font: 12.5px/1.5 ui-monospace, Consolas, monospace; padding: 10px; border: 1px solid var(--ln); border-radius: 10px; background: transparent; color: inherit; min-height: 0; }
 /* el lienzo es claro siempre: así se lee igual en cualquier tema y coincide con lo exportado */
 .dg-canvas { position: relative; min-height: 0; overflow: auto; border: 1px solid var(--ln); border-radius: 10px; background: #fff; color: #1f2430; }

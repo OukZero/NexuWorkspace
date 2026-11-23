@@ -1,6 +1,6 @@
 /* ===== Equipo: sala, personajes y objetos ===== */
 /* ocupa todo el alto disponible; la sala es la que crece */
-.tm-wrap { align-items: stretch; min-height: calc(100vh - 150px); grid-template-columns: 290px minmax(0, 1fr) 340px; }
+.tm-wrap { align-items: stretch; min-height: calc(calc(100 * var(--vh)) - 150px); grid-template-columns: 290px minmax(0, 1fr) 340px; }
 .tm-wrap > .card { height: 100%; }
 .tm-wrap .eyebrow { display: flex; align-items: center; gap: 6px; }
 .tm-mid { display: flex; flex-direction: column; gap: 0; min-width: 0; }
@@ -254,12 +254,12 @@
 .tm-live { display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: var(--accent); vertical-align: 1px; animation: tm-live 1s ease-in-out infinite; }
 .tm-edit.is-chat { display: flex; flex-direction: column; }
 /* editor de agente: no estira la pantalla, hace scroll interno */
-.tm-wrap > .tm-edit:not(.is-chat) { height: auto; align-self: start; max-height: calc(100vh - 150px); overflow-y: auto; scrollbar-width: thin; }
+.tm-wrap > .tm-edit:not(.is-chat) { height: auto; align-self: start; max-height: calc(calc(100 * var(--vh)) - 150px); overflow-y: auto; scrollbar-width: thin; }
 .tm-edit:not(.is-chat) .tm-tabs { position: sticky; top: 0; z-index: 2; }
 
 /* chat del equipo */
 .tc { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
-.tc-log { flex: 1 1 0; min-height: 260px; max-height: calc(100vh - 360px); overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 2px 8px; scroll-behavior: smooth; }
+.tc-log { flex: 1 1 0; min-height: 260px; max-height: calc(calc(100 * var(--vh)) - 360px); overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 2px 8px; scroll-behavior: smooth; }
 .tc-empty { margin: auto; display: grid; justify-items: center; gap: 6px; text-align: center; color: var(--muted); padding: 20px 8px; }
 .tc-empty > span { font-size: 38px; }
 .tc-empty b { color: var(--text); font-size: 14px; }
@@ -333,7 +333,7 @@
   .tr-fx { display: none; }
 }
 /* altura fija: cada columna hace scroll por su cuenta en vez de estirar la pantalla */
-.tm-wrap { height: calc(100vh - 150px); min-height: 520px; overflow: hidden; }
+.tm-wrap { height: calc(calc(100 * var(--vh)) - 150px); min-height: 520px; overflow: hidden; }
 .tm-wrap > .card { height: auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .tm-wrap > .card.is-chat { overflow: hidden; }
 @media (max-width: 1100px) { .tm-wrap { grid-template-columns: 1fr; height: auto; min-height: 0; overflow: visible; } .tm-wrap > .card { height: auto; overflow: visible; } }
@@ -510,7 +510,7 @@
 .tc-add.on { color: var(--text); background: var(--panel2); }
 .tc-mentions { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 0; }
 .tc-mentions button { padding: 3px 10px; white-space: nowrap; }
-.tc-log { min-height: 340px; max-height: calc(100vh - 250px); }
+.tc-log { min-height: 340px; max-height: calc(calc(100 * var(--vh)) - 250px); }
 .tm-wrap .tc-comp textarea { min-height: 44px; }
 .tc-comp { padding: 10px; }
 .tc-hint { padding-bottom: 4px; }
@@ -535,7 +535,7 @@
 .tm-wrap .tm-opts button { padding: 3px 9px; font-size: 11.5px; }
 /* centro: la sala deja de estirarse a todo el alto y la columna se queda pegada arriba */
 .tm-wrap > .tm-mid { align-self: start; height: auto; max-height: 100%; }
-.tr-room { flex: 0 0 auto; min-height: 0; height: clamp(300px, 50vh, 480px); }
+.tr-room { flex: 0 0 auto; min-height: 0; height: clamp(300px, calc(50 * var(--vh)), 480px); }
 .tm-agents-h { margin: 10px 0 4px; }
 .tm-roster { padding: 4px 2px 6px; }
 .tr-bar { margin-top: 6px; }

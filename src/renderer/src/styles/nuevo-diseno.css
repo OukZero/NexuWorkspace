@@ -95,7 +95,7 @@ h1, h2, h3, .tb-title h1, .card-h h2, .bc h2 { font-family: 'Sora', 'IBM Plex Sa
 
 /* ---------- riel lateral (64 px) ---------- */
 .navrail {
-  flex: none; width: 64px; height: 100vh; display: flex; flex-direction: column; align-items: center;
+  flex: none; width: 64px; height: calc(100 * var(--vh)); display: flex; flex-direction: column; align-items: center;
   gap: 6px; padding: 14px 0; background: color-mix(in srgb, var(--panel) 96%, #000);
   border-right: 1px solid var(--line); box-shadow: inset -1px 0 0 var(--nd-edge); z-index: 7;
 }
@@ -135,7 +135,7 @@ h1, h2, h3, .tb-title h1, .card-h h2, .bc h2 { font-family: 'Sora', 'IBM Plex Sa
 
 /* ---------- inicio: detalles del mockup ---------- */
 /* la barra de captura es `fixed` pero el contenedor del bento la contiene: se le da altura de pantalla para que quede abajo */
-.bento.home { min-height: calc(100vh - 200px); align-content: start; padding-bottom: 16px; }
+.bento.home { min-height: calc(calc(100 * var(--vh)) - 200px); align-content: start; padding-bottom: 16px; }
 /* la barra vive como último hijo de `.scroll`: `sticky` la mantiene flotando abajo aunque se haga scroll */
 .scroll > .addin.hm-add { position: sticky; left: auto; bottom: 14px; transform: none; width: min(640px, calc(100% - 48px)); margin: 0 auto 14px; }
 .addin.hm-add {
