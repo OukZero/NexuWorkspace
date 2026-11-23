@@ -87,7 +87,11 @@ export function registerTeamIpc(): void {
         ? `\n\nEstimación ${level === 'technical' ? 'técnica' : 'comercial'}. Entrega el resultado siguiendo EXACTAMENTE esta plantilla:\n${get(level)}`
         : `\n\nSegún lo que pida el usuario, usa la plantilla técnica o la comercial (si no está claro, usa la técnica y dilo):\n--- PLANTILLA TÉCNICA ---\n${get('technical')}\n--- PLANTILLA COMERCIAL ---\n${get('commercial')}`
     }
-    const prompt = `${a.prompt}\n\nUsa estas skills cuando la tarea encaje: ${a.skills.join(', ') || 'ninguna'}.\n\n${tpl}
+    // propuestas numeradas: así «aplica la 1 y la 3» se puede resolver luego desde el historial
+    const how = a.canEdit
+      ? 'Si te piden aplicar propuestas de la conversación, aplícalas de verdad en los archivos y al final lista qué número de propuesta aplicaste y en qué archivos.'
+      : 'Si propones cambios, enuméralos (1, 2, 3…) indicando archivo y cambio concreto, para poder aplicarlos después por número. Tú no modificas archivos.'
+    const prompt = `${a.prompt}\n\n${how}\n\nUsa estas skills cuando la tarea encaje: ${a.skills.join(', ') || 'ninguna'}.\n\n${tpl}
 
 ${histBlock(history)}---\n${message || 'Revisa los archivos adjuntos.'}`
     return tracked(`${a.name} respondió.`, (signal) => runAgent(a, prompt, files, signal, convDir))
@@ -144,7 +148,7 @@ ${histBlock(history)}---\n${message || 'Revisa los archivos adjuntos.'}`
     const cmd = getDb().settings.claudeCmd
     const model = boss && MODELS.includes(boss.model) ? boss.model : 'sonnet'
     const list = workers.map((a) => `- id: ${a.id} | ${a.name}${a.canEdit ? ' (MODIFICA ARCHIVOS)' : ''} | skills: ${a.skills.join(', ') || '—'} | ${a.prompt.replace(/\s+/g, ' ').slice(0, 220)}`).join('\n')
-    const plan = `${boss?.prompt ?? ''}\n\nAgentes disponibles:\n${list}\n\n${histBlock(history)}Solicitud:\n${message.slice(0, 3000)}\n\nSi la solicitud se refiere a algo de la conversación reciente (p. ej. «aplica las opciones 1, 2 y 3» sobre una lista de ideas), identifica exactamente a qué se refiere y copia el contenido relevante dentro de cada instrucción: el agente que la reciba no puede adivinarlo. Planifica como máximo 4 pasos, en orden, usando solo estos agentes (cada paso recibe los resultados anteriores). Responde SOLO con un array JSON: [{"id":"<id del agente>","task":"<instrucción concreta y autosuficiente>"}]`
+    const plan = `${boss?.prompt ?? ''}\n\nAgentes disponibles:\n${list}\n\n${histBlock(history)}Solicitud:\n${message.slice(0, 3000)}\n\nSi la solicitud se refiere a algo de la conversación reciente (p. ej. «aplica las opciones 1, 2 y 3» sobre una lista de ideas), identifica exactamente a qué se refiere y copia el contenido relevante dentro de cada instrucción: el agente que la reciba no puede adivinarlo. Si piden aplicar o implementar cambios, el paso que modifica el código debe ser de un agente marcado (MODIFICA ARCHIVOS); un agente que no edita solo puede proponer, nunca aplicar. Planifica como máximo 4 pasos, en orden, usando solo estos agentes (cada paso recibe los resultados anteriores). Responde SOLO con un array JSON: [{"id":"<id del agente>","task":"<instrucción concreta y autosuficiente>"}]`
     let steps: Array<{ id: string; task: string }> = []
     try {
       broadcast('team:progress', { agentId: ORCHESTRATOR_ID, text: 'Planificando los pasos…' })
