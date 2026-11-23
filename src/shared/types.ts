@@ -547,6 +547,16 @@ export interface MockupFile {
   size: number
 }
 
+/** Guía de estilo del front: se inyecta en toda conversación de la pestaña Diseño para que los mockups sean coherentes. */
+export interface DesignStyle {
+  /** Descripción libre: personalidad, tono, colores (hex), tipografías, radios, espaciado, componentes, qué evitar. */
+  brief: string
+  /** Webs de referencia que Claude consulta con WebFetch. */
+  links: string[]
+  /** Capturas/logos de referencia (copiados a la carpeta de estilo de la app). */
+  refs: { name: string; path: string }[]
+}
+
 export interface Subtask {
   id: string
   text: string
@@ -879,6 +889,7 @@ export interface TeamProp {
 }
 
 export interface DB {
+  designStyle?: DesignStyle
   tasks: Task[]
   entries: Entry[]
   settings: Settings
@@ -1027,6 +1038,10 @@ export interface IpcChannels {
   'mockup:list': { args: [string]; ret: MockupFile[] }
   'mockup:delete': { args: [string, string]; ret: void }
   'mockup:export': { args: [string, string, 'png' | 'pdf', number]; ret: string | null } // tarea, archivo, formato, ancho
+  'design:style-get': { args: []; ret: DesignStyle }
+  'design:style-save': { args: [{ brief: string; links: string[] }]; ret: DesignStyle }
+  'design:style-add': { args: [string, Uint8Array]; ret: DesignStyle } // nombre, bytes de una imagen de referencia
+  'design:style-remove': { args: [string]; ret: DesignStyle }
   'mockup:reveal': { args: [string]; ret: void }
   'chat:close': { args: [string]; ret: void }
   'chat:reopen': { args: [string]; ret: void }

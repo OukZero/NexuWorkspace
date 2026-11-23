@@ -5,7 +5,7 @@ import path from 'path'
 import { BrowserWindow } from 'electron'
 import { ChildProcess, spawn } from 'child_process'
 import { attachRoot, trusted as trustedAttachments } from './attachments'
-import { designInstructions, mockupsDir, stageAssets } from './mockups'
+import { designInstructions, mockupsDir, stageAssets, styleDir } from './mockups'
 import type { Activity, Attachment, Chat, ChatMessage, ChatMode, ChatUsage, Hunk, LimitWindow, PermissionChoice, PermissionRequest, Provider, Task } from '../../../shared/types'
 import { clip } from '../../../shared/util'
 import { profilesOf } from '../../../shared/templates'
@@ -729,7 +729,7 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[], e
     if (files.length) args.push('--add-dir', `"${attachRoot()}"`) // para que Claude pueda leer los adjuntos no gráficos
     // pestaña Diseño: acceso a la carpeta de mockups de la tarea e instrucciones de diseño como parte del system prompt
     if (chat.kind === 'design') {
-      args.push('--add-dir', `"${mockupsDir(task.id)}"`, '--append-system-prompt-file', `"${designInstructions(task.id, task.title)}"`)
+      args.push('--add-dir', `"${mockupsDir(task.id)}"`, '--add-dir', `"${styleDir()}"`, '--append-system-prompt-file', `"${designInstructions(task.id, task.title)}"`)
     } else {
       // todas las carpetas de los grupos de la tarea: Claude sabe que existen y que debe trabajar en el conjunto
       const parts = [groupNote(task), prof?.instructions, chat.worktree ? `Trabajas en una copia aislada del repositorio (rama «${chat.worktree.branch}», carpeta ${chat.worktree.dir}). Haz todos los cambios ahí; no toques la carpeta original.` : ''].filter(Boolean)
