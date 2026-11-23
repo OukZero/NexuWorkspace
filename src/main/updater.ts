@@ -8,6 +8,7 @@ import { broadcast, commit, getDb } from './db'
 import { lifecycle } from './lifecycle'
 import { stopActive } from './features/time/timer'
 import { cleanup } from './quit'
+import { showUpdating } from './splash'
 
 const HOUR = 3_600_000
 let state: UpdateState = { status: app.isPackaged ? 'idle' : 'dev', current: app.getVersion() }
@@ -96,8 +97,11 @@ export function install(): void {
     /* sin datos que guardar */
   }
   cleanup()
-  // isSilent=true: el Setup de NSIS corre con /S (sin asistente); el segundo true reabre la app al terminar
-  autoUpdater.quitAndInstall(true, true)
+  // pantalla «Actualizando…» unos segundos y luego se instala, para que no parezca que la app solo se cierra
+  void showUpdating(state.version).then(() => {
+    // isSilent=true: el Setup de NSIS corre con /S (sin asistente); el segundo true reabre la app al terminar
+    autoUpdater.quitAndInstall(true, true)
+  })
 }
 
 export function initUpdater(): void {
