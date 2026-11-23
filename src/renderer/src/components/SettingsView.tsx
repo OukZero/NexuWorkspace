@@ -45,6 +45,9 @@ const ICONS: Record<string, string> = {
   integraciones: 'M9 7V3M15 7V3M7 7h10v4a5 5 0 0 1-10 0V7zM12 16v5',
   sistema: 'M4 5h16v11H4zM8 20h8M12 16v4',
   datos: 'M12 4c4.4 0 8 1.1 8 2.5S16.4 9 12 9 4 7.9 4 6.5 7.6 4 12 4zM4 6.5v5C4 12.9 7.6 14 12 14s8-1.1 8-2.5v-5M4 11.5v5C4 17.9 7.6 19 12 19s8-1.1 8-2.5v-5',
+  telegram: 'M21 4L3 11l6 2.2L11.5 20l3.2-4.2 4.8 3.7z M9 13.2l4.5-3.2',
+  spotify: 'M9 18V6l10-2v12 M9 18a2.5 2.5 0 1 1-2-2.4 M19 16a2.5 2.5 0 1 1-2-2.4',
+  calendario: 'M4 5h16v15H4z M4 10h16 M9 3v4 M15 3v4',
   card: 'M5 5h14v14H5z M9 9h6M9 13h6'
 }
 function Icon({ n, size = 16 }: { n: string; size?: number }): ReactNode {
@@ -595,6 +598,9 @@ export function SettingsView(): ReactNode {
 
           {tab === 'integraciones' && (
             <>
+              <div className="meta" style={{ marginBottom: 14 }}>
+                Redmine y Git se guardan con el botón «Guardar» de abajo; Telegram, Spotify y el calendario tienen cada uno el suyo.
+              </div>
               <Card icon="integraciones" title="Redmine" sub="Dirección y actividad por defecto">
               <div className="grid2">
                 <div>
@@ -632,12 +638,15 @@ export function SettingsView(): ReactNode {
                 </div>
               </div>
               </Card>
-              <div className="meta" style={{ marginTop: 14 }}>
-                Redmine y git se guardan con el botón «Guardar» de abajo; Telegram tiene el suyo.
-              </div>
-              <TelegramSettings />
-              <SpotifySettings />
-              <CalendarSettings />
+              <Card icon="telegram" title="Telegram" sub="Avisos y permisos de Claude en el móvil">
+                <TelegramSettings />
+              </Card>
+              <Card icon="spotify" title="Spotify" sub="Control de reproducción y pomodoro">
+                <SpotifySettings />
+              </Card>
+              <Card icon="calendario" title="Calendario de Outlook" sub="Reuniones en «Hoy» y avisos previos">
+                <CalendarSettings />
+              </Card>
             </>
           )}
 

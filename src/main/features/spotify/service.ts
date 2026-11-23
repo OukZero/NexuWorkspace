@@ -33,25 +33,34 @@ let loaded = false // la sesión guardada se lee del disco una sola vez, no en c
 const file = (): string => path.join(app.getPath('userData'), 'spotify.bin')
 const clientId = (): string => (getDb().settings.spotifyClientId ?? '').trim()
 
-function persist(): void {
-  if (!tokens || !safeStorage.isEncryptionAvailable()) return
-  fs.writeFileSync(file(), safeStorage.encryptString(JSON.stringify(tokens)))
-}
-
-function load(): void {
-  if (tokens || loaded) return
-  loaded = true
+async function persist(): Promise<void> {
   try {
-    if (!safeStorage.isEncryptionAvailable()) return
-    const t = JSON.parse(safeStorage.decryptString(fs.readFileSync(file()))) as Tokens
-    if (t.refresh && t.clientId) tokens = t
+    if (!tokens || !(await safeStorage.isAsyncEncryptionAvailable())) return
+    fs.writeFileSync(file(), await safeStorage.encryptStringAsync(JSON.stringify(tokens)))
   } catch {
-    /* sin sesión guardada */
+    /* sin permiso de escritura: la sesión vale solo hasta cerrar la app */
   }
 }
 
+// la API de cifrado asíncrona obliga a cargar la sesión una sola vez y esperar a que termine antes de usarla
+let loading: Promise<void> | null = null
+export function ensureLoaded(): Promise<void> {
+  loading ??= (async () => {
+    if (tokens || loaded) return
+    loaded = true
+    try {
+      if (!(await safeStorage.isAsyncEncryptionAvailable())) return
+      const t = JSON.parse((await safeStorage.decryptStringAsync(fs.readFileSync(file()))).result) as Tokens
+      if (t.refresh && t.clientId && !tokens) tokens = t
+    } catch {
+      /* sin sesión guardada */
+    }
+  })()
+  return loading
+}
+
 export function getStatus(): SpotifyStatus {
-  load()
+  void ensureLoaded()
   const id = clientId()
   return { configured: !!id, connected: !!tokens && tokens.clientId === id, error: lastError }
 }
@@ -84,7 +93,7 @@ async function tokenRequest(body: Record<string, string>): Promise<{ access_toke
 export async function connect(): Promise<SpotifyStatus> {
   const id = clientId()
   if (!id) throw new Error('Pega primero el Client ID de tu app de Spotify.')
-  if (!safeStorage.isEncryptionAvailable()) throw new Error('El cifrado del sistema no está disponible: no se puede guardar la sesión de Spotify.')
+  if (!(await safeStorage.isAsyncEncryptionAvailable())) throw new Error('El cifrado del sistema no está disponible: no se puede guardar la sesión de Spotify.')
   server?.close()
   const verifier = randomBytes(48).toString('base64url')
   const challenge = createHash('sha256').update(verifier).digest('base64url')
@@ -124,12 +133,12 @@ export async function connect(): Promise<SpotifyStatus> {
   tokens = { refresh: t.refresh_token, clientId: id }
   access = { token: t.access_token, exp: Date.now() + t.expires_in * 1000 - 30_000 }
   lastError = undefined
-  persist()
+  await persist()
   return getStatus()
 }
 
 async function accessToken(): Promise<string> {
-  load()
+  await ensureLoaded()
   if (!tokens || tokens.clientId !== clientId()) throw new Error('Spotify no está conectado.')
   if (access && Date.now() < access.exp) return access.token
   try {
@@ -137,7 +146,7 @@ async function accessToken(): Promise<string> {
     access = { token: t.access_token, exp: Date.now() + t.expires_in * 1000 - 30_000 }
     if (t.refresh_token) {
       tokens = { ...tokens, refresh: t.refresh_token }
-      persist()
+      void persist()
     }
     return access.token
   } catch (e) {

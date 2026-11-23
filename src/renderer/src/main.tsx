@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { Login } from './components/Login'
 import { SkillsWindow } from './components/SkillsWindow'
 import { initStore, peek } from './store'
@@ -17,6 +18,8 @@ import './styles/extra.css'
 import './styles/cockpit.css'
 import './styles/nuevo-diseno.css'
 import './styles/equipo.css'
+import './styles/sorvo.css'
+import './styles/diagramas.css'
 
 initTheme()
 const root = createRoot(document.getElementById('root') as HTMLElement)
@@ -35,6 +38,13 @@ async function boot(): Promise<void> {
   }
   await initStore()
   hydrate(peek()?.settings.appearance) // equipo sin preferencias guardadas: se toman las de los datos
-  root.render(<StrictMode>{new URLSearchParams(location.search).has('skills') ? <SkillsWindow /> : <App />}</StrictMode>)
+  root.render(<StrictMode><ErrorBoundary>{new URLSearchParams(location.search).has('skills') ? <SkillsWindow /> : <App />}</ErrorBoundary></StrictMode>)
 }
-void boot()
+// sin esto, un fallo al arrancar deja solo el fondo y ningún mensaje
+boot().catch((e: unknown) => {
+  console.error(e)
+  const box = document.createElement('pre')
+  box.style.cssText = 'position:fixed;inset:0;margin:0;padding:24px;color:#fff;background:#000c;white-space:pre-wrap;overflow:auto'
+  box.textContent = 'No se pudo iniciar la app:\n\n' + (e instanceof Error ? e.stack ?? e.message : String(e))
+  document.body.appendChild(box)
+})
