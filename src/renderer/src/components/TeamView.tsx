@@ -506,9 +506,12 @@ export function TeamView(): ReactNode {
     // lo anterior de esta conversación, para que el agente entienda referencias como «la idea 3»
     const history = (convs.find((c) => c.id === cid)?.msgs ?? [])
       .filter((m) => m.role !== 'system' && m.text.trim())
-      .slice(-10)
-      // la última respuesta de un agente (la propuesta a la que el usuario suele referirse) va casi completa; el resto, resumido
-      .map((m, i, a) => `${m.role === 'user' ? 'Usuario' : byId(m.agentId)?.name ?? 'Agente'}: ${m.text.slice(0, m.role !== 'user' && i === a.map((x) => x.role).lastIndexOf(m.role) ? 6000 : m.role === 'user' ? 3000 : 1500)}`)
+      .slice(-14)
+      // las dos últimas respuestas de agentes (propuestas y lo ya aplicado) van casi completas para que no se pierdan; el resto, resumido
+      .map((m, i, a) => {
+        const lastAgent = a.map((x, j) => (x.role !== 'user' ? j : -1)).filter((j) => j >= 0).slice(-2)
+        return `${m.role === 'user' ? 'Usuario' : byId(m.agentId)?.name ?? 'Agente'}: ${m.text.slice(0, m.role !== 'user' && lastAgent.includes(i) ? 6000 : m.role === 'user' ? 3000 : 1500)}`
+      })
       .join('\n\n')
     pushChat({ role: 'user', text, attachments: sent.length ? sent : undefined }, cid)
     const at = forced ? undefined : mentioned(text)
@@ -736,7 +739,7 @@ export function TeamView(): ReactNode {
           <div className="tm-popwrap">
             <button className="btn primary sm" aria-expanded={pop === 'add'} aria-haspopup="true" onClick={() => setPop(pop === 'add' ? '' : 'add')}>＋ Agente</button>
             {pop === 'add' && (
-              <div className="rs-pop" role="menu">
+              <div className="rs-pop right up" role="menu">
                 <button role="menuitem" onClick={() => { setPop(''); addAgent() }}><span aria-hidden>🤖</span> Agente en blanco</button>
                 {missingTpl.map((t) => (
                   <button key={t.id} role="menuitem" style={{ ['--c' as string]: t.color }} title={t.prompt} onClick={() => { setPop(''); addTemplate(t) }}><span aria-hidden>{t.emoji}</span> {t.name}</button>
