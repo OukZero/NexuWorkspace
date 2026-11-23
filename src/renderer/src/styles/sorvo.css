@@ -428,7 +428,7 @@ html[data-preset="aqua"] .navrail .tn-i:hover { color: #fff; }
 .hg-menu button:disabled { opacity: .4; }
 
 .home-grid {
-  --hg-row: max(34px, calc((calc(100 * var(--vh)) - 235px - (var(--hg-rows, 14) - 1) * 14px) / var(--hg-rows, 14)));
+  --hg-row: max(54px, calc((calc(100 * var(--vh)) - 235px - (var(--hg-rows, 14) - 1) * 14px) / var(--hg-rows, 14)));
   display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: var(--hg-row); gap: 14px;
   padding-bottom: 64px; /* hueco para la barra flotante de nueva tarea */
 }
@@ -456,9 +456,10 @@ html[data-preset="aqua"] .navrail .tn-i:hover { color: #fff; }
 .hg-body > .hm-ai { container-type: size; display: flex; flex-direction: column; padding-block: 12px; }
 .hg-body > .hm-ai .hm-gauges { flex: 1 1 0; min-height: 0; }
 .hg-body > .hm-ai .hm-arc { display: flex; flex-direction: column; min-height: 0; }
-.hg-body > .hm-ai .hm-arc .g { flex: 1 1 0; min-height: 24px; width: auto; max-width: 116px; margin: 0 auto; }
+.hg-body > .hm-ai .hm-arc .g { flex: 1 1 0; min-height: 44px; container-type: size; width: auto; max-width: 116px; margin: 0 auto; }
 .hg-body > .hm-ai .hm-arc :is(span, small) { flex: none; }
 @container (max-height: 175px) { .hm-ai .hm-arc small { display: none; } }
+.hg-body > .hm-ai .hm-arc .g b { font-size: clamp(9px, 24cqmin, 20px); }
 
 /* widgets de gráficos */
 .hw { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; }
