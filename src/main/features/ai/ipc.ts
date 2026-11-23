@@ -7,7 +7,7 @@ import { planAssistant, readAndAnswer } from './assistant'
 import * as attachments from './attachments'
 import * as chat from './chat'
 import { buildContext, expandVars, repoDirOf, taskById as findTask, withContext } from './context'
-import { deleteMockup, exportMockup, listMockups, revealMockups } from './mockups'
+import { addStyleRef, deleteMockup, exportMockup, getStyle, listMockups, removeStyleRef, revealMockups, saveStyle } from './mockups'
 import * as sessions from './sessions'
 import * as skills from './skills'
 import { summarizeConversation } from './summary'
@@ -32,6 +32,10 @@ export function registerAiIpc(): void {
   api('mockup:list', (taskId) => listMockups(taskId))
   api('mockup:delete', (taskId, name) => deleteMockup(taskId, name))
   api('mockup:export', (taskId, name, format, width) => exportMockup(taskId, name, format, width))
+  api('design:style-get', () => getStyle())
+  api('design:style-save', (p) => saveStyle(p))
+  api('design:style-add', (name, data) => addStyleRef(name, data))
+  api('design:style-remove', (name) => removeStyleRef(name))
   api('mockup:reveal', (taskId) => revealMockups(taskId))
   api('attach:pick', (convId) => attachments.pick(convId))
   api('attach:save', (convId, name, data) => attachments.saveBytes(convId, name, data))

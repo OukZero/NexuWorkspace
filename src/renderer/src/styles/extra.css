@@ -1166,3 +1166,23 @@ html .composer-hint kbd { color: var(--text); }
 .kb { align-items: start; }
 .kb-col { max-height: max(340px, calc(100vh - 260px)); }
 .kb-cards { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; overflow-y: auto; margin: 0 -6px; padding: 2px 6px; }
+
+/* Guía de estilo del front (pestaña Diseño) */
+.dstyle { width: min(640px, 92vw); max-height: 88vh; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 18px; background: var(--panel, #171a21); border: 1px solid var(--ln); border-radius: 14px; }
+.dstyle-h { display: flex; align-items: center; justify-content: space-between; }
+.dstyle textarea { min-height: 190px; resize: vertical; width: 100%; font: 12px/1.5 var(--mono, ui-monospace, monospace); }
+.dstyle textarea.short { min-height: 64px; }
+.dstyle-refs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.dstyle-f { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.dstyle-f .meta { margin-right: auto; }
+.design-list-h { gap: 2px; }
+.design-list-h > b { margin-right: auto; }
+
+/* Visor de mockups: el iframe mide el ancho real del dispositivo y se escala (transform) para verse entero */
+.design:has(.design-list[hidden]) { grid-template-columns: minmax(0, 1fr); }
+.design-bar { flex-wrap: wrap; row-gap: 6px; }
+.design-bar .meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.design-stage { overflow: auto; justify-content: safe center; align-items: flex-start; }
+.design-frame { flex: none; max-width: none; height: auto; }
+.design-frame iframe { width: auto; height: auto; max-width: none; transform-origin: top left; }
+@media (max-width: 1000px) { .design { grid-template-columns: 170px minmax(0, 1fr); } }
