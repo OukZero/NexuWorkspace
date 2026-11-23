@@ -812,6 +812,11 @@ html[data-focus] .side, html[data-focus] .statusbar, html[data-focus] .topstack 
 .ap { display: flex; flex-direction: column; gap: 6px; }
 .ap h3 { margin: 18px 0 4px; font-size: 14px; }
 .ap h3:first-child { margin-top: 0; }
+/* Secciones en tarjetas, como el resto de Ajustes: el título va en la cabecera, no con el margen de .ap h3 */
+.ap { gap: 14px; }
+.ap > .set-card { margin-bottom: 0; }
+.ap .set-card-h h3 { margin: 0; font-size: 15px; }
+.ap-sec { display: flex; flex-direction: column; gap: 10px; }
 .ap-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .ap-row > label { margin: 0; min-width: 120px; }
 .ap-row input[type="range"] { width: 180px; }
@@ -1186,3 +1191,53 @@ html .composer-hint kbd { color: var(--text); }
 .design-frame { flex: none; max-width: none; height: auto; }
 .design-frame iframe { width: auto; height: auto; max-width: none; transform-origin: top left; }
 @media (max-width: 1000px) { .design { grid-template-columns: 170px minmax(0, 1fr); } }
+
+/* ---------- Arquitectura ---------- */
+.arch { display: grid; grid-template-columns: 220px 1fr; height: 100%; min-height: 0; }
+.arch-list { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-right: 1px solid var(--ln); overflow-y: auto; }
+.arch-item { text-align: left; background: transparent; border: 1px solid var(--ln); border-radius: 8px; padding: 8px 10px; color: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.arch-item span { font-size: 11px; color: var(--muted); }
+.arch-item.on { border-color: var(--accent); }
+.arch-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 14px 18px; gap: 10px; }
+.arch-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.arch-head h2, .arch-form h2 { margin: 0; font-size: 17px; }
+.arch-head small { color: var(--muted); }
+.arch-actions, .arch-steps { display: flex; gap: 6px; flex-wrap: wrap; }
+.arch-chat { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.arch-msg { border: 1px solid var(--ln); border-radius: 10px; padding: 10px 14px; max-width: 100%; overflow-x: auto; }
+.arch-msg.user { align-self: flex-end; border-color: var(--accent); max-width: 80%; }
+.arch-msg p { margin: 0; white-space: pre-wrap; }
+.arch-busy, .arch-empty { color: var(--muted); }
+.arch-input { display: flex; gap: 8px; align-items: flex-end; }
+.arch-input textarea { flex: 1; resize: none; }
+.arch-form { display: flex; flex-direction: column; gap: 12px; max-width: 680px; overflow-y: auto; }
+.arch-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.arch-dir { display: flex; gap: 6px; }
+.arch-dir input { flex: 1; }
+.arch-scope { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.arch-scope button { text-align: left; background: transparent; color: inherit; border: 1px solid var(--ln); border-radius: 8px; padding: 8px 10px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.arch-scope button span { font-size: 11px; color: var(--muted); }
+.arch-scope button.on { border-color: var(--accent); }
+@media (max-width: 900px) { .arch { grid-template-columns: 150px 1fr; } .arch-scope { grid-template-columns: 1fr; } }
+
+/* ---------- adaptación a la ventana: ningún módulo desborda ni obliga a scroll horizontal ---------- */
+html, body { max-width: 100vw; overflow-x: hidden; }
+html .scroll { min-width: 0; overflow-x: hidden; }
+html #view, html #view > * { min-width: 0; max-width: 100%; }
+@media (max-width: 1280px) {
+  .tm-wrap { grid-template-columns: 240px minmax(0, 1fr) 300px; }
+}
+@media (max-width: 1000px) {
+  html .tm-wrap { grid-template-columns: minmax(0, 1fr); height: auto; min-height: 0; overflow: visible; }
+  html .tm-wrap > .tm-edit:not(.is-chat) { max-height: none; }
+  .tm-wrap .tc-log { max-height: 60vh; }
+  html .chat-wrap { grid-template-columns: minmax(0, 1fr); height: auto; min-height: 380px; }
+  .filters .f-q, .hist-q, .music-wrap .mu-sbox { min-width: 0; flex: 1 1 100%; }
+  .kz-row, .kz-limits { grid-template-columns: minmax(0, 1fr); }
+  .db-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  html #view { padding-left: 10px; padding-right: 10px; }
+  .db-tiles { grid-template-columns: minmax(0, 1fr); }
+  .chat-head .grow { min-width: 0; }
+}

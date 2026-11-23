@@ -98,12 +98,11 @@ export function SpotifySettings({ card }: { card?: boolean }): ReactNode {
 
   return (
     <>
-      <h3>Spotify</h3>
-      <div className="meta" style={{ maxWidth: 700, marginBottom: 8 }}>
+      <div className="meta" style={{ marginBottom: 8 }}>
         Controla Spotify desde cualquier pantalla. Crea una app en developer.spotify.com, añade esta URI de redirección exactamente como aparece y pega aquí su Client ID:{' '}
         <b>{REDIRECT}</b>. Pausar, reanudar y cambiar de pista requiere Spotify Premium y un dispositivo activo.
       </div>
-      <div className="grid2" style={{ maxWidth: 700 }}>
+      <div className="grid2">
         <div>
           <label>Client ID</label>
           <input autoComplete="off" value={clientId} placeholder="a1b2c3…" onChange={(e) => setClientId(e.target.value)} />

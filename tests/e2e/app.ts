@@ -6,8 +6,8 @@ import path from 'path'
 const root = path.resolve(__dirname, '../..')
 
 /** Abre la app compilada (out/) en modo de pruebas: datos temporales, sin sesión ni integraciones. */
-export async function launchApp(): Promise<{ app: ElectronApplication; page: Page; dataDir: string; close: () => Promise<void> }> {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shutoki-e2e-'))
+export async function launchApp(reuseDir?: string): Promise<{ app: ElectronApplication; page: Page; dataDir: string; close: (keepData?: boolean) => Promise<void> }> {
+  const dataDir = reuseDir ?? fs.mkdtempSync(path.join(os.tmpdir(), 'shutoki-e2e-'))
   const app = await electron.launch({
     args: [root],
     cwd: root,
@@ -24,9 +24,9 @@ export async function launchApp(): Promise<{ app: ElectronApplication; page: Pag
   }
   if (!page) throw new Error('No se abrió la ventana principal.')
   await page.waitForSelector('#nav', { timeout: 30000 })
-  const close = async (): Promise<void> => {
+  const close = async (keepData = false): Promise<void> => {
     await app.close().catch(() => undefined)
-    fs.rmSync(dataDir, { recursive: true, force: true })
+    if (!keepData) fs.rmSync(dataDir, { recursive: true, force: true })
   }
   return { app, page, dataDir, close }
 }

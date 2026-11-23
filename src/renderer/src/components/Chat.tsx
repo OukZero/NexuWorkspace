@@ -152,7 +152,7 @@ export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string
     const fresh = !db.chats[convId]?.messages.length
     const base = fresh ? (db.settings.defaultContext ?? DEFAULT_CONTEXT) : []
     setCtxKinds(taskHasChat || !taskId ? base : base.filter((k) => k !== 'task'))
-    if (!taskHasChat && taskId) {
+    if (!taskHasChat && taskId && db.chats[convId]?.kind !== 'diagram') {
       void ui.run('task:prompt', taskId).then((p) => {
         if (alive && p) setInput((cur) => cur || p)
       })
@@ -486,8 +486,8 @@ export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string
           >
             {messages.length === 0 && !running && (
               <div className="empty">
-                <div>Conversación nueva para esta tarea. {ai} trabajará en la carpeta del proyecto y puede editar archivos.</div>
-                {chat?.kind !== 'design' && chat?.kind !== 'review' && (
+                <div>{chat?.kind === 'diagram' ? `Describe el diagrama que necesitas o pide cambios sobre el actual. ${ai} responderá con uno nuevo que puedes aplicar al lienzo.` : `Conversación nueva para esta tarea. ${ai} trabajará en la carpeta del proyecto y puede editar archivos.`}</div>
+                {chat?.kind !== 'design' && chat?.kind !== 'review' && chat?.kind !== 'diagram' && (
                   <div className="quick-acts">
                     {QUICK_STARTS.map(([label, text]) => (
                       <button key={label} className="btn sm" onClick={() => (setInput(text), area.current?.focus())}>

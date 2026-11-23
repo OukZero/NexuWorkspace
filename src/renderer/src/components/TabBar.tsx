@@ -20,6 +20,8 @@ export const PANEL_LABEL: Record<string, string> = {
   notes: 'Notas',
   meetings: 'Reuniones',
   team: 'Equipo',
+  arch: 'Arquitectura',
+  diagrams: 'Diagramas',
   whatsapp: 'WhatsApp',
   settings: 'Ajustes'
 }

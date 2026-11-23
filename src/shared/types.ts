@@ -429,7 +429,7 @@ export interface Chat {
   /** Aviso de límite de la cuenta ya mostrado en este chat (para no repetirlo). */
   limitHint?: string
   /** 'design' = conversación de la pestaña Diseño (no aparece entre las conversaciones normales). */
-  kind?: 'design' | 'review'
+  kind?: 'design' | 'review' | 'diagram'
   taskId: string
   createdAt: number
   title?: string
@@ -888,7 +888,40 @@ export interface TeamProp {
   flip?: boolean
 }
 
+/** Diseño de arquitectura guiado por Claude: de la aclaración de requisitos a opciones, decisión y ADR. */
+export interface ArchDoc {
+  id: string
+  title: string
+  /** Tipo de solución: 'app-web', 'api', 'integracion', 'datos', 'automatizacion', 'otro'… */
+  kind: string
+  /** Alcance: prototipo/pequeño, mediano o grande/producción. */
+  scope: 'small' | 'medium' | 'large'
+  /** Carpeta de un proyecto existente (opcional): Claude la lee para proponer algo coherente con lo que ya hay. */
+  dir: string
+  brief: string
+  messages: { role: 'user' | 'assistant'; text: string; at: number }[]
+  createdAt: number
+  updatedAt: number
+}
+
+/** Tipos de diagrama: los cinco primeros se dibujan con Mermaid (texto); BPMN usa un modelador gráfico (XML). */
+export type DiagramType = 'flow' | 'sequence' | 'class' | 'state' | 'er' | 'bpmn'
+
+/** Diagrama guardado. `code` es Mermaid o XML BPMN según `type`; `convId` es la conversación con la IA que lo ayuda a generarlo. */
+export interface Diagram {
+  id: string
+  title: string
+  type: DiagramType
+  code: string
+  taskId?: string
+  convId?: string
+  createdAt: number
+  updatedAt: number
+}
+
 export interface DB {
+  diagrams?: Diagram[]
+  architectures?: ArchDoc[]
   designStyle?: DesignStyle
   tasks: Task[]
   entries: Entry[]
@@ -1042,6 +1075,16 @@ export interface IpcChannels {
   'design:style-save': { args: [{ brief: string; links: string[] }]; ret: DesignStyle }
   'design:style-add': { args: [string, Uint8Array]; ret: DesignStyle } // nombre, bytes de una imagen de referencia
   'design:style-remove': { args: [string]; ret: DesignStyle }
+  'arch:list': { args: []; ret: ArchDoc[] }
+  'arch:save': { args: [Pick<ArchDoc, 'title' | 'kind' | 'scope' | 'dir' | 'brief'> & { id?: string }]; ret: ArchDoc }
+  'arch:delete': { args: [string]; ret: ArchDoc[] }
+  /** step: 'start' | 'options' | 'compare' | 'decide' | 'adr' | 'free'. Devuelve el documento con la respuesta añadida. */
+  'arch:ask': { args: [string, string, string?]; ret: ArchDoc }
+  'diagram:list': { args: []; ret: Diagram[] }
+  'diagram:save': { args: [{ id?: string; title: string; type: DiagramType; code: string }]; ret: Diagram }
+  'diagram:delete': { args: [string]; ret: Diagram[] }
+  'diagram:chat': { args: [string, string]; ret: string } // diagrama, tarea -> id de la conversación con la IA (se crea si hace falta)
+  'diagram:export': { args: [string, 'svg' | 'png' | 'mmd' | 'bpmn', string]; ret: string | null } // nombre, formato, contenido (PNG en base64)
   'mockup:reveal': { args: [string]; ret: void }
   'chat:close': { args: [string]; ret: void }
   'chat:reopen': { args: [string]; ret: void }

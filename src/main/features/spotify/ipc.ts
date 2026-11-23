@@ -3,7 +3,10 @@ import { commit, getDb } from '../../db'
 import * as spotify from './service'
 
 export function registerSpotifyIpc(): void {
-  api('spotify:status', () => spotify.getStatus())
+  api('spotify:status', async () => {
+    await spotify.ensureLoaded() // la sesión cifrada se lee de forma asíncrona
+    return spotify.getStatus()
+  })
   api('spotify:save', (c) => {
     const s = getDb().settings
     const id = c.clientId.trim()

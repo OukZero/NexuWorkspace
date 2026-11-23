@@ -106,6 +106,20 @@ export const PRESETS: Record<string, Preset> = {
     { bg: '#0a0b10', panel: '#11131b', panel2: '#181b26', line: '#262b3a', text: '#e8ebf4', muted: '#9aa1b4', user: '#1d2440', code: '#07080c', over: '#141722' },
     ['#8fa4ff', '#4a63d6']
   ),
+  // paleta del dashboard «Sorvo»: negro carbón, tarjetas grafito y acento naranja cálido (ver styles/sorvo.css)
+  sorvo: mk(
+    'Sorvo',
+    'dark',
+    { bg: '#0d0e12', panel: '#16171d', panel2: '#1c1e26', line: '#2a2d38', text: '#f3f3f6', muted: '#8d919e', user: '#3a2418', code: '#08090c', over: '#14161d' },
+    ['#ff8a3d', '#e8642a']
+  ),
+  // paleta «Aqua»: degradado turquesa, cristal blanco y azul marino (ver el final de styles/sorvo.css)
+  aqua: mk(
+    'Aqua',
+    'light',
+    { bg: '#bfe8f2', panel: '#eefaff', panel2: '#d6eff6', line: '#9fcddb', text: '#082030', muted: '#2f5266', user: '#cdeaf3', code: '#d9eef5', over: '#e3f4f9' },
+    ['#14425e', '#14425e']
+  ),
   medianoche: {
     label: 'Medianoche',
     base: 'dark',

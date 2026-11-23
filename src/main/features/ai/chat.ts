@@ -19,6 +19,7 @@ import { notify } from '../../notify'
 import { takeCheckpoint } from '../dev/isolation'
 import { ensureTimer } from '../time/timer'
 import { emit, getMain, showWin } from '../../windows'
+import { diagramNote } from './diagrams'
 import { tasksRepo } from '../../data/repos'
 
 const MAX_ACTIVITY = 300
@@ -157,6 +158,9 @@ export function cheapestModel(provider: Provider): string {
 
 const newChat = (taskId: string, title?: string): Chat => ({ taskId, createdAt: Date.now(), title, sessionId: null, messages: [], activity: [], running: false })
 
+/** Instrucciones extra solo para las conversaciones de la ventana Diagramas. */
+const dNote = (chat: Chat, convId: string): string => (chat.kind === 'diagram' ? diagramNote(convId) : '')
+
 function chatOf(convId: string): Chat {
   const c = getDb().chats[convId]
   if (!c) throw new Error('Conversación no encontrada')
@@ -164,13 +168,13 @@ function chatOf(convId: string): Chat {
 }
 
 /** Crea una conversación nueva (vacía) para la tarea y devuelve su id. */
-export function createConversation(taskId: string, kind?: 'design' | 'review'): string {
+export function createConversation(taskId: string, kind?: 'design' | 'review' | 'diagram'): string {
   const db = getDb()
   if (!db.tasks.some((t) => t.id === taskId)) throw new Error('Tarea no encontrada')
   const n = Object.values(db.chats).filter((c) => c.taskId === taskId && (!c.kind || c.kind === 'review')).length + 1
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
   const model = db.settings.defaultChatModel?.trim()
-  db.chats[id] = { ...newChat(taskId, kind === 'design' ? 'Diseño' : kind === 'review' ? 'Revisión' : `Conversación ${n}`), ...(kind ? { kind } : {}), ...(model && kind !== 'review' ? { model } : {}) }
+  db.chats[id] = { ...newChat(taskId, kind === 'design' ? 'Diseño' : kind === 'review' ? 'Revisión' : kind === 'diagram' ? 'Diagrama' : `Conversación ${n}`), ...(kind ? { kind } : {}), ...(model && kind !== 'review' ? { model } : {}) }
   commit()
   return id
 }
@@ -607,7 +611,7 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[], e
   const startRun = (): void => {
   const provider: Provider = chat.provider ?? 'claude'
   const prof = profilesOf(db.settings).find((p) => p.id === chat.profileId)
-  const readOnly = chat.kind === 'review' || !!prof?.readOnly
+  const readOnly = chat.kind === 'review' || chat.kind === 'diagram' ||!!prof?.readOnly
   // cuenta cerca del límite: pasa al modelo más barato (si se activó en Ajustes)
   let useModel = chat.model
   const cheapAt = db.settings.cheapAt ?? 0
@@ -635,7 +639,7 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[], e
     }
     let prompt = files.length ? `${modelText || 'Revisa los archivos adjuntos.'}\n\nArchivos adjuntos (puedes leerlos con tus herramientas):\n${files.map((f) => `- ${f.path}`).join('\n')}` : modelText
     // Copilot no tiene system prompt adicional: la lista de carpetas del grupo va al inicio del primer mensaje (la sesión la conserva)
-    const note = chat.sessionId ? '' : [groupNote(task), prof?.instructions].filter(Boolean).join('\n\n')
+    const note = chat.sessionId ? '' : [groupNote(task), prof?.instructions, dNote(chat, convId)].filter(Boolean).join('\n\n')
     if (note) prompt = `[Contexto de carpetas]\n${note}\n\n[Pedido]\n${prompt}`
     const inv = buildInvocation({
       cmd: db.settings.copilotCmd.trim() || 'copilot',
@@ -660,7 +664,7 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[], e
     const sid = chat.sessionId ?? randomUUID()
     let prompt = files.length ? `${modelText || 'Revisa los archivos adjuntos.'}\n\nArchivos adjuntos (puedes leerlos con tus herramientas):\n${files.map((f) => `- ${f.path}`).join('\n')}` : modelText
     // igual que Copilot: el contexto de carpetas y las instrucciones del perfil van al primer mensaje de la sesión
-    const note = resume ? '' : [groupNote(task), prof?.instructions].filter(Boolean).join('\n\n')
+    const note = resume ? '' : [groupNote(task), prof?.instructions, dNote(chat, convId)].filter(Boolean).join('\n\n')
     if (note) prompt = `[Contexto de carpetas]\n${note}\n\n[Pedido]\n${prompt}`
     // sin modelo elegido se usa uno concreto: el «auto» del CLI no devuelve respuesta con clave de API
     child = spawn(`${db.settings.geminiCmd.trim() || 'gemini'} ${geminiArgs({ sessionId: sid, resume, model: useModel || 'gemini-3-flash-preview', readOnly, agent: chat.mode === 'agent' }).join(' ')}`, { shell: true, cwd: task.folder, windowsHide: true })
@@ -732,7 +736,7 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[], e
       args.push('--add-dir', `"${mockupsDir(task.id)}"`, '--add-dir', `"${styleDir()}"`, '--append-system-prompt-file', `"${designInstructions(task.id, task.title)}"`)
     } else {
       // todas las carpetas de los grupos de la tarea: Claude sabe que existen y que debe trabajar en el conjunto
-      const parts = [groupNote(task), prof?.instructions, chat.worktree ? `Trabajas en una copia aislada del repositorio (rama «${chat.worktree.branch}», carpeta ${chat.worktree.dir}). Haz todos los cambios ahí; no toques la carpeta original.` : ''].filter(Boolean)
+      const parts = [groupNote(task), prof?.instructions, dNote(chat, convId), chat.worktree ? `Trabajas en una copia aislada del repositorio (rama «${chat.worktree.branch}», carpeta ${chat.worktree.dir}). Haz todos los cambios ahí; no toques la carpeta original.` : ''].filter(Boolean)
       if (parts.length) {
         const dir = path.join(os.tmpdir(), 'mis-tareas')
         fs.mkdirSync(dir, { recursive: true })

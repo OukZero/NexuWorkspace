@@ -5,6 +5,7 @@ import { workFolder } from '../../shared/util'
 import { AddEntryModal } from './components/AddEntryModal'
 import { ChatView } from './components/Chat'
 import { DiffModal } from './components/DiffModal'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { NewTabModal } from './components/NewTabModal'
 import { Rail, TopTools } from './components/Sidebar'
 import { StatusBar } from './components/StatusBar'
@@ -520,6 +521,8 @@ export function App(): ReactNode {
     web: 'Pestañas integradas para webs de trabajo',
     notes: 'Se guardan como archivos Markdown en tu equipo',
     meetings: 'Graba la voz, transcribe en tu equipo y obtén el resumen',
+    arch: 'Diseña la arquitectura con Claude: opciones según tipo de tarea y alcance',
+    diagrams: 'BPMN, flujo, UML y ER: dibújalos a mano o pídeselos a la IA',
     team: 'Agentes especializados con su propio prompt y skills; tu personaje decora la sala',
     music: 'Spotify: reproduce, pausa y cambia de pista sin salir de la app',
     groups: 'Conjuntos de carpetas a los que la IA puede acceder',
@@ -607,7 +610,7 @@ const Registered = VIEWS[view]
           {!popTask && active && view === 'chat' && <TaskHead taskId={active} mode={mode} onMode={(m) => setModes((s) => ({ ...s, [active]: m }))} />}
         </div>
         <div className="scroll">
-          <section id="view">{content}</section>
+          <section id="view"><ErrorBoundary key={view}>{content}</ErrorBoundary></section>
           <WebHost />
         </div>
         {!popTask && active && dockOpen && db.settings.terminalMode !== 'external' && (

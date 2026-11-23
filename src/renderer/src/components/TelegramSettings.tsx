@@ -53,12 +53,11 @@ export function TelegramSettings(): ReactNode {
 
   return (
     <>
-      <h3>Telegram</h3>
-      <div className="meta" style={{ maxWidth: 700, marginBottom: 8 }}>
+      <div className="meta" style={{ marginBottom: 8 }}>
         Recibe en el teléfono los avisos de la campanita y responde los permisos de Claude con botones. Funciona solo con la app abierta. Los chats de bots no van
         cifrados de extremo a extremo: no lo uses con datos de clientes.
       </div>
-      <div className="grid2" style={{ maxWidth: 700 }}>
+      <div className="grid2">
         <div>
           <label>Token del bot (de @BotFather)</label>
           <input type="password" autoComplete="off" value={token} placeholder="123456789:AA…" onChange={(e) => setToken(e.target.value)} />

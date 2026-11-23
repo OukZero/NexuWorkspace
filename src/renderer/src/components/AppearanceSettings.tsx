@@ -88,6 +88,41 @@ function Seg<T extends string | number>({ value, options, onChange, label }: { v
   )
 }
 
+// Mismos trazos de línea que las tarjetas de Ajustes (SettingsView), para que todas las pestañas se vean iguales.
+const SEC_ICONS: Record<string, string> = {
+  tema: 'M12 3a9 9 0 1 0 0 18c1.5 0 2-1 1.5-2s0-2.5 1.5-2.5H17a4 4 0 0 0 4-4C21 6.5 17 3 12 3z',
+  acento: 'M12 3a9 9 0 1 0 0 18 2 2 0 0 0 0-4 2 2 0 0 1 0-4h2a4 4 0 0 0 0-8zM7.5 11h.01M9 7h.01M14 7h.01',
+  fondo: 'M4 5h16v14H4zM4 15l4-4 4 4 3-3 5 5',
+  temas: 'M6 4h9l3 3v13H6zM15 4v3h3M9 12h6M9 16h6',
+  tipo: 'M5 6V4h14v2M12 4v16M9 20h6',
+  forma: 'M5 5h14v14H5zM9 5v4M5 9h4',
+  chat: 'M4 5h16v11H8l-4 4z',
+  cambio: 'M4 12a8 8 0 0 1 14-5.3L20 9M20 4v5h-5M20 12a8 8 0 0 1-14 5.3L4 15M4 20v-5h5',
+  disp: 'M4 5h7v6H4zM13 5h7v6h-7zM4 13h16v6H4z',
+  menu: 'M4 6h16M4 12h16M4 18h10',
+  proyecto: 'M3 12l9-9h8v8l-9 9zM16 8h.01'
+}
+
+/** Sección de Apariencia con el aspecto de una tarjeta de Ajustes: icono, título y subtítulo. */
+function Sec({ icon, title, sub, children }: { icon: string; title: string; sub?: string; children: ReactNode }): ReactNode {
+  return (
+    <section className="set-card">
+      <header className="set-card-h">
+        <span className="set-card-i">
+          <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d={SEC_ICONS[icon]} />
+          </svg>
+        </span>
+        <div className="grow">
+          <h3>{title}</h3>
+          {sub && <div className="set-card-sub">{sub}</div>}
+        </div>
+      </header>
+      <div className="set-card-b ap-sec">{children}</div>
+    </section>
+  )
+}
+
 const MODES: Array<[ThemeMode, string]> = [
   ['light', '☀ Día'],
   ['dark', '☾ Noche'],
@@ -185,8 +220,8 @@ export function AppearanceSettings(): ReactNode {
 
   return (
     <div className="ap">
-      {/* ---------------- temas ---------------- */}
-      <h3>Tema</h3>
+      {/* ---------------- tema ---------------- */}
+      <Sec icon="tema" title="Tema" sub="Modo y estilo de colores">
       <div className="ap-row">
         <Seg<ThemeMode> label="Modo" value={a.mode} options={MODES} onChange={(m) => update({ mode: m })} />
         <span className="meta">{a.preset === '' ? 'El modo vale para el estilo Clásico.' : 'Con un estilo elegido, el modo lo define el estilo.'}</span>
@@ -221,13 +256,16 @@ export function AppearanceSettings(): ReactNode {
           <Mock p={presetFor('custom') as Preset} />
         </Card>
       </div>
+      </Sec>
 
-      {/* ---------------- acento ---------------- */}
-      <h3>Fondo</h3>
-      <div className="sub">Elige un fondo integrado o agrega tus propias imágenes. Los paneles se vuelven translúcidos para que se vea.</div>
-      <BackgroundPicker />
+      {/* ---------------- fondo ---------------- */}
+      <Sec icon="fondo" title="Fondo" sub="Integrado o tus imágenes; los paneles se vuelven translúcidos">
+        <BackgroundPicker />
+      </Sec>
 
-      <h3>Color de acento</h3>
+      {/* ---------------- acento y colores ---------------- */}
+      <Sec icon="acento" title="Acento y colores" sub="Color de botones y resaltados">
+      <div className="ap-group">Acento</div>
       <div className="ap-swatches">
         <button className={`ap-sw auto ${a.accent === 'auto' ? 'on' : ''}`} title="Del tema: cada estilo trae el suyo" aria-label="Acento del tema" onClick={() => update({ accent: 'auto' })} />
         {Object.keys(ACCENTS).map((k) => (
@@ -238,7 +276,7 @@ export function AppearanceSettings(): ReactNode {
       </div>
 
       {/* ---------------- colores propios ---------------- */}
-      <h3>Colores propios</h3>
+      <div className="ap-group">Colores propios</div>
       <div className="meta">Elige cuatro colores y el resto (bordes, texto atenuado, burbujas) se calcula solo para que combine.</div>
       <div className="ap-row">
         {(
@@ -259,8 +297,10 @@ export function AppearanceSettings(): ReactNode {
         </button>
       </div>
 
+      </Sec>
+
       {/* ---------------- mis temas ---------------- */}
-      <h3>Mis temas</h3>
+      <Sec icon="temas" title="Mis temas" sub="Guarda, exporta e importa tu aspecto">
       <div className="ap-row">
         <input style={{ width: 200 }} placeholder="Nombre del tema" value={saveName} maxLength={40} onChange={(e) => setSaveName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && saveTheme()} aria-label="Nombre del tema" />
         <button className="btn sm" onClick={saveTheme}>
@@ -305,8 +345,10 @@ export function AppearanceSettings(): ReactNode {
         </button>
       </div>
 
+      </Sec>
+
       {/* ---------------- tipografía ---------------- */}
-      <h3>Tipografía</h3>
+      <Sec icon="tipo" title="Tipografía" sub="Letras, tamaño e interlineado">
       <div className="ap-row">
         <label>Letra de la interfaz</label>
         <Select ariaLabel="Letra de la interfaz" value={a.uiFont} creatable searchable onChange={(v) => update({ uiFont: v.replace(/[^\p{L}\p{N} _-]/gu, '').slice(0, 40) })} options={fontOptions(uiFonts, 'Predeterminada (Segoe UI)')} />
@@ -325,8 +367,10 @@ export function AppearanceSettings(): ReactNode {
         <input type="range" min={125} max={180} step={5} value={a.lineHeight} aria-label="Interlineado" onChange={(e) => update({ lineHeight: Number(e.target.value) })} />
       </div>
 
+      </Sec>
+
       {/* ---------------- forma ---------------- */}
-      <h3>Forma y movimiento</h3>
+      <Sec icon="forma" title="Forma y movimiento" sub="Esquinas, sombras, densidad y animaciones">
       <div className="ap-row">
         <label>Esquinas</label>
         <Seg<Radius> label="Esquinas" value={a.radius} onChange={(radius) => update({ radius })} options={[['sharp', 'Rectas'], ['soft', 'Suaves'], ['round', 'Redondas']]} />
@@ -348,8 +392,10 @@ export function AppearanceSettings(): ReactNode {
         Confeti al completar una tarea
       </label>
 
+      </Sec>
+
       {/* ---------------- chat y código ---------------- */}
-      <h3>Chat y código</h3>
+      <Sec icon="chat" title="Chat y código" sub="Burbujas y colores del código">
       <div className="ap-row">
         <label>Burbujas del chat</label>
         <Seg<Bubbles> label="Burbujas" value={a.bubbles} onChange={(bubbles) => update({ bubbles })} options={[['solid', 'Rellenas'], ['soft', 'Suaves'], ['outline', 'Con borde']]} />
@@ -372,8 +418,11 @@ export function AppearanceSettings(): ReactNode {
         </pre>
       </div>
 
-      {/* ---------------- botón día / noche ---------------- */}
-      <h3>Botón día / noche</h3>
+      </Sec>
+
+      {/* ---------------- cambio de tema ---------------- */}
+      <Sec icon="cambio" title="Cambio de tema" sub="Botón día / noche y cambio según la hora">
+      <div className="ap-group">Botón día / noche</div>
       <div className="ap-row">
         <label>Tema claro</label>
         <Select ariaLabel="Tema claro predeterminado" value={a.dayPreset} onChange={(dayPreset) => update({ dayPreset })} options={[{ value: '', label: 'Clásico (claro)' }, ...light.map(([k, p]) => ({ value: k, label: p.label }))]} />
@@ -384,8 +433,7 @@ export function AppearanceSettings(): ReactNode {
       </div>
       <p className="meta">El botón de la barra lateral y la paleta de comandos alternan entre estos dos estilos.</p>
 
-      {/* ---------------- horario ---------------- */}
-      <h3>Tema según la hora</h3>
+      <div className="ap-group">Según la hora</div>
       <label className="tpl-check">
         <input type="checkbox" style={{ width: 'auto' }} checked={a.auto.on} onChange={(e) => update({ auto: { ...a.auto, on: e.target.checked } })} />
         Cambiar solo entre un estilo de día y uno de noche
@@ -405,13 +453,16 @@ export function AppearanceSettings(): ReactNode {
         </>
       )}
 
+      </Sec>
+
       {/* ---------------- disposiciones ---------------- */}
-      <h3>Disposiciones</h3>
+      <Sec icon="disp" title="Disposiciones" sub="Ventanas guardadas: panel, tamaños y modo foco">
       <div className="meta">Guarda cómo tienes la ventana (panel lateral, anchos, terminal y modo foco) y vuelve a ella con un clic o con Ctrl+K. Los bordes de los paneles se arrastran con el mouse.</div>
       <Layouts />
+      </Sec>
 
       {/* ---------------- menú ---------------- */}
-      <h3>Menú superior</h3>
+      <Sec icon="menu" title="Menú superior" sub="Qué se fija arriba y en qué orden">
       <div className="meta">Fija en la barra superior lo más importante; el resto queda en el botón «+». También puedes ordenar u ocultar secciones (siguen disponibles con Ctrl+K).</div>
       <div className="ap-nav">
         {NAV_GROUPS.map((g) => {
@@ -444,8 +495,10 @@ export function AppearanceSettings(): ReactNode {
         })}
       </div>
 
+      </Sec>
+
       {/* ---------------- color por proyecto ---------------- */}
-      <h3>Color por proyecto y cliente</h3>
+      <Sec icon="proyecto" title="Color por proyecto y cliente" sub="Franja de color en tareas, tablero y pestañas">
       <div className="meta">Se ve como una franja de color en las tareas, el tablero y las pestañas. El del proyecto manda sobre el del cliente.</div>
       {names('project').length + names('client').length === 0 && <div className="meta">Aún no hay tareas con proyecto o cliente.</div>}
       <div className="ap-colors">
@@ -466,6 +519,8 @@ export function AppearanceSettings(): ReactNode {
           })
         )}
       </div>
+
+      </Sec>
 
       <div className="foot" style={{ marginTop: 18 }}>
         <span className="meta">Los cambios se aplican y se guardan solos.</span>
