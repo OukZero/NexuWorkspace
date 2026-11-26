@@ -45,6 +45,12 @@
     ],
     "artifactName": "Nexu-Workspace-Setup-${version}.${ext}",
     "npmRebuild": false,
+    "extraResources": [
+      {
+        "from": "resources/whisper",
+        "to": "whisper"
+      }
+    ],
     "asarUnpack": [
       "**/node_modules/node-pty/**"
     ],
