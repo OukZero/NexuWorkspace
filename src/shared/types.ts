@@ -331,7 +331,7 @@ export type PermissionChoice = 'allow' | 'always' | 'deny'
 
 /** Cómo se tratan los comandos de shell que no están en la lista permitida. */
 export type CommandPolicy = 'ask' | 'all' | 'list'
-export type MiniFormat = 'full' | 'compact' | 'timer'
+export type MiniFormat = 'full' | 'compact' | 'timer' | 'edge'
 export type ChatMode = 'agent' | 'ask'
 
 /** Copia del trabajo guardada antes de cada respuesta de la IA, para poder volver atrás. */
@@ -812,9 +812,14 @@ export interface TeamAgent {
 
 export interface RobotLook {
   head?: 'redonda' | 'cuadrada' | 'tv' | 'domo'
-  eyes?: 'pixel' | 'redondos' | 'visor' | 'felices'
+  eyes?: 'pixel' | 'redondos' | 'visor' | 'felices' | 'enojados' | 'dormidos' | 'estrellas' | 'guino'
   antenna?: 'bola' | 'doble' | 'helice' | 'ninguna'
-  acc?: 'ninguno' | 'gorro' | 'sombrero' | 'corona' | 'audifonos' | 'lentes'
+  acc?: 'ninguno' | 'gorro' | 'sombrero' | 'corona' | 'audifonos' | 'lentes' | 'orejas' | 'halo' | 'cuernos' | 'parche' | 'gafasSol'
+  /** Boca bajo la pantalla; 'ninguna' deja solo los ojos. */
+  mouth?: 'ninguna' | 'sonrisa' | 'neutral' | 'o' | 'diente'
+  cheeks?: 'ninguno' | 'rubor' | 'pecas'
+  /** Ropa sobre el cuerpo. */
+  outfit?: 'ninguna' | 'corbata' | 'mono' | 'bufanda' | 'capa' | 'delantal' | 'chaleco' | 'hoodie'
 }
 
 /** Personaje del usuario: rasgos que el avatar dibuja en capas. Los opcionales se añadieron después. */
@@ -824,13 +829,18 @@ export interface TeamCharacter {
   skin: string
   hair: 'corto' | 'rizado' | 'gorro' | 'largo' | 'mono' | 'rapado' | 'cresta' | 'calvo'
   /** 'barba' es heredado: ahora va en `facial`. */
-  gear: 'ninguno' | 'lentes' | 'sol' | 'audifonos' | 'gorra' | 'aretes' | 'barba'
-  outfit: 'sudadera' | 'camisa' | 'bata' | 'polera' | 'chaqueta' | 'traje'
+  gear: 'ninguno' | 'lentes' | 'sol' | 'audifonos' | 'gorra' | 'aretes' | 'barba' | 'orejas' | 'lazo' | 'halo' | 'corona' | 'bandana' | 'sombrero' | 'cinta' | 'mascarilla' | 'parche' | 'collar' | 'flor' | 'cuernos' | 'monoculo'
+  outfit: 'sudadera' | 'camisa' | 'bata' | 'polera' | 'chaqueta' | 'traje' | 'capucha' | 'overol' | 'delantal' | 'bufanda' | 'rayas' | 'hawaiana' | 'vestido' | 'kimono' | 'armadura' | 'camiseta'
+  /** Color del accesorio (si no, el propio de cada uno). */
+  gearColor?: string
+  /** Segundo accesorio, con su propio color. */
+  gear2?: TeamCharacter['gear']
+  gear2Color?: string
   hairColor?: string
   eyeColor?: string
   outfitColor?: string
-  mouth?: 'sonrisa' | 'grande' | 'neutral' | 'sorpresa'
-  face?: 'normal' | 'pecas' | 'rubor'
+  mouth?: 'sonrisa' | 'grande' | 'neutral' | 'sorpresa' | 'lengua' | 'enojada'
+  face?: 'normal' | 'pecas' | 'rubor' | 'lunar' | 'cicatriz'
   facial?: 'ninguno' | 'barba' | 'bigote' | 'perilla'
 }
 

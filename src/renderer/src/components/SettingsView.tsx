@@ -719,6 +719,7 @@ export function SettingsView(): ReactNode {
                       <option value="full">Completa: conversación, timer y chat</option>
                       <option value="compact">Compacta: conversación y timer</option>
                       <option value="timer">Mínima: solo timer</option>
+                      <option value="edge">Barra en el borde derecho (opciones y chat al pasar el mouse)</option>
                     </select>
                     <label style={{ ...checkRow, margin: 0 }}>
                       <input type="checkbox" style={{ width: 'auto' }} checked={s.miniOnTop !== false} onChange={(e) => set('miniOnTop', e.target.checked)} />

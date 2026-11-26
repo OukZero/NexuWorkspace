@@ -3,6 +3,10 @@ import type { ClipboardEvent, DragEvent, KeyboardEvent as RKeyEvent, PointerEven
 import { AttachmentList } from './Chat'
 import { G } from './glyphs'
 import { Markdown } from './Markdown'
+import { useTyping } from '../typing'
+import { useAppearance } from '../theme'
+import type { CharStyle } from '../theme'
+import { GEAR_COLOR, OUTFIT_COLOR, StyledAvatar, StyledRobot, gearLayer, outfitLayer } from './CharStyles'
 import type { AgentTeam, Attachment, RobotLook, SkillInfo, TeamAgent, TeamCharacter, TeamChatMsg, TeamConv, TeamProp } from '../../../shared/types'
 import { AGENT_TEMPLATES, ORCHESTRATOR_ID } from '../../../shared/teamTemplates'
 import { useUi } from '../ui'
@@ -17,18 +21,23 @@ const HAIR_COLORS = ['#2b2f4a', '#141414', '#6b4226', '#b5652b', '#e8c46a', '#e8
 const EYE_COLORS = ['#1a1c28', '#5a3a22', '#2f7bd8', '#2fbf8a', '#8a5ad8', '#c0392b']
 const OUTFIT_COLORS = ['#5b73f0', '#ff7a9c', '#2fbf8a', '#ffb868', '#8a5ad8', '#2b3150', '#e8ebf4', '#c0392b']
 const HAIR: Opt<TeamCharacter['hair']> = [['corto', 'Corto'], ['largo', 'Largo'], ['rizado', 'Rizado'], ['mono', 'Moño'], ['cresta', 'Cresta'], ['rapado', 'Rapado'], ['calvo', 'Calvo'], ['gorro', 'Gorro']]
-const GEAR: Opt<TeamCharacter['gear']> = [['ninguno', 'Ninguno'], ['lentes', 'Lentes'], ['sol', 'Gafas de sol'], ['audifonos', 'Audífonos'], ['gorra', 'Gorra'], ['aretes', 'Aretes']]
-const OUTFIT: Opt<TeamCharacter['outfit']> = [['sudadera', 'Sudadera'], ['polera', 'Polera'], ['camisa', 'Camisa'], ['chaqueta', 'Chaqueta'], ['traje', 'Traje'], ['bata', 'Bata']]
-const MOUTH: Opt<NonNullable<TeamCharacter['mouth']>> = [['sonrisa', 'Sonrisa'], ['grande', 'Alegre'], ['neutral', 'Neutral'], ['sorpresa', 'Sorpresa']]
-const FACE: Opt<NonNullable<TeamCharacter['face']>> = [['normal', 'Normal'], ['pecas', 'Pecas'], ['rubor', 'Rubor']]
+const GEAR: Opt<TeamCharacter['gear']> = [['ninguno', 'Ninguno'], ['lentes', 'Lentes'], ['sol', 'Gafas de sol'], ['audifonos', 'Audífonos'], ['gorra', 'Gorra'], ['aretes', 'Aretes'], ['orejas', 'Orejas de gato'], ['lazo', 'Lazo'], ['halo', 'Aureola'], ['corona', 'Corona'], ['bandana', 'Bandana'], ['sombrero', 'Sombrero'], ['cinta', 'Cinta'], ['mascarilla', 'Mascarilla'], ['parche', 'Parche'], ['collar', 'Collar'], ['flor', 'Flor'], ['cuernos', 'Cuernitos'], ['monoculo', 'Monóculo']]
+const OUTFIT: Opt<TeamCharacter['outfit']> = [['sudadera', 'Sudadera'], ['polera', 'Polera'], ['camisa', 'Camisa'], ['chaqueta', 'Chaqueta'], ['traje', 'Traje'], ['bata', 'Bata'], ['capucha', 'Capucha'], ['overol', 'Overol'], ['delantal', 'Delantal'], ['bufanda', 'Bufanda'], ['camiseta', 'Camiseta'], ['rayas', 'Rayas'], ['hawaiana', 'Hawaiana'], ['vestido', 'Vestido'], ['kimono', 'Kimono'], ['armadura', 'Armadura']]
+const GEAR_COLORS = ['#16182a', '#e8ebf4', '#ffd166', '#ff7a9c', '#e0443e', '#8fa4ff', '#2fbf8a', '#8a5ad8']
+const MOUTH: Opt<NonNullable<TeamCharacter['mouth']>> = [['sonrisa', 'Sonrisa'], ['grande', 'Alegre'], ['neutral', 'Neutral'], ['sorpresa', 'Sorpresa'], ['lengua', 'Lengua'], ['enojada', 'Enojada']]
+const FACE: Opt<NonNullable<TeamCharacter['face']>> = [['normal', 'Normal'], ['pecas', 'Pecas'], ['rubor', 'Rubor'], ['lunar', 'Lunar'], ['cicatriz', 'Cicatriz']]
 const FACIAL: Opt<NonNullable<TeamCharacter['facial']>> = [['ninguno', 'Ninguno'], ['barba', 'Barba'], ['bigote', 'Bigote'], ['perilla', 'Perilla']]
 const HEADS: Opt<NonNullable<RobotLook['head']>> = [['redonda', 'Redonda'], ['cuadrada', 'Cuadrada'], ['tv', 'Tele'], ['domo', 'Domo']]
-const BOT_EYES: Opt<NonNullable<RobotLook['eyes']>> = [['pixel', 'Píxel'], ['redondos', 'Redondos'], ['visor', 'Visor'], ['felices', 'Felices']]
+const BOT_EYES: Opt<NonNullable<RobotLook['eyes']>> = [['pixel', 'Píxel'], ['redondos', 'Redondos'], ['visor', 'Visor'], ['felices', 'Felices'], ['enojados', 'Enojados'], ['dormidos', 'Dormidos'], ['estrellas', 'Estrellas'], ['guino', 'Guiño']]
+const BOT_MOUTH: Opt<NonNullable<RobotLook['mouth']>> = [['ninguna', 'Sin boca'], ['sonrisa', 'Sonrisa'], ['neutral', 'Neutral'], ['o', 'Sorpresa'], ['diente', 'Dientes']]
+const BOT_CHEEKS: Opt<NonNullable<RobotLook['cheeks']>> = [['ninguno', 'Ninguno'], ['rubor', 'Rubor'], ['pecas', 'Pecas']]
+const BOT_OUTFIT: Opt<NonNullable<RobotLook['outfit']>> = [['ninguna', 'Ninguna'], ['corbata', 'Corbata'], ['mono', 'Moño'], ['bufanda', 'Bufanda'], ['capa', 'Capa'], ['delantal', 'Delantal'], ['chaleco', 'Chaleco'], ['hoodie', 'Capucha']]
 const ANTENNAS: Opt<NonNullable<RobotLook['antenna']>> = [['bola', 'Bola'], ['doble', 'Doble'], ['helice', 'Hélice'], ['ninguna', 'Sin antena']]
-const BOT_ACC: Opt<NonNullable<RobotLook['acc']>> = [['ninguno', 'Ninguno'], ['gorro', 'Gorro'], ['sombrero', 'Sombrero'], ['corona', 'Corona'], ['audifonos', 'Audífonos'], ['lentes', 'Lentes']]
+const BOT_ACC: Opt<NonNullable<RobotLook['acc']>> = [['ninguno', 'Ninguno'], ['gorro', 'Gorro'], ['sombrero', 'Sombrero'], ['corona', 'Corona'], ['audifonos', 'Audífonos'], ['lentes', 'Lentes'], ['gafasSol', 'Gafas de sol'], ['orejas', 'Orejas de gato'], ['halo', 'Aureola'], ['cuernos', 'Cuernitos'], ['parche', 'Parche']]
 const MODELS: TeamAgent['model'][] = ['haiku', 'sonnet', 'opus']
 // color base de cada prenda si el usuario no eligió uno propio
-const OUTFIT_COLOR: Record<TeamCharacter['outfit'], string> = { sudadera: '#5b73f0', polera: '#ff7a9c', camisa: '#d6dbea', chaqueta: '#2fbf8a', traje: '#2b3150', bata: '#f4f6fc' }
+// prendas nuevas: se dibujan con el mismo código que los estilos alternativos
+const NEW_OUTFITS: TeamCharacter['outfit'][] = ['rayas', 'hawaiana', 'vestido', 'kimono', 'armadura', 'camiseta']
 const HAIR_COLOR = '#2b2f4a'
 const clamp = (n: number, a: number, b: number): number => Math.min(b, Math.max(a, n))
 const pick = <T,>(l: T[]): T => l[Math.floor(Math.random() * l.length)]
@@ -40,8 +49,22 @@ const darken = (hex: string, f = 0.72): string => {
   return `#${ch(16)}${ch(8)}${ch(0)}`
 }
 
-/** Avatar en capas (SVG). Las clases av-* las anima el CSS: respiración, parpadeo y tecleo. */
-function Avatar({ c, size = 150, live }: { c: TeamCharacter; size?: number; live?: 'idle' | 'work' }): ReactNode {
+/** Avatar según el estilo elegido en Apariencia (`style` fuerza uno, p. ej. en las vistas previas). */
+export function Avatar({ c, size = 150, live, style }: { c: TeamCharacter; size?: number; live?: 'idle' | 'work' | 'type'; style?: CharStyle }): ReactNode {
+  const ap = useAppearance()
+  const s = style ?? ap.charStyle
+  return s === 'clasico' ? <ClassicAvatar c={c} size={size} live={live} /> : <StyledAvatar c={c} size={size} live={live} style={s} />
+}
+
+/** Robot según el estilo elegido en Apariencia. */
+export function Robot({ a, state, size = 86, style }: { a: TeamAgent; state: 'idle' | 'work' | 'done'; size?: number; style?: CharStyle }): ReactNode {
+  const ap = useAppearance()
+  const s = style ?? ap.charStyle
+  return s === 'clasico' ? <ClassicRobot a={a} state={state} size={size} /> : <StyledRobot a={a} state={state} size={size} style={s} />
+}
+
+/** Avatar clásico en capas (SVG). Las clases av-* las anima el CSS: respiración, parpadeo y tecleo. */
+function ClassicAvatar({ c, size = 150, live }: { c: TeamCharacter; size?: number; live?: 'idle' | 'work' | 'type' }): ReactNode {
   const o1 = c.outfitColor ?? OUTFIT_COLOR[c.outfit] ?? '#5b73f0'
   const o2 = darken(o1)
   const hc = c.hairColor ?? HAIR_COLOR
@@ -63,6 +86,8 @@ function Avatar({ c, size = 150, live }: { c: TeamCharacter; size?: number; live
       <g className="av-body">
         {/* hombros y brazos */}
         <path d="M18 168 q2 -50 34 -58 h46 q32 8 34 58z" fill="url(#avO)" />
+        <path d="M28 150 q6 -22 26 -34 M122 150 q-6 -22 -26 -34" stroke="#fff" strokeOpacity=".14" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+        <path d="M44 166 q3 -22 12 -34 M106 166 q-3 -22 -12 -34" stroke="#000" strokeOpacity=".12" strokeWidth="2" strokeLinecap="round" fill="none" />
         <path className="av-arm l" d="M24 168 q-2 -34 12 -50 l14 6 q-12 18 -8 44z" fill={o2} />
         <path className="av-arm r" d="M126 168 q2 -34 -12 -50 l-14 6 q12 18 8 44z" fill={o2} />
         {c.outfit === 'sudadera' && <><path d="M54 110 q21 22 42 0 l-4 -6 q-17 14 -34 0z" fill={shade} /><path d="M68 124 v18 M82 124 v18" stroke="#e8ebf4" strokeWidth="2.5" strokeLinecap="round" /></>}
@@ -71,16 +96,25 @@ function Avatar({ c, size = 150, live }: { c: TeamCharacter; size?: number; live
         {c.outfit === 'polera' && <path d="M58 107 q17 12 34 0" stroke={o2} strokeWidth="5" fill="none" strokeLinecap="round" />}
         {c.outfit === 'chaqueta' && <><path d="M62 106 l13 60 l13 -60z" fill="#e8ebf4" /><path d="M62 106 l13 60 M88 106 l-13 60" stroke={o2} strokeWidth="3" /><path d="M38 146 h16 M96 146 h16" stroke={o2} strokeWidth="2.5" strokeLinecap="round" /></>}
         {c.outfit === 'traje' && <><path d="M62 106 l13 34 l13 -34z" fill="#fff" /><path d="M75 112 l-4 6 l4 24 l4 -24z" fill="#c0392b" /><path d="M62 106 l13 34 l-11 -8z M88 106 l-13 34 l11 -8z" fill={o2} /></>}
+        {c.outfit === 'capucha' && <><path d="M36 116 q39 -34 78 0 v12 q-39 -26 -78 0z" fill={o2} /><path d="M56 110 q19 16 38 0" stroke={shade} strokeWidth="6" fill="none" /><path d="M68 124 v20 M82 124 v20" stroke="#e8ebf4" strokeWidth="2.5" strokeLinecap="round" /></>}
+        {c.outfit === 'overol' && <><rect x="54" y="136" width="42" height="32" rx="6" fill="#4a6fa5" /><path d="M58 112 v26 M92 112 v26" stroke="#4a6fa5" strokeWidth="8" /><circle cx="58" cy="138" r="2.5" fill="#ffd166" /><circle cx="92" cy="138" r="2.5" fill="#ffd166" /><rect x="66" y="148" width="18" height="10" rx="2" fill="none" stroke="#2e4a73" /></>}
+        {c.outfit === 'delantal' && <><path d="M58 112 l-6 18 M92 112 l6 18" stroke="#e8ebf4" strokeWidth="4" strokeLinecap="round" /><rect x="50" y="128" width="50" height="40" rx="9" fill="#e8ebf4" /><rect x="62" y="146" width="26" height="12" rx="3" fill="none" stroke="#c9cfe0" /></>}
+        {c.outfit === 'bufanda' && <><path d="M50 104 q25 18 50 0 v13 q-25 18 -50 0z" fill="#ff7a9c" /><rect x="86" y="114" width="14" height="38" rx="5" fill="#e0557a" /><path d="M54 110 q21 14 42 0 M88 128 h10 M88 138 h10" stroke="#fff" strokeOpacity=".3" strokeWidth="2" fill="none" /></>}
+        {NEW_OUTFITS.includes(c.outfit) && <g transform="translate(0 8)">{outfitLayer(c, o1, o2)}</g>}
         {/* cuello y cabeza */}
         <rect x="64" y="90" width="22" height="24" rx="8" fill={c.skin} /><rect x="64" y="90" width="22" height="24" rx="8" fill={shade} />
         <circle cx="36" cy="68" r="8" fill={c.skin} /><circle cx="114" cy="68" r="8" fill={c.skin} />
-        {c.gear === 'aretes' && <g fill="#ffd166" stroke="#d9a13a"><circle cx="35" cy="78" r="3" /><circle cx="115" cy="78" r="3" /></g>}
+        <circle cx="35" cy="69" r="4" fill="rgba(0,0,0,.14)" /><circle cx="115" cy="69" r="4" fill="rgba(0,0,0,.14)" />
+        <ellipse cx="75" cy="102" rx="22" ry="7" fill="rgba(0,0,0,.2)" />
         {c.hair === 'mono' && <circle cx="75" cy="13" r="13" fill={hc} />}
         <ellipse cx="75" cy="64" rx="38" ry="40" fill={c.skin} />
         <ellipse cx="75" cy="64" rx="38" ry="40" fill="url(#avF)" />
+        <ellipse cx="75" cy="64" rx="37" ry="39" fill="none" stroke="rgba(0,0,0,.09)" strokeWidth="2.5" />
+        <path d="M75 70 q-3.5 8 -1 10.5 q3 1.6 6 -.5" stroke="rgba(0,0,0,.3)" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+        <path d="M76 69 q1.5 3 .5 6" stroke="#fff" strokeOpacity=".3" strokeWidth="1.6" fill="none" strokeLinecap="round" />
         {c.face === 'pecas' && <g fill="#8a5a3c" opacity=".55">{[[47, 77], [53, 81], [44, 83], [103, 77], [97, 81], [106, 83]].map(([x, y]) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.4" />)}</g>}
         {facial === 'barba' && <path d="M40 70 q35 56 70 0 q-6 26 -35 28 q-29 -2 -35 -28z" fill={hc} />}
-        {(c.hair === 'corto' || c.hair === 'largo' || c.hair === 'mono') && <>{cap}<path d="M52 24 q14 -6 28 -2" stroke="#fff" strokeOpacity=".22" strokeWidth="3" fill="none" strokeLinecap="round" /></>}
+        {(c.hair === 'corto' || c.hair === 'largo' || c.hair === 'mono') && <>{cap}<path d="M52 24 q14 -6 28 -2" stroke="#fff" strokeOpacity=".22" strokeWidth="3" fill="none" strokeLinecap="round" /><path d="M46 44 q5 -14 18 -20 M88 24 q14 4 20 22 M70 22 q-4 8 -12 14" stroke="#000" strokeOpacity=".22" strokeWidth="1.6" fill="none" strokeLinecap="round" /></>}
         {c.hair === 'rizado' && <g fill={hc}>{[44, 60, 76, 92, 106].map((x, i) => <circle key={x} cx={x} cy={i % 2 ? 26 : 30} r="14" />)}</g>}
         {c.hair === 'rapado' && <path d="M37 58 q-1 -42 38 -42 q39 0 38 42 q-8 -20 -38 -20 q-30 0 -38 20z" fill={hc} opacity=".55" />}
         {c.hair === 'cresta' && <path d="M64 36 l-5 -16 l9 4 l7 -22 l7 22 l9 -4 l-5 16 q-11 -5 -22 0z" fill={hc} />}
@@ -89,6 +123,7 @@ function Avatar({ c, size = 150, live }: { c: TeamCharacter; size?: number; live
         <path d="M52 52 q8 -5 16 -1 M82 51 q8 -4 16 1" stroke={hc} strokeWidth="3" strokeLinecap="round" fill="none" />
         <g className="av-eyes">
           <ellipse cx="60" cy="66" rx="5" ry="6" fill="#fff" /><ellipse cx="90" cy="66" rx="5" ry="6" fill="#fff" />
+          <path d="M54.5 63 q5.5 -5 11 0 M84.5 63 q5.5 -5 11 0" stroke="#1a1c28" strokeOpacity=".55" strokeWidth="1.5" fill="none" strokeLinecap="round" />
           <circle cx="61" cy="67" r="3.4" fill={eye} /><circle cx="91" cy="67" r="3.4" fill={eye} />
           <circle cx="61" cy="67" r="1.7" fill="#0b0c14" /><circle cx="91" cy="67" r="1.7" fill="#0b0c14" />
           <circle cx="62.2" cy="65.6" r="1.1" fill="#fff" /><circle cx="92.2" cy="65.6" r="1.1" fill="#fff" />
@@ -98,26 +133,117 @@ function Avatar({ c, size = 150, live }: { c: TeamCharacter; size?: number; live
         {mouth === 'grande' && <path className="av-mouth" d="M64 82 q11 14 22 0z" fill="#1a1c28" stroke="#1a1c28" strokeWidth="2" strokeLinejoin="round" />}
         {mouth === 'neutral' && <path className="av-mouth" d="M67 86 h16" stroke="#1a1c28" strokeWidth="2.6" strokeLinecap="round" />}
         {mouth === 'sorpresa' && <ellipse className="av-mouth" cx="75" cy="87" rx="4" ry="5" fill="#1a1c28" />}
+        {mouth === 'lengua' && <g className="av-mouth"><ellipse cx="76" cy="91" rx="4.5" ry="6" fill="#ff7a9c" /><path d="M76 86 v8" stroke="#d9507a" strokeWidth="1.2" /><path d="M65 83 q10 9 20 0" fill="none" stroke="#1a1c28" strokeWidth="2.6" strokeLinecap="round" /></g>}
+        {mouth === 'enojada' && <path className="av-mouth" d="M66 88 q9 -7 18 0" fill="none" stroke="#1a1c28" strokeWidth="2.6" strokeLinecap="round" />}
+        {c.face === 'lunar' && <circle cx="100" cy="79" r="2" fill="#5c3a26" />}
+        {c.face === 'cicatriz' && <g stroke="#c9877a" strokeWidth="2" strokeLinecap="round"><path d="M97 50 l-9 22" /><path d="M93 58 l5 2 M91 64 l5 2" strokeWidth="1.5" /></g>}
         {facial === 'bigote' && <path d="M62 81 q6 -6 13 -2 q7 -4 13 2 q-6 3 -13 0 q-7 3 -13 0z" fill={hc} />}
         {facial === 'perilla' && <path d="M69 94 q6 4 12 0 q-1 8 -6 10 q-5 -2 -6 -10z" fill={hc} />}
-        {c.gear === 'lentes' && <g fill="rgba(143,164,255,.22)" stroke="#16182a" strokeWidth="3"><rect x="46" y="55" width="26" height="22" rx="7" /><rect x="78" y="55" width="26" height="22" rx="7" /><path d="M72 64 h6" /></g>}
-        {c.gear === 'sol' && <><g fill="#16182a" stroke="#16182a" strokeWidth="3"><rect x="46" y="57" width="26" height="18" rx="7" /><rect x="78" y="57" width="26" height="18" rx="7" /><path d="M72 64 h6" /></g><path d="M51 62 h7 M83 62 h7" stroke="#fff" strokeOpacity=".45" strokeWidth="2" strokeLinecap="round" /></>}
-        {c.gear === 'audifonos' && <g fill="none" stroke="#e8ebf4" strokeWidth="5" strokeLinecap="round"><path d="M37 68 q0 -48 38 -48 q38 0 38 48" /><rect x="30" y="62" width="11" height="22" rx="5" fill="#8fa4ff" stroke="none" /><rect x="109" y="62" width="11" height="22" rx="5" fill="#8fa4ff" stroke="none" /></g>}
-        {c.gear === 'gorra' && <><path d="M35 54 q0 -40 40 -40 q40 0 40 40z" fill={o1} /><path d="M35 54 q40 -8 80 0" stroke={o2} strokeWidth="3" fill="none" /><path d="M80 52 q26 -4 46 6 q-22 4 -46 0z" fill={o2} /><circle cx="75" cy="15" r="3.5" fill={o2} /></>}
+        {/* accesorios (hasta dos, cada uno con su color); mismo dibujo que los estilos nuevos, bajado para este cráneo */}
+        <g transform="translate(0 3)">{gearLayer(c, hc, o1, o2, {}, true)}</g>
       </g>
+      {/* teclado: aparece al escribir (o con el timer en marcha); las teclas se encienden en desorden */}
+      {(live === 'type' || live === 'work') && (
+        <g className="av-kb">
+          <rect x="22" y="147" width="106" height="21" rx="6" fill="#222740" stroke="#8fa4ff" strokeOpacity=".5" />
+          {[0, 1, 2].flatMap((r) => Array.from({ length: 9 }, (_, k) => (
+            <rect key={`${r}-${k}`} className="av-key" x={30 + k * 10 + (r === 1 ? 2 : r === 2 ? 4 : 0)} y={150.5 + r * 5.4} width="8" height="4" rx="1.2" fill="#8fa4ff" style={{ animationDelay: `${((r * 9 + k) * 37 % 100) * 0.006}s` }} />
+          )))}
+          <circle className="av-hand l" cx="54" cy="146" r="6.5" fill={c.skin} stroke="rgba(0,0,0,.18)" />
+          <circle className="av-hand r" cx="96" cy="146" r="6.5" fill={c.skin} stroke="rgba(0,0,0,.18)" />
+        </g>
+      )}
     </svg>
   )
 }
 
+const optsRow = <T extends string>(list: Array<[T, string]>, cur: T, on: (v: T) => void): ReactNode => (
+  <div className="tm-opts">{list.map(([v, l]) => <button key={v} className={cur === v ? 'on' : ''} onClick={() => on(v)}>{l}</button>)}</div>
+)
+// muestras de color + selector libre (el último círculo abre el selector del sistema)
+const swatchRow = (list: string[], cur: string | undefined, on: (v: string) => void, label: string): ReactNode => {
+  const custom = !!cur && !list.includes(cur)
+  return (
+    <div className="tm-sw" style={{ gridTemplateColumns: `repeat(${list.length + 1}, minmax(0, 20px))` }}>
+      {list.map((s) => <button key={s} type="button" style={{ background: s }} className={cur === s ? 'on' : ''} aria-label={`${label} ${s}`} aria-pressed={cur === s} onClick={() => on(s)} />)}
+      <label className={`tm-sw-custom ${custom ? 'on' : ''}`} title="Color personalizado" style={custom ? { background: cur } : undefined}>
+        <input type="color" value={cur && /^#[0-9a-f]{6}$/i.test(cur) ? cur : '#888888'} onChange={(e) => on(e.target.value)} aria-label={`${label}: color personalizado`} />
+        {!custom && <span aria-hidden>＋</span>}
+      </label>
+      <input key={cur} className="tm-hex" defaultValue={cur ?? ''} maxLength={7} spellCheck={false} aria-label={`${label}: código hexadecimal`} placeholder="#rrggbb"
+        onBlur={(e) => { const v = e.target.value.trim(); if (/^#[0-9a-f]{6}$/i.test(v)) on(v.toLowerCase()); else e.target.value = cur ?? '' }}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }} />
+    </div>
+  )
+}
+
+/** Editor del personaje del usuario (vista previa, nombre, pestañas Cara/Pelo/Ropa). Lo usan el diálogo del Equipo y Apariencia. */
+export function CharacterEditor({ char: ch, onChange }: { char: TeamCharacter; onChange: (p: Partial<TeamCharacter>) => void }): ReactNode {
+  const [tab, setTab] = useState<'cara' | 'pelo' | 'ropa'>('cara')
+  const typing = useTyping()
+  const field = (label: string, body: ReactNode): ReactNode => <div className="tm-field"><span className="tm-lbl">{label}</span>{body}</div>
+  const random = (): void => {
+    onChange({
+      skin: pick(SKINS.slice(0, 6)), hair: pick(HAIR)[0], gear: pick(GEAR)[0], gearColor: Math.random() < 0.5 ? undefined : pick(GEAR_COLORS), gear2: Math.random() < 0.6 ? 'ninguno' : pick(GEAR)[0], gear2Color: undefined, outfit: pick(OUTFIT)[0],
+      hairColor: pick(HAIR_COLORS), eyeColor: pick(EYE_COLORS), outfitColor: pick(OUTFIT_COLORS),
+      mouth: pick(MOUTH)[0], face: pick(FACE)[0], facial: Math.random() < 0.7 ? 'ninguno' : pick(FACIAL)[0]
+    })
+  }
+  return (
+    <>
+      <div className="tm-head">
+        <div className="tm-stage"><Avatar c={ch} size={92} live={typing ? 'type' : 'idle'} /></div>
+        <div className="tm-id">
+          <div className="eyebrow">Tu personaje</div>
+          <input className="tm-name" value={ch.name} onChange={(e) => onChange({ name: e.target.value })} aria-label="Nombre del personaje" />
+          <input className="tm-name sub" value={ch.role} onChange={(e) => onChange({ role: e.target.value })} aria-label="Rol del personaje" />
+          <button className="btn sm tm-rand" onClick={random}>🎲 Aleatorio</button>
+        </div>
+      </div>
+      {/* por pestañas: con tantas opciones, una sola columna se volvía interminable */}
+      <div className="tm-subtabs" role="tablist">
+        {(['cara', 'pelo', 'ropa'] as const).map((k) => (
+          <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
+            {k === 'cara' ? 'Cara' : k === 'pelo' ? 'Pelo' : 'Ropa y extras'}
+          </button>
+        ))}
+      </div>
+      {tab === 'cara' && <>
+        {field('Piel', swatchRow(SKINS, ch.skin, (skin) => onChange({ skin }), 'Piel'))}
+        {field('Ojos', swatchRow(EYE_COLORS, ch.eyeColor ?? '#1a1c28', (eyeColor) => onChange({ eyeColor }), 'Ojos'))}
+        {field('Boca', optsRow(MOUTH, ch.mouth ?? 'sonrisa', (mouth) => onChange({ mouth })))}
+        {field('Mejillas', optsRow(FACE, ch.face ?? 'normal', (face) => onChange({ face })))}
+        {field('Vello facial', optsRow(FACIAL, ch.facial ?? 'ninguno', (facial) => onChange({ facial })))}
+      </>}
+      {tab === 'pelo' && <>
+        {field('Peinado', optsRow(HAIR, ch.hair, (hair) => onChange({ hair })))}
+        {field('Color de pelo', swatchRow(HAIR_COLORS, ch.hairColor ?? HAIR_COLOR, (hairColor) => onChange({ hairColor }), 'Pelo'))}
+      </>}
+      {tab === 'ropa' && <>
+        {field('Ropa', optsRow(OUTFIT, ch.outfit, (outfit) => onChange({ outfit })))}
+        {field('Color de ropa', swatchRow(OUTFIT_COLORS, ch.outfitColor ?? OUTFIT_COLOR[ch.outfit], (outfitColor) => onChange({ outfitColor }), 'Ropa'))}
+        {field('Accesorio', optsRow(GEAR, ch.gear === 'barba' ? 'ninguno' : ch.gear, (gear) => onChange({ gear, gearColor: undefined })))}
+        {ch.gear !== 'ninguno' && ch.gear !== 'barba' && GEAR_COLOR[ch.gear] && field('Color del accesorio', swatchRow(GEAR_COLORS, ch.gearColor ?? GEAR_COLOR[ch.gear]!, (gearColor) => onChange({ gearColor }), 'Accesorio'))}
+        {field('Segundo accesorio', optsRow(GEAR, ch.gear2 ?? 'ninguno', (gear2) => onChange({ gear2, gear2Color: undefined })))}
+        {ch.gear2 && ch.gear2 !== 'ninguno' && ch.gear2 !== 'barba' && GEAR_COLOR[ch.gear2] && field('Color del 2.º accesorio', swatchRow(GEAR_COLORS, ch.gear2Color ?? GEAR_COLOR[ch.gear2]!, (gear2Color) => onChange({ gear2Color }), '2.º accesorio'))}
+      </>}
+    </>
+  )
+}
+
 /** Robot de un agente: cabeza con pantalla, antena que late y emoji en el pecho. */
-export function Robot({ a, state, size = 86 }: { a: TeamAgent; state: 'idle' | 'work' | 'done'; size?: number }): ReactNode {
+function ClassicRobot({ a, state, size = 86 }: { a: TeamAgent; state: 'idle' | 'work' | 'done'; size?: number }): ReactNode {
   const L = a.look ?? {}
   const head = L.head ?? 'redonda'
   const eyes = L.eyes ?? 'pixel'
   const ant = L.antenna ?? 'bola'
   const acc = L.acc ?? 'ninguno'
   // un sombrero tapa la antena: no se dibujan juntos
-  const hat = acc === 'gorro' || acc === 'sombrero' || acc === 'corona'
+  const hat = acc === 'gorro' || acc === 'sombrero' || acc === 'corona' || acc === 'orejas' || acc === 'halo' || acc === 'cuernos'
+  const mouth = L.mouth ?? 'ninguna'
+  const cheeks = L.cheeks ?? 'ninguno'
+  const outfit = L.outfit ?? 'ninguna'
+  const emojiX = outfit === 'corbata' || outfit === 'mono' ? 26 : 43
   const rx = head === 'cuadrada' ? 5 : head === 'tv' ? 8 : 16
   const skull = (fill: string): ReactNode =>
     head === 'domo'
@@ -127,6 +253,7 @@ export function Robot({ a, state, size = 86 }: { a: TeamAgent; state: 'idle' | '
     <svg className={`bot bot-${state}`} width={size} height={(size * 96) / 86} viewBox="0 0 86 96" style={{ ['--c' as string]: a.color }}>
       <ellipse cx="43" cy="92" rx="30" ry="4" fill="#000" opacity=".25" />
       <g className="bot-body">
+        {outfit === 'capa' && <g className="bot-cape"><path d="M12 60 q-12 22 -8 36 h78 q4 -14 -8 -36z" fill={a.color} opacity=".7" /><path d="M12 60 q-12 22 -8 36 h78 q4 -14 -8 -36z" fill="#000" opacity=".18" /></g>}
         {!hat && ant === 'bola' && <><line x1="43" y1="6" x2="43" y2="18" stroke="#8a92aa" strokeWidth="3" /><circle className="bot-ant" cx="43" cy="6" r="5" fill={a.color} /></>}
         {!hat && ant === 'doble' && <><path d="M33 20 L27 7 M53 20 L59 7" stroke="#8a92aa" strokeWidth="3" strokeLinecap="round" /><circle className="bot-ant" cx="27" cy="6" r="4" fill={a.color} /><circle className="bot-ant" cx="59" cy="6" r="4" fill={a.color} /></>}
         {!hat && ant === 'helice' && <><line x1="43" y1="6" x2="43" y2="18" stroke="#8a92aa" strokeWidth="3" /><ellipse className="bot-prop" cx="43" cy="5" rx="13" ry="3" fill={a.color} /><circle cx="43" cy="5" r="2.5" fill="#8a92aa" /></>}
@@ -139,13 +266,38 @@ export function Robot({ a, state, size = 86 }: { a: TeamAgent; state: 'idle' | '
           {eyes === 'redondos' && <><circle cx="33.5" cy="39" r="5.5" stroke="none" /><circle cx="52.5" cy="39" r="5.5" stroke="none" /></>}
           {eyes === 'visor' && <rect x="26" y="35" width="34" height="8" rx="4" stroke="none" />}
           {eyes === 'felices' && <path d="M28 42 q5.5 -8 11 0 M47 42 q5.5 -8 11 0" fill="none" strokeWidth="3" strokeLinecap="round" />}
+          {eyes === 'enojados' && <><rect x="29" y="35" width="9" height="11" rx="4" stroke="none" /><rect x="48" y="35" width="9" height="11" rx="4" stroke="none" /><path d="M26 30 l14 6 M60 30 l-14 6" fill="none" strokeWidth="3" strokeLinecap="round" /></>}
+          {eyes === 'dormidos' && <><path d="M28 40 h11 M47 40 h11" fill="none" strokeWidth="3" strokeLinecap="round" /><text className="bot-z" x="58" y="34" fontSize="9" stroke="none">z</text></>}
+          {eyes === 'estrellas' && <><text x="33.5" y="45" textAnchor="middle" fontSize="15" stroke="none">★</text><text x="52.5" y="45" textAnchor="middle" fontSize="15" stroke="none">★</text></>}
+          {eyes === 'guino' && <><rect x="29" y="33" width="9" height="12" rx="4" stroke="none" /><path d="M47 41 q5.5 -7 11 0" fill="none" strokeWidth="3" strokeLinecap="round" /></>}
         </g>
+        {cheeks === 'rubor' && <g className="bot-cheeks" fill="#ff7a9c" opacity=".55"><ellipse cx="26" cy="48" rx="4" ry="2.4" /><ellipse cx="60" cy="48" rx="4" ry="2.4" /></g>}
+        {cheeks === 'pecas' && <g fill={a.color} opacity=".7"><circle cx="25" cy="47" r="1" /><circle cx="29" cy="49" r="1" /><circle cx="57" cy="49" r="1" /><circle cx="61" cy="47" r="1" /></g>}
+        {mouth !== 'ninguna' && (
+          <g className="bot-mouth" fill="none" stroke={a.color} strokeWidth="2" strokeLinecap="round">
+            {mouth === 'sonrisa' && <path d="M36 48 q7 5 14 0" />}
+            {mouth === 'neutral' && <path d="M37 49.5 h12" />}
+            {mouth === 'o' && <circle cx="43" cy="49" r="2.4" />}
+            {mouth === 'diente' && <><path d="M35 47.5 q8 6 16 0" /><rect x="40" y="48" width="6" height="3" rx="1" fill="#e8ebf4" stroke="none" /></>}
+          </g>
+        )}
         {acc !== 'audifonos' && <><rect x="4" y="30" width="8" height="18" rx="4" fill="#8a92aa" /><rect x="74" y="30" width="8" height="18" rx="4" fill="#8a92aa" /></>}
-        <text x="43" y="76" textAnchor="middle" fontSize="17">{a.emoji}</text>
+        {outfit === 'corbata' && <path d="M43 63 l-4 4 l4 3 l4 -3z M43 70 l-5 5 l5 11 l5 -11z" fill={a.color} stroke="#000" strokeOpacity=".25" />}
+        {outfit === 'mono' && <g className="bot-bow"><path d="M43 68 l-11 -6 v12z M43 68 l11 -6 v12z" fill={a.color} stroke="#000" strokeOpacity=".25" /><circle cx="43" cy="68" r="3" fill="#e8ebf4" /></g>}
+        {outfit === 'bufanda' && <g className="bot-scarf"><rect x="11" y="60" width="64" height="9" rx="4.5" fill="#ff7a9c" /><rect x="52" y="64" width="10" height="20" rx="3" fill="#e0557a" /><path d="M16 64 h50 M53 76 h8" stroke="#fff" strokeOpacity=".35" strokeWidth="1.5" /></g>}
+        {outfit === 'delantal' && <><rect x="24" y="66" width="38" height="20" rx="6" fill="#e8ebf4" opacity=".92" /><path d="M30 66 l-5 -4 M56 66 l5 -4" stroke="#e8ebf4" strokeWidth="2.5" strokeLinecap="round" /></>}
+        {outfit === 'chaleco' && <g fill="#1b1d2c" opacity=".88"><path d="M10 62 h22 v24 h-14 a8 8 0 0 1 -8 -8z" /><path d="M76 62 h-22 v24 h14 a8 8 0 0 0 8 -8z" /><circle cx="22" cy="74" r="1.6" fill={a.color} /><circle cx="64" cy="74" r="1.6" fill={a.color} /></g>}
+        {outfit === 'hoodie' && <g><path d="M18 62 q25 18 50 0 v7 q-25 18 -50 0z" fill={a.color} opacity=".9" /><path d="M38 72 v10 M48 72 v10" stroke="#e8ebf4" strokeWidth="2" strokeLinecap="round" /></g>}
+        <text x={emojiX} y="76" textAnchor="middle" fontSize={emojiX === 43 ? 17 : 14}>{a.emoji}</text>
         {acc === 'gorro' && <><path d="M15 24 q0 -20 28 -20 q28 0 28 20z" fill="#ff7a9c" /><rect x="13" y="19" width="60" height="7" rx="3.5" fill="#e0557a" /><circle cx="43" cy="4" r="4" fill="#e8ebf4" /></>}
         {acc === 'sombrero' && <><rect x="29" y="1" width="28" height="15" rx="2" fill="#1b1d2c" /><rect x="29" y="11" width="28" height="3" fill={a.color} /><rect x="19" y="15" width="48" height="4" rx="2" fill="#1b1d2c" /></>}
         {acc === 'corona' && <path d="M25 19 l2 -15 l8 7 l8 -10 l8 10 l8 -7 l2 15z" fill="#ffd166" stroke="#d9a13a" strokeWidth="1.5" strokeLinejoin="round" />}
         {acc === 'audifonos' && <><path d="M8 34 q0 -28 35 -28 q35 0 35 28" stroke="#e8ebf4" strokeWidth="4" fill="none" /><rect x="2" y="27" width="11" height="22" rx="5" fill="#e8ebf4" /><rect x="73" y="27" width="11" height="22" rx="5" fill="#e8ebf4" /></>}
+        {acc === 'orejas' && <g className="bot-ears"><path d="M17 24 l1 -20 l16 12z" fill={a.color} /><path d="M69 24 l-1 -20 l-16 12z" fill={a.color} /><path d="M21 17 l.8 -9 l7 5.5z M65 17 l-.8 -9 l-7 5.5z" fill="#ff9db8" /></g>}
+        {acc === 'halo' && <ellipse className="bot-halo" cx="43" cy="7" rx="15" ry="4" fill="none" stroke="#ffd166" strokeWidth="3" />}
+        {acc === 'cuernos' && <><path d="M21 22 q-6 -4 -5 -16 q9 3 15 12z" fill="#ff5d5d" /><path d="M65 22 q6 -4 5 -16 q-9 3 -15 12z" fill="#ff5d5d" /></>}
+        {acc === 'parche' && <><path d="M16 26 L70 44" stroke="#1b1d2c" strokeWidth="2.5" /><ellipse cx="33.5" cy="39" rx="9" ry="10" fill="#1b1d2c" stroke="#8a92aa" strokeWidth="1" /></>}
+        {acc === 'gafasSol' && <g fill="#05060c" stroke="#e8ebf4" strokeWidth="2"><rect x="24" y="31" width="19" height="15" rx="5" /><rect x="44" y="31" width="19" height="15" rx="5" /><path d="M43 37 h1" /><path d="M27 34 l5 -1.5 M47 34 l5 -1.5" stroke={a.color} strokeLinecap="round" /></g>}
         {acc === 'lentes' && <g fill="none" stroke="#e8ebf4" strokeWidth="2.5"><rect x="25" y="30" width="17" height="18" rx="5" /><rect x="44" y="30" width="17" height="18" rx="5" /></g>}
       </g>
     </svg>
@@ -159,6 +311,7 @@ function Room({ team, working, routing, done, sel, selAgent, progress, onStop, o
 }): ReactNode {
   const ref = useRef<HTMLDivElement>(null)
   const drag = useRef<string | null>(null)
+  const typing = useTyping()
   const props = team.props ?? []
   const n = Math.max(team.agents.length, 1)
   const move = (e: RPointerEvent): void => {
@@ -219,7 +372,7 @@ function Room({ team, working, routing, done, sel, selAgent, progress, onStop, o
       })}
       <div className={`tr-me ${working ? 'work' : ''}`} style={{ left: '90%' }}>
         {routing && <div className="tr-bubble think">¿Quién lo atiende?</div>}
-        <Avatar c={team.character} size={92} live={working ? 'work' : 'idle'} />
+        <Avatar c={team.character} size={92} live={typing ? 'type' : working ? 'work' : 'idle'} />
         <small className="tr-tag">{team.character.name}</small>
       </div>
       {props.map((p) => {
@@ -310,7 +463,6 @@ export function TeamView(): ReactNode {
   const [editRoom, setEditRoom] = useState(false)
   const [showChar, setShowChar] = useState(false) // personalización del personaje, oculta por defecto
   const [target, setTarget] = useState('') // '' = todo el equipo (se enruta solo)
-  const [charTab, setCharTab] = useState<'cara' | 'pelo' | 'ropa'>('cara')
   const [draft, setDraftRaw] = useState(kept.draft)
   const setDraft = (v: string): void => {
     kept.draft = v
@@ -438,16 +590,9 @@ export function TeamView(): ReactNode {
   }
   const patchProp = (p: Partial<TeamProp>): void => update({ ...team, props: props.map((x) => (x.id === selProp ? { ...x, ...p } : x)) })
   const curProp = props.find((p) => p.id === selProp)
-  const random = (): void => {
-    setChar({
-      skin: pick(SKINS.slice(0, 6)), hair: pick(HAIR)[0], gear: pick(GEAR)[0], outfit: pick(OUTFIT)[0],
-      hairColor: pick(HAIR_COLORS), eyeColor: pick(EYE_COLORS), outfitColor: pick(OUTFIT_COLORS),
-      mouth: pick(MOUTH)[0], face: pick(FACE)[0], facial: Math.random() < 0.7 ? 'ninguno' : pick(FACIAL)[0]
-    })
-  }
   const setLook = (p: Partial<RobotLook>): void => setAgent({ look: { ...agent?.look, ...p } })
   const randomBot = (): void =>
-    setAgent({ color: pick(COLORS), look: { head: pick(HEADS)[0], eyes: pick(BOT_EYES)[0], antenna: pick(ANTENNAS)[0], acc: pick(BOT_ACC)[0] } })
+    setAgent({ color: pick(COLORS), look: { head: pick(HEADS)[0], eyes: pick(BOT_EYES)[0], antenna: pick(ANTENNAS)[0], acc: pick(BOT_ACC)[0], mouth: pick(BOT_MOUTH)[0], cheeks: pick(BOT_CHEEKS)[0], outfit: pick(BOT_OUTFIT)[0] } })
   const ask = async (): Promise<void> => {
     if (!agent) return
     const id = agent.id
@@ -675,46 +820,13 @@ export function TeamView(): ReactNode {
       </div>
     )
   }
-  const ch = team.character
   const field = (label: string, body: ReactNode): ReactNode => <div className="tm-field"><span className="tm-lbl">{label}</span>{body}</div>
 
   return (
     <div className="tm-wrap tm-v2">
       {showChar && <section className="card tm-char tm-char-pop" role="dialog" aria-label="Personalizar mi personaje">
         <button className="btn sm tm-char-x" aria-label="Cerrar" onClick={() => setShowChar(false)}>✕ Cerrar</button>
-        <div className="tm-head">
-          <div className="tm-stage"><Avatar c={team.character} size={92} live="idle" /></div>
-          <div className="tm-id">
-            <div className="eyebrow">Tu personaje</div>
-            <input className="tm-name" value={team.character.name} onChange={(e) => setChar({ name: e.target.value })} aria-label="Nombre del personaje" />
-            <input className="tm-name sub" value={team.character.role} onChange={(e) => setChar({ role: e.target.value })} aria-label="Rol del personaje" />
-            <button className="btn sm tm-rand" onClick={random}>🎲 Aleatorio</button>
-          </div>
-        </div>
-        {/* por pestañas: con tantas opciones, una sola columna se volvía interminable */}
-        <div className="tm-subtabs" role="tablist">
-          {(['cara', 'pelo', 'ropa'] as const).map((k) => (
-            <button key={k} role="tab" aria-selected={charTab === k} className={charTab === k ? 'on' : ''} onClick={() => setCharTab(k)}>
-              {k === 'cara' ? 'Cara' : k === 'pelo' ? 'Pelo' : 'Ropa y extras'}
-            </button>
-          ))}
-        </div>
-        {charTab === 'cara' && <>
-          {field('Piel', swatches(SKINS, ch.skin, (skin) => setChar({ skin }), 'Piel'))}
-          {field('Ojos', swatches(EYE_COLORS, ch.eyeColor ?? '#1a1c28', (eyeColor) => setChar({ eyeColor }), 'Ojos'))}
-          {field('Boca', opts(MOUTH, ch.mouth ?? 'sonrisa', (mouth) => setChar({ mouth })))}
-          {field('Mejillas', opts(FACE, ch.face ?? 'normal', (face) => setChar({ face })))}
-          {field('Vello facial', opts(FACIAL, ch.facial ?? 'ninguno', (facial) => setChar({ facial })))}
-        </>}
-        {charTab === 'pelo' && <>
-          {field('Peinado', opts(HAIR, ch.hair, (hair) => setChar({ hair })))}
-          {field('Color de pelo', swatches(HAIR_COLORS, ch.hairColor ?? HAIR_COLOR, (hairColor) => setChar({ hairColor }), 'Pelo'))}
-        </>}
-        {charTab === 'ropa' && <>
-          {field('Ropa', opts(OUTFIT, ch.outfit, (outfit) => setChar({ outfit })))}
-          {field('Color de ropa', swatches(OUTFIT_COLORS, ch.outfitColor ?? OUTFIT_COLOR[ch.outfit], (outfitColor) => setChar({ outfitColor }), 'Ropa'))}
-          {field('Accesorio', opts(GEAR, ch.gear === 'barba' ? 'ninguno' : ch.gear, (gear) => setChar({ gear })))}
-        </>}
+        <CharacterEditor char={team.character} onChange={setChar} />
       </section>}
 
       <section className="card tm-mid">
@@ -1047,7 +1159,10 @@ export function TeamView(): ReactNode {
               {field('Cabeza', opts(HEADS, agent.look?.head ?? 'redonda', (head) => setLook({ head })))}
               {field('Ojos', opts(BOT_EYES, agent.look?.eyes ?? 'pixel', (eyes) => setLook({ eyes })))}
               {field('Antena', opts(ANTENNAS, agent.look?.antenna ?? 'bola', (antenna) => setLook({ antenna })))}
+              {field('Boca', opts(BOT_MOUTH, agent.look?.mouth ?? 'ninguna', (mouth) => setLook({ mouth })))}
+              {field('Mejillas', opts(BOT_CHEEKS, agent.look?.cheeks ?? 'ninguno', (cheeks) => setLook({ cheeks })))}
               {field('Accesorio', opts(BOT_ACC, agent.look?.acc ?? 'ninguno', (acc) => setLook({ acc })))}
+              {field('Ropa', opts(BOT_OUTFIT, agent.look?.outfit ?? 'ninguna', (outfit) => setLook({ outfit })))}
             </details>
             <label>Nombre y emoji</label>
             <div className="tm-row"><input className="tm-emoji" aria-label="Emoji" value={agent.emoji} onChange={(e) => setAgent({ emoji: Array.from(e.target.value).slice(0, 2).join('') })} /><input aria-label="Nombre" value={agent.name} maxLength={40} onChange={(e) => setAgent({ name: e.target.value })} /></div>

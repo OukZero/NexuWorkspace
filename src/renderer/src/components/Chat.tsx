@@ -652,7 +652,7 @@ export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string
             </div>
           )}
           <div
-            className={`composer cbox ${dragging ? 'drag' : ''}`}
+            className={`composer cbox ${dragging ? 'drag' : ''} ${running ? 'working' : ''}`}
             onDragOver={(e) => {
               e.preventDefault()
               setDragging(true)

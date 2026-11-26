@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
-import { BG_BUILTIN, BG_MAX_IMAGES, addBgImageFile, getAppearance, getBgActive, getBgLib, removeBgImage, resetBgAdjust, setBgActive, update, useAppearance, useBackgrounds } from '../theme'
+import { BG_BUILTIN, BG_MAX_IMAGES, addBgImageFile, getAppearance, getBgActive, getBgLib, removeBgImage, resetBgAdjust, resetChatAdjust, setBgActive, update, useAppearance, useBackgrounds } from '../theme'
 import type { Appearance } from '../theme'
 import { useUi } from '../ui'
 import { G } from './glyphs'
@@ -21,6 +21,14 @@ export function BackgroundPicker(): ReactNode {
   const a = getAppearance()
   type NumKey = 'bgX' | 'bgY' | 'bgZoom' | 'bgDim' | 'bgBlur' | 'bgBright' | 'bgSat' | 'bgGlass' | 'glassBlur'
   const sl = (k: NumKey, label: string, min: number, max: number, step: number, unit: string): ReactNode => (
+    <label>
+      {label} · {a[k]}
+      {unit}
+      <input type="range" min={min} max={max} step={step} value={a[k]} aria-label={label} onChange={(e) => update({ [k]: Number(e.target.value) })} />
+    </label>
+  )
+
+  const csl = (k: 'chatBg' | 'chatMsgs' | 'chatUser' | 'chatComp' | 'chatBlur', label: string, min: number, max: number, step: number, unit: string): ReactNode => (
     <label>
       {label} · {a[k]}
       {unit}
@@ -100,6 +108,18 @@ export function BackgroundPicker(): ReactNode {
           </button>
         </div>
       )}
+      <div className="bgp-sl">
+        <b className="bgp-sub">Chat</b>
+        {csl('chatBg', 'Fondo del chat', 0, 100, 5, '%')}
+        {csl('chatMsgs', 'Mensajes de la IA', 0, 100, 5, '%')}
+        {csl('chatUser', 'Tus mensajes', 0, 100, 5, '%')}
+        {csl('chatComp', 'Caja de escritura', 0, 100, 5, '%')}
+        {csl('chatBlur', 'Desenfoque del fondo del chat', 0, 30, 1, ' px')}
+        <small className="bgp-note">0 % = transparente (se ve el fondo); 100 % = opaco, como siempre.</small>
+        <button className="btn sm" onClick={resetChatAdjust}>
+          Restablecer el chat
+        </button>
+      </div>
       <small className="bgp-note">Tus imágenes se guardan solo en este equipo (hasta {BG_MAX_IMAGES}).</small>
     </div>
   )

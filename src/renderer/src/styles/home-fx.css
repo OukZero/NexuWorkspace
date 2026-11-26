@@ -1,0 +1,75 @@
+/* ===== efectos de la pantalla de inicio =====
+   Solo CSS y solo con transform/opacity/box-shadow. Se desactivan con «Animaciones» apagadas o con prefers-reduced-motion. */
+@keyframes hx-rise { from { opacity: 0; transform: translateY(14px) scale(.985); } }
+@keyframes hx-breathe { 0%, 100% { opacity: .35; transform: scale(.96); } 50% { opacity: .75; transform: scale(1.05); } }
+@keyframes hx-sheen { from { transform: translateX(-120%); } to { transform: translateX(120%); } }
+@keyframes hx-drift { 0% { transform: translate3d(-4%, -2%, 0); } 50% { transform: translate3d(4%, 3%, 0); } 100% { transform: translate3d(-4%, -2%, 0); } }
+
+html:not([data-motion="off"]) .home-grid:not(.editing) .hg-item { animation: hx-rise .55s cubic-bezier(.22, 1, .36, 1) backwards; }
+html:not([data-motion="off"]) .home-grid:not(.editing) .hg-item:nth-child(1) { animation-delay: .02s; }
+html:not([data-motion="off"]) .home-grid:not(.editing) .hg-item:nth-child(2) { animation-delay: .08s; }
+html:not([data-motion="off"]) .home-grid:not(.editing) .hg-item:nth-child(3) { animation-delay: .14s; }
+html:not([data-motion="off"]) .home-grid:not(.editing) .hg-item:nth-child(4) { animation-delay: .2s; }
+html:not([data-motion="off"]) .home-grid:not(.editing) .hg-item:nth-child(5) { animation-delay: .26s; }
+html:not([data-motion="off"]) .home-grid:not(.editing) .hg-item:nth-child(6) { animation-delay: .32s; }
+html:not([data-motion="off"]) .home-grid:not(.editing) .hg-item:nth-child(n + 7) { animation-delay: .38s; }
+
+/* tarjetas: se elevan y se iluminan con el acento al pasar el cursor; un brillo cruza la tarjeta una vez */
+.home-grid:not(.editing) .hg-body > * { position: relative; overflow: hidden; transition: transform .25s cubic-bezier(.22, 1, .36, 1), box-shadow .25s, border-color .25s; }
+.home-grid:not(.editing) .hg-body > *:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--accent) 45%, transparent); box-shadow: 0 14px 40px -14px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent); }
+.home-grid:not(.editing) .hg-body > *::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; background: linear-gradient(105deg, transparent 35%, color-mix(in srgb, var(--accent) 14%, transparent) 50%, transparent 65%); }
+html:not([data-motion="off"]) .home-grid:not(.editing) .hg-body > *:hover::after { opacity: 1; animation: hx-sheen .9s ease-out; }
+
+/* anillo de enfoque: halo que respira detrás */
+.hm-ring { position: relative; }
+.hm-ring::before { content: ""; position: absolute; inset: 6%; border-radius: 50%; z-index: 0; pointer-events: none; background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 40%, transparent), transparent 72%); filter: blur(14px); opacity: .5; }
+.hm-ring > * { position: relative; z-index: 1; }
+html:not([data-motion="off"]) .hm-ring::before { animation: hx-breathe 4.5s ease-in-out infinite; }
+
+/* resplandor ambiental que deriva lentamente detrás de la cuadrícula */
+.home-grid { position: relative; isolation: isolate; }
+.home-grid::before { content: ""; position: absolute; inset: -6%; z-index: -1; pointer-events: none; opacity: .5;
+  background: radial-gradient(38% 32% at 22% 18%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%), radial-gradient(34% 30% at 82% 72%, color-mix(in srgb, var(--accent2, var(--accent)) 14%, transparent), transparent 70%); }
+html:not([data-motion="off"]) .home-grid::before { animation: hx-drift 26s ease-in-out infinite; will-change: transform; }
+
+@media (prefers-reduced-motion: reduce) {
+  .home-grid *, .home-grid::before, .hm-ring::before { animation: none !important; transition: none !important; }
+}
+
+/* ===== efectos comunes al resto de módulos ===== */
+@keyframes hx-view { from { opacity: 0; transform: translateY(8px); } }
+@keyframes hx-pop { from { opacity: 0; transform: translateY(10px) scale(.985); } }
+@keyframes hx-msg { from { opacity: 0; transform: translateY(6px); } }
+
+/* cada vez que se abre un módulo, su contenido entra con un fundido corto */
+/* (#view se rehace al cambiar de módulo; <main> y .scroll no, por eso el efecto va aquí) */
+html:not([data-motion="off"]) #view > * { animation: hx-view .38s cubic-bezier(.22, 1, .36, 1) backwards; }
+
+/* tarjetas y columnas de Horas, Tablero, Uso, Notas…: entran escalonadas dentro de su contenedor (.bc es la tarjeta de casi todos los módulos) */
+html:not([data-motion="off"]) #view :is(.bc, .group-card, .col, .nt-list, .nt-main, .hr-task, .hist-row, .mu-card) { animation: hx-pop .5s cubic-bezier(.22, 1, .36, 1) backwards; }
+html:not([data-motion="off"]) #view :is(.bc, .group-card, .col, .mu-card):nth-child(2) { animation-delay: .06s; }
+html:not([data-motion="off"]) #view :is(.bc, .group-card, .col, .mu-card):nth-child(3) { animation-delay: .12s; }
+html:not([data-motion="off"]) #view :is(.bc, .group-card, .col, .mu-card):nth-child(4) { animation-delay: .18s; }
+html:not([data-motion="off"]) #view :is(.bc, .group-card, .col, .mu-card):nth-child(n + 5) { animation-delay: .24s; }
+
+/* hover: contadores se elevan; el resto solo se ilumina (sin transform, por si contienen menús flotantes) */
+.stat, .group-card, .card:not(.tm-char) { transition: transform .25s cubic-bezier(.22, 1, .36, 1), box-shadow .25s, border-color .25s; }
+.stat:hover { transform: translateY(-3px); }
+:is(.stat, .group-card, .card:not(.tm-char)):hover { border-color: color-mix(in srgb, var(--accent) 40%, transparent); box-shadow: 0 12px 34px -16px color-mix(in srgb, var(--accent) 55%, transparent); }
+
+/* filas y tareas: el acento asoma al pasar el cursor */
+:is(.row, .task, .sess, .hist-row, .nt-item):hover { box-shadow: inset 2px 0 0 var(--accent); }
+
+/* botón principal: brillo al pasar y leve hundimiento al pulsar */
+.btn.primary { transition: transform .15s, box-shadow .2s, filter .2s; }
+.btn.primary:hover:not(:disabled) { box-shadow: 0 8px 24px -8px color-mix(in srgb, var(--accent) 70%, transparent); filter: brightness(1.08); }
+.btn.primary:active:not(:disabled) { transform: scale(.97); }
+
+/* Chat IA: los mensajes nuevos entran suavemente y la caja de escritura respira al enfocarla */
+html:not([data-motion="off"]) .chatpane .msgs > :is(.msg, .mrow):last-child { animation: hx-msg .28s cubic-bezier(.22, 1, .36, 1); }
+html .chatpane .composer.cbox { transition: border-color .25s, box-shadow .35s; }
+html:not([data-motion="off"]) .chatpane .composer.cbox:focus-within { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent), 0 10px 44px -10px color-mix(in srgb, var(--accent) 45%, transparent); }
+
+@media (prefers-reduced-motion: reduce) {
+  main *, main { animation: none !important; transition: none !important; }
+}

@@ -23,6 +23,9 @@
 .tm-wrap .tm-sw > .on, .tm-wrap .tm-sw > button:focus-visible, .tm-wrap .tm-sw-custom:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* muestra «personalizado»: arcoíris hasta que se elige un color propio */
 .tm-wrap .tm-sw-custom { position: relative; overflow: hidden; background: conic-gradient(#ff7a9c, #ffd166, #5fe3b4, #5ad1ff, #8fa4ff, #c39bff, #ff7a9c); }
+/* Fuera de .tm-wrap (p. ej. en Apariencia) el input absoluto se estiraba por toda la pantalla y cada clic abría el selector de color. */
+.tm-sw-custom { position: relative; overflow: hidden; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; flex: none; cursor: pointer; background: conic-gradient(#ff7a9c, #ffd166, #5fe3b4, #5ad1ff, #8fa4ff, #c39bff, #ff7a9c); }
+.tm-sw-custom > span { pointer-events: none; font-size: 13px; font-weight: 700; color: #0d1024; line-height: 1; }
 .tm-sw-custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
 .tm-wrap .tm-sw { flex-wrap: wrap; gap: 7px; }
 /* pestañas del editor del personaje */
@@ -618,3 +621,45 @@ html .tm-wrap.tm-v2 > .tm-char-pop { position: fixed; z-index: 50; top: 70px; ri
 .ag-item:disabled { opacity: .5; cursor: not-allowed; }
 .ag-bot { width: 44px; height: 48px; overflow: hidden; flex: none; }
 .ag-chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--c, var(--ln)); }
+
+/* vida extra del Robot y del Avatar (boca que habla, aureola, capa, orejas, lazo…) */
+@keyframes bot-talk { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(1.7); } }
+@keyframes bot-float { 50% { transform: translateY(-2px); } }
+@keyframes bot-sway { 50% { transform: rotate(4deg); } }
+@keyframes bot-zz { 0% { transform: translate(0, 0); opacity: 0; } 30% { opacity: 1; } 100% { transform: translate(4px, -8px); opacity: 0; } }
+@keyframes av-talk { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.06, 1.45); } }
+@keyframes av-wiggle { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-5deg); } }
+.bot-mouth, .bot-cheeks, .bot-halo, .bot-cape, .bot-scarf, .bot-ears, .bot-bow, .bot-z, .av-mouth, .av-halo, .av-bow { transform-box: fill-box; transform-origin: 50% 50%; }
+.bot-cheeks { animation: bot-float 3.2s ease-in-out infinite; }
+.bot-halo { animation: bot-float 2.4s ease-in-out infinite; }
+.bot-cape { transform-origin: 50% 0; animation: bot-sway 3.4s ease-in-out infinite; }
+.bot-scarf { transform-origin: 20% 0; animation: bot-sway 2.8s ease-in-out infinite; }
+.bot-ears { animation: bot-sway 4s ease-in-out infinite; }
+.bot-z { animation: bot-zz 2.4s ease-in infinite; }
+.bot-work .bot-mouth { animation: bot-talk .35s ease-in-out infinite; }
+.av-halo { animation: bot-float 2.4s ease-in-out infinite; }
+.av-bow { animation: av-wiggle 3s ease-in-out infinite; }
+.av-work .av-mouth { animation: av-talk .4s ease-in-out infinite; }
+.companion .av-body { animation-duration: 2.6s; }
+@media (prefers-reduced-motion: reduce) {
+  .bot-mouth, .bot-cheeks, .bot-halo, .bot-cape, .bot-scarf, .bot-ears, .bot-bow, .bot-z, .av-mouth, .av-halo, .av-bow { animation: none !important; }
+}
+:root[data-motion="off"] :is(.bot-mouth, .bot-cheeks, .bot-halo, .bot-cape, .bot-scarf, .bot-ears, .bot-bow, .bot-z, .av-mouth, .av-halo, .av-bow) { animation: none !important; }
+
+/* escribir: el personaje teclea (mismos gestos que al trabajar) y el teclado se enciende */
+@keyframes av-key { 0%, 70%, 100% { opacity: .35; } 80% { opacity: 1; } }
+@keyframes av-hand { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(3px); } }
+@keyframes av-kb-in { from { transform: translateY(8px); opacity: 0; } }
+.av-type .av-body { animation: av-lean 1.6s ease-in-out infinite; }
+.av-type .av-arm.l { animation: av-type .31s ease-in-out infinite; }
+.av-type .av-arm.r { animation: av-type .34s ease-in-out .17s infinite; }
+.av-type .av-mouth, .av-work .av-mouth { animation: av-talk .4s ease-in-out infinite; }
+.av-kb { animation: av-kb-in .25s var(--ease-out); }
+.av-key { opacity: .35; animation: av-key .5s linear infinite; }
+.av-hand { transform-box: fill-box; transform-origin: center; animation: av-hand .3s ease-in-out infinite; }
+.av-hand.r { animation-delay: .15s; }
+.tm-char-inline { max-width: 460px; }
+@media (prefers-reduced-motion: reduce) {
+  .av-type .av-body, .av-type .av-arm, .av-type .av-mouth, .av-kb, .av-key, .av-hand { animation: none !important; }
+}
+:root[data-motion="off"] :is(.av-type .av-body, .av-type .av-arm, .av-type .av-mouth, .av-kb, .av-key, .av-hand) { animation: none !important; }

@@ -482,7 +482,7 @@ export function GitView({ taskId }: { taskId: string }): ReactNode {
                 Usar este número
               </button>
             </div>
-            {issues === null && <div className="meta">Cargando issues…</div>}
+            {issues === null && <div className="skel-list" aria-busy="true" aria-label="Cargando issues"><div className="skel" /><div className="skel" /><div className="skel" style={{ width: '70%' }} /></div>}
             {issues?.length === 0 && <div className="meta">No hay issues abiertas (o no se pudieron leer).</div>}
             <div className="gissues">
               {issues?.map((i) => (
