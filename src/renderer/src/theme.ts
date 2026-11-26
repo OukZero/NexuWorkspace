@@ -345,6 +345,8 @@ export interface Appearance extends Look {
   /** Sonidos sutiles de la interfaz. */
   sounds: boolean
   soundVol: number
+  /** Voz (blip) del acompañante al hablar; independiente del resto de sonidos. */
+  companionSound: boolean
   /** Personaje acompañante siempre visible: agente elegido ('' = el primero) y esquina. */
   companion: boolean
   companionAgent: string
@@ -375,7 +377,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   nav: { order: [], hidden: [], pinned: DEFAULT_PINNED }, colors: {}, bgDim: 80, bgGlass: 78,
   bgX: 50, bgY: 50, bgZoom: 100, bgFit: 'cover', bgBlur: 0, bgSat: 100, bgBright: 100, glassBlur: 12,
   chatBg: 100, chatMsgs: 100, chatUser: 100, chatComp: 100, chatBlur: 0, saved: [],
-  liveBg: 'off', seasons: true, seasonForce: '', sounds: true, soundVol: 40, companion: true, companionAgent: '', companionCorner: 'br', charStyle: 'clasico', dock: 'left', dockChat: true, companionPos: null
+  liveBg: 'off', seasons: true, seasonForce: '', sounds: true, soundVol: 40, companionSound: true, companion: true, companionAgent: '', companionCorner: 'br', charStyle: 'clasico', dock: 'left', dockChat: true, companionPos: null
 }
 
 const KEY = 'shutoki.appearance'
@@ -459,6 +461,7 @@ export function sanitize(raw: unknown): Appearance {
     seasonForce: str(r.seasonForce, '', 30),
     sounds: r.sounds !== false,
     soundVol: num(r.soundVol, 0, 100, d.soundVol),
+    companionSound: r.companionSound !== false,
     companion: r.companion !== false,
     companionAgent: str(r.companionAgent, '', 60),
     companionCorner: r.companionCorner === 'bl' ? 'bl' : 'br',

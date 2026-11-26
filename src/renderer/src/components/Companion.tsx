@@ -107,10 +107,10 @@ export function Companion(): ReactNode {
 
   const say = useCallback((msg: string, ms = 7000) => {
     setBubble(msg)
-    playSfx('blip')
+    if (A.companionSound) playSfx('blip')
     window.clearTimeout(timer.current)
     timer.current = window.setTimeout(() => setBubble(null), ms)
-  }, [])
+  }, [A.companionSound])
   const jump = useCallback(() => {
     setHop(false)
     requestAnimationFrame(() => setHop(true))

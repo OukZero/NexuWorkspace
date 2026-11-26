@@ -28,6 +28,7 @@ import { UpdateChip } from './UpdateCard'
 import { MiniPlayer } from './MiniPlayer'
 import { TimerBar } from './TimerBar'
 import { NotificationBell } from './NotificationBell'
+import { CommandsBell } from './CommandsBell'
 import { showSettingsTab } from './SettingsView'
 import { NAV_GROUPS } from '../navDefs'
 import { BackgroundPicker } from './BackgroundPicker'
@@ -427,6 +428,7 @@ export function TopTools({ onSearch, fullscreen, onFullscreen }: { onSearch: () 
       <MiniPlayer />
       <TimerBar />
       <NotificationBell variant="top" />
+      <CommandsBell variant="top" />
       <UpdateChip />
       <button className="ib" title={fullscreen ? 'Salir de pantalla completa (F11)' : 'Pantalla completa (F11)'} aria-label={fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'} aria-pressed={fullscreen} onClick={onFullscreen}>
         <G n={fullscreen ? 'shrink' : 'expand'} size={16} />
