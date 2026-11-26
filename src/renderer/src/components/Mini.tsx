@@ -6,6 +6,7 @@ import { convLabel, openConvs } from '../conversations'
 import { activeEntry, call, findTask, useDB, useNow } from '../store'
 import { fmtDur, isWorkTask } from '../utils'
 import { IconSend, IconStop } from './icons'
+import { DockChat } from './DockChat'
 
 const TARGET_KEY = 'shutoki.miniTarget' // 'auto', id de conversación o 'task:<id>' (tarea sin conversación)
 const TABS_KEY = 'shutoki.tabs' // pestañas abiertas en la ventana principal
@@ -122,6 +123,8 @@ export function Mini(): ReactNode {
   const name = target ? `${target.task.title}${chat ? ` · ${convLabel(chat)}` : ''}` : ''
   const ai = chat?.provider === 'copilot' ? 'Copilot' : 'Claude'
 
+  if (format === 'edge') return <Edge running={running} timer={a ? fmtDur(now - a.start) : db.paused ? 'en pausa' : ''} />
+
   if (format === 'full') {
     return (
       <Full
@@ -190,6 +193,60 @@ export function Mini(): ReactNode {
         </button>
       </div>
     </>
+  )
+}
+
+/** Formato «barra»: franja en el borde izquierdo; al pasar el mouse muestra opciones y «Chat» abre una vista más grande con las tareas y sus conversaciones. */
+function Edge({ running, timer }: { running: boolean; timer: string }): ReactNode {
+  const [stage, setStage] = useState<'bar' | 'menu' | 'chat'>('bar')
+  const box = useRef<HTMLDivElement>(null)
+  const leave = useRef(0)
+  useEffect(() => {
+    document.body.classList.add('edge-mode')
+    return () => document.body.classList.remove('edge-mode')
+  }, [])
+  // la ventana pide el tamaño de la etapa: franja fina → menú → chat grande
+  useEffect(() => {
+    const [w, h] = stage === 'bar' ? [8, 160] : stage === 'menu' ? [260, 176] : [440, 580]
+    void call('mini:resize', w, h).catch(() => {})
+  }, [stage])
+  const enter = (): void => {
+    window.clearTimeout(leave.current)
+    setStage((s) => (s === 'bar' ? 'menu' : s))
+  }
+  // al salir el mouse se vuelve a la franja, con un pequeño margen para no cerrarse por un roce
+  const out = (): void => {
+    window.clearTimeout(leave.current)
+    // el chat abierto no se esconde solo (se perdería lo que se está escribiendo); se vuelve con «‹»
+    leave.current = window.setTimeout(() => setStage((s) => (s === 'menu' ? 'bar' : s)), 600)
+  }
+  return (
+    <div ref={box} className={`edge edge-${stage}`} onMouseEnter={enter} onMouseLeave={out}>
+      {stage === 'bar' ? (
+        <div className={`edge-grip ${running ? 'on' : ''}`} aria-hidden />
+      ) : stage === 'menu' ? (
+        <div className="edge-menu">
+          <div className="edge-head">
+            <span className={`edge-dot ${running ? 'on' : ''}`} />
+            <span className="edge-ttl">Shutoki</span>
+            <span className="edge-t">{timer || (running ? 'trabajando…' : 'en espera')}</span>
+          </div>
+          <button className="edge-act" style={{ ['--i' as string]: 0 }} onClick={() => setStage('chat')}>
+            <span className="edge-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" /></svg></span>
+            <span className="edge-tx"><b>Chat IA</b><small>Tareas y conversaciones</small></span>
+          </button>
+          <button className="edge-act" style={{ ['--i' as string]: 1 }} onClick={() => call('win:restore')}>
+            <span className="edge-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg></span>
+            <span className="edge-tx"><b>Abrir la app</b><small>Volver a la ventana completa</small></span>
+          </button>
+        </div>
+      ) : (
+        <div className="edge-chat">
+          <div className="edge-bar"><strong>Chat AI</strong><span className="grow" /><button title="Volver al menú" onClick={() => setStage('menu')}>‹</button><button title="Abrir la app" onClick={() => call('win:restore')}>⤢</button></div>
+          <DockChat big />
+        </div>
+      )}
+    </div>
   )
 }
 

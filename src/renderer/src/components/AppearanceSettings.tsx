@@ -8,6 +8,9 @@ import { NAV_GROUPS } from '../navDefs'
 import { LIMITS, applyPreset, deletePreset, savePreset, savedLayouts, setLayout, useLayout } from '../layout'
 import { Select } from './Select'
 import { BackgroundPicker } from './BackgroundPicker'
+import { playSfx } from '../sounds'
+import { CharStylePicker, CompanionAgentSelect, MyCharacterEditor } from './Companion'
+import { SEASONS } from '../seasons'
 
 // ---------- utilidades ----------
 const hexToRgb = (h: string): [number, number, number] => {
@@ -391,7 +394,76 @@ export function AppearanceSettings(): ReactNode {
         <input type="checkbox" style={{ width: 'auto' }} checked={a.confetti} disabled={!a.motion} onChange={(e) => update({ confetti: e.target.checked })} />
         Confeti al completar una tarea
       </label>
+      <label className="tpl-check">
+        <input type="checkbox" style={{ width: 'auto' }} checked={a.sounds} onChange={(e) => update({ sounds: e.target.checked })} />
+        Sonidos suaves (iniciar o detener el timer, completar tareas)
+      </label>
+      {a.sounds && (
+        <div className="ap-row">
+          <label>Volumen</label>
+          <input type="range" min={0} max={100} value={a.soundVol} onChange={(e) => update({ soundVol: Number(e.target.value) })} />
+          <button type="button" className="btn" onClick={() => playSfx('done')}>Probar sonido</button>
+        </div>
+      )}
+      <div className="ap-row">
+        <label>Fondo animado</label>
+        <Seg<Appearance['liveBg']> label="Fondo animado" value={a.liveBg} onChange={(liveBg) => update({ liveBg })} options={[['off', 'Ninguno'], ['aurora', 'Aurora'], ['particulas', 'Partículas']]} />
+      </div>
+      <label className="tpl-check">
+        <input type="checkbox" style={{ width: 'auto' }} checked={a.seasons} onChange={(e) => update({ seasons: e.target.checked })} />
+        Eventos del calendario de Chile (Navidad, Año Nuevo, Pascua, Fiestas Patrias…)
+      </label>
+      <div className="ap-row">
+        <label>Previsualizar evento</label>
+        <select value={a.seasonForce} onChange={(e) => update({ seasonForce: e.target.value })}>
+          <option value="">Según la fecha de hoy</option>
+          {SEASONS.map((s) => <option key={s.id} value={s.id}>{s.emoji} {s.name}</option>)}
+        </select>
+      </div>
+      <label className="tpl-check">
+        <input type="checkbox" style={{ width: 'auto' }} checked={a.companion} onChange={(e) => update({ companion: e.target.checked })} />
+        Personaje acompañante siempre visible
+      </label>
+      {a.companion && (
+        <>
+          <div className="ap-row">
+            <label>Personaje</label>
+            <CompanionAgentSelect value={a.companionAgent} onChange={(companionAgent) => update({ companionAgent })} />
+          </div>
+          <div className="ap-row">
+            <label>Esquina</label>
+            <Seg<Appearance['companionCorner']> label="Esquina" value={a.companionCorner} onChange={(companionCorner) => update({ companionCorner })} options={[['br', 'Derecha'], ['bl', 'Izquierda']]} />
+          </div>
+          <div className="ap-row">
+            <label>Posición</label>
+            <span className="meta">Arrástralo con el mouse; doble clic lo devuelve a la esquina.</span>
+            {a.companionPos && <button className="btn" onClick={() => update({ companionPos: null })}>Volver a la esquina</button>}
+          </div>
+        </>
+      )}
+      <div className="ap-row">
+        <label>Menú lateral</label>
+        <Seg<Appearance['dock']> label="Menú lateral" value={a.dock} onChange={(dock) => update({ dock })} options={[['left', 'Fijo a la izquierda'], ['right', 'Barra derecha que se esconde']]} />
+      </div>
+      <div className="ap-row">
+        <label>Al minimizar</label>
+        <Seg<'barra' | 'flotante'>
+          label="Al minimizar"
+          value={db.settings.miniEnabled !== false && db.settings.miniFormat === 'edge' ? 'barra' : 'flotante'}
+          onChange={(v) => void window.api.call('settings:save', v === 'barra' ? { miniEnabled: true, miniFormat: 'edge' } : { miniEnabled: true, miniFormat: 'full' }).catch(() => undefined)}
+          options={[['barra', 'Barra oculta a la derecha (con chat IA)'], ['flotante', 'Ventana flotante']]}
+        />
+      </div>
 
+      </Sec>
+
+      {/* ---------------- mi personaje ---------------- */}
+      <Sec icon="menu" title="Mi personaje" sub="Tu avatar: aparece en el Equipo y puede ser tu acompañante; teclea cuando escribes">
+        <div className="ap-row">
+          <label>Estilo de dibujo</label>
+          <CharStylePicker />
+        </div>
+        <MyCharacterEditor />
       </Sec>
 
       {/* ---------------- chat y código ---------------- */}

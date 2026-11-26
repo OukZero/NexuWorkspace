@@ -7,6 +7,9 @@ export type ThemeMode = 'light' | 'dark' | 'system'
 export type Density = 'comfortable' | 'compact'
 export type Radius = 'sharp' | 'soft' | 'round'
 export type Bubbles = 'solid' | 'soft' | 'outline'
+/** Estilos de dibujo de personajes y robots ('clasico' = el diseño original). */
+export type CharStyle = 'clasico' | 'chibi' | 'plano' | 'pixel' | 'kawaii'
+export const CHAR_STYLES: CharStyle[] = ['clasico', 'chibi', 'plano', 'pixel', 'kawaii']
 
 /** Color de acento por perfil: [tema oscuro, tema claro]. */
 export const ACCENTS: Record<string, [string, string]> = {
@@ -328,6 +331,32 @@ export interface Appearance extends Look {
   bgBright: number
   /** Desenfoque del vidrio de los paneles (px). */
   glassBlur: number
+  /** Opacidad (%) de las capas del chat: fondo del panel, mensajes de la IA, burbuja propia y caja de escritura; y desenfoque (px) del fondo. */
+  chatBg: number
+  chatMsgs: number
+  chatUser: number
+  chatComp: number
+  chatBlur: number
+  /** Fondo animado sobre el fondo normal. */
+  liveBg: 'off' | 'aurora' | 'particulas'
+  /** Temas de temporada según el calendario de Chile; seasonForce fuerza uno para previsualizarlo. */
+  seasons: boolean
+  seasonForce: string
+  /** Sonidos sutiles de la interfaz. */
+  sounds: boolean
+  soundVol: number
+  /** Personaje acompañante siempre visible: agente elegido ('' = el primero) y esquina. */
+  companion: boolean
+  companionAgent: string
+  companionCorner: 'br' | 'bl'
+  /** Estilo de dibujo de personajes y robots. */
+  charStyle: CharStyle
+  /** Menú lateral: a la izquierda (normal) o en una barra a la derecha que se esconde. */
+  dock: 'left' | 'right'
+  /** Chat compacto dentro de la barra escondida (alternativa a la ventana flotante). */
+  dockChat: boolean
+  /** Última posición del acompañante si se arrastró (px desde arriba-izquierda). */
+  companionPos: { x: number; y: number } | null
   saved: SavedTheme[]
 }
 
@@ -344,7 +373,9 @@ export const DEFAULT_APPEARANCE: Appearance = {
   auto: { on: false, lightFrom: '07:00', darkFrom: '19:00', light: 'papel', dark: 'medianoche' },
   dayPreset: 'nexoclaro', nightPreset: 'shutoki',
   nav: { order: [], hidden: [], pinned: DEFAULT_PINNED }, colors: {}, bgDim: 80, bgGlass: 78,
-  bgX: 50, bgY: 50, bgZoom: 100, bgFit: 'cover', bgBlur: 0, bgSat: 100, bgBright: 100, glassBlur: 12, saved: []
+  bgX: 50, bgY: 50, bgZoom: 100, bgFit: 'cover', bgBlur: 0, bgSat: 100, bgBright: 100, glassBlur: 12,
+  chatBg: 100, chatMsgs: 100, chatUser: 100, chatComp: 100, chatBlur: 0, saved: [],
+  liveBg: 'off', seasons: true, seasonForce: '', sounds: true, soundVol: 40, companion: true, companionAgent: '', companionCorner: 'br', charStyle: 'clasico', dock: 'left', dockChat: true, companionPos: null
 }
 
 const KEY = 'shutoki.appearance'
@@ -418,6 +449,23 @@ export function sanitize(raw: unknown): Appearance {
     bgSat: num(r.bgSat, 0, 200, d.bgSat),
     bgBright: num(r.bgBright, 40, 160, d.bgBright),
     glassBlur: num(r.glassBlur, 0, 30, d.glassBlur),
+    chatBg: num(r.chatBg, 0, 100, d.chatBg),
+    chatMsgs: num(r.chatMsgs, 0, 100, d.chatMsgs),
+    chatUser: num(r.chatUser, 0, 100, d.chatUser),
+    chatComp: num(r.chatComp, 0, 100, d.chatComp),
+    chatBlur: num(r.chatBlur, 0, 30, d.chatBlur),
+    liveBg: r.liveBg === 'aurora' || r.liveBg === 'particulas' ? r.liveBg : 'off',
+    seasons: r.seasons !== false,
+    seasonForce: str(r.seasonForce, '', 30),
+    sounds: r.sounds !== false,
+    soundVol: num(r.soundVol, 0, 100, d.soundVol),
+    companion: r.companion !== false,
+    companionAgent: str(r.companionAgent, '', 60),
+    companionCorner: r.companionCorner === 'bl' ? 'bl' : 'br',
+    charStyle: CHAR_STYLES.includes(r.charStyle as CharStyle) ? (r.charStyle as CharStyle) : 'clasico',
+    dock: r.dock === 'right' ? 'right' : 'left',
+    dockChat: r.dockChat !== false,
+    companionPos: ((p) => (p && typeof p.x === 'number' && typeof p.y === 'number' ? { x: Math.round(p.x), y: Math.round(p.y) } : null))(r.companionPos as { x?: unknown; y?: unknown } | null),
     saved: Array.isArray(r.saved)
       ? r.saved
           .filter((s): s is Record<string, unknown> => !!s && typeof s === 'object')
@@ -560,12 +608,28 @@ function apply(): void {
   root.dataset.bubbles = A.bubbles
   if (!A.motion) root.dataset.motion = 'off'
   else delete root.dataset.motion
+  if (A.dock === 'right') root.dataset.dock = 'right'
+  else delete root.dataset.dock
   const allVars = new Set([...PRESET_VARS, ...Object.keys(customPreset(A.custom).vars)])
   for (const k of allVars) {
     if (p && k in p.vars) root.style.setProperty(k, p.vars[k])
     else root.style.removeProperty(k)
   }
   root.style.setProperty('--bg-deco', 'none')
+
+  // capas del chat: solo se activan si alguna se aleja del valor por defecto (así el aspecto de siempre queda intacto)
+  const chatAdj = A.chatBg !== 100 || A.chatMsgs !== 100 || A.chatUser !== 100 || A.chatComp !== 100 || A.chatBlur !== 0
+  if (chatAdj) {
+    root.dataset.chatAdj = ''
+    root.style.setProperty('--chat-bg', `${A.chatBg}%`)
+    root.style.setProperty('--chat-msgs', `${A.chatMsgs}%`)
+    root.style.setProperty('--chat-user', `${A.chatUser}%`)
+    root.style.setProperty('--chat-comp', `${A.chatComp}%`)
+    root.style.setProperty('--chat-blur', A.chatBlur > 0 ? `blur(${A.chatBlur}px)` : 'none')
+  } else {
+    delete root.dataset.chatAdj
+    for (const k of ['--chat-bg', '--chat-msgs', '--chat-user', '--chat-comp', '--chat-blur']) root.style.removeProperty(k)
+  }
 
   const img = getBgImage()
   const active = getBgActive()
@@ -697,7 +761,8 @@ export const setFontScale = (n: number): void => update({ fontScale: n })
 export const setPreset = (k: string): void => update({ preset: k })
 export const setBgDim = (n: number): void => update({ bgDim: n })
 export const setBgGlass = (n: number): void => update({ bgGlass: n })
-export const resetBgAdjust = (): void => update({ bgX: 50, bgY: 50, bgZoom: 100, bgFit: 'cover', bgBlur: 0, bgSat: 100, bgBright: 100, bgDim: 80, bgGlass: 78, glassBlur: 12 })
+export const resetChatAdjust = (): void => update({ chatBg: 100, chatMsgs: 100, chatUser: 100, chatComp: 100, chatBlur: 0 })
+export const resetBgAdjust =(): void => update({ bgX: 50, bgY: 50, bgZoom: 100, bgFit: 'cover', bgBlur: 0, bgSat: 100, bgBright: 100, bgDim: 80, bgGlass: 78, glassBlur: 12 })
 /** Elige el fondo: 'aurora' u otro integrado, o «img:<id>» de una imagen propia. */
 export function setBgActive(id: string): void {
   write('bgActive', id)

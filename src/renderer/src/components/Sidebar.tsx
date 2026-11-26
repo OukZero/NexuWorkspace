@@ -293,6 +293,7 @@ function useNavModel(): {
 export function Rail({ onSearch }: { onSearch: () => void }): ReactNode {
   const { ui, chatTip, badgeOf, isOn, pinned, rest, restBadge } = useNavModel()
   const [more, setMore] = useState(false)
+  const app = useAppearance()
   // Plegado de la barra (solo lo muestra el tema Sorvo): se recuerda entre sesiones
   const [folded, setFolded] = useState(() => {
     try {
@@ -370,7 +371,7 @@ export function Rail({ onSearch }: { onSearch: () => void }): ReactNode {
               </button>
             </Popover.Trigger>
             <Popover.Portal>
-              <Popover.Content className="pmenu tn-more" side="right" align="end" sideOffset={10} collisionPadding={12}>
+              <Popover.Content className="pmenu tn-more" side={app.dock === 'right' ? 'left' : 'right'} align="end" sideOffset={10} collisionPadding={12}>
                 {NAV_GROUPS.map((g) => {
                   const items = rest.filter((x) => x.group === g.title)
                   if (!items.length) return null

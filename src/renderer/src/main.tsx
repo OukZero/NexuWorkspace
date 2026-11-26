@@ -20,9 +20,15 @@ import './styles/nuevo-diseno.css'
 import './styles/equipo.css'
 import './styles/sorvo.css'
 import './styles/glass.css'
+import './styles/chat-glass.css'
+import './styles/home-fx.css'
+import './styles/fx.css'
+import './styles/ambient.css'
 import './styles/diagramas.css'
+import { initFx } from './fx'
 
 initTheme()
+initFx()
 const root = createRoot(document.getElementById('root') as HTMLElement)
 
 async function boot(): Promise<void> {

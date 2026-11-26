@@ -1,0 +1,20 @@
+/* ===== capas del chat ajustables (Apariencia → Fondo → Chat) =====
+   Solo se aplican con html[data-chat-adj] (algún control movido); con los valores por defecto queda el aspecto de siempre.
+   Cada capa mezcla su color con transparente según --chat-*: 0 % deja ver el fondo, 100 % es opaco. */
+html:root[data-chat-adj] .chatpane {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel2) var(--chat-bg, 100%), transparent), color-mix(in srgb, var(--panel) var(--chat-bg, 100%), transparent));
+  backdrop-filter: var(--chat-blur, none);
+}
+html:root[data-chat-adj] .chatpane .msg.assistant {
+  background: color-mix(in srgb, var(--panel2) var(--chat-msgs, 100%), transparent);
+  border-color: color-mix(in srgb, var(--line) var(--chat-msgs, 100%), transparent);
+}
+html:root[data-chat-adj] .chatpane .msg.user {
+  background: color-mix(in srgb, var(--accent) calc(var(--chat-user, 100%) * .16), transparent);
+  border-color: color-mix(in srgb, var(--accent) calc(var(--chat-user, 100%) * .35), transparent);
+}
+html:root[data-chat-adj] .chatpane .composer.cbox {
+  background: color-mix(in srgb, var(--panel) var(--chat-comp, 100%), transparent);
+  border-color: color-mix(in srgb, var(--line2) var(--chat-comp, 100%), transparent);
+}
+.bgp-sub { display: block; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-top: 6px; }
