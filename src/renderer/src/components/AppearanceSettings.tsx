@@ -398,6 +398,10 @@ export function AppearanceSettings(): ReactNode {
         <input type="checkbox" style={{ width: 'auto' }} checked={a.sounds} onChange={(e) => update({ sounds: e.target.checked })} />
         Sonidos suaves (iniciar o detener el timer, completar tareas)
       </label>
+      <label className="tpl-check">
+        <input type="checkbox" style={{ width: 'auto' }} checked={a.companionSound} onChange={(e) => update({ companionSound: e.target.checked })} />
+        Sonido del acompañante (el “blip” cuando habla o le haces clic)
+      </label>
       {a.sounds && (
         <div className="ap-row">
           <label>Volumen</label>
