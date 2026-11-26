@@ -13,6 +13,7 @@ import { buildInvocation, readUsage, type CopilotEvent, type CopilotUsage } from
 import { geminiArgs, parseGeminiLine } from './gemini'
 import { randomUUID } from 'crypto'
 import { broadcast, commit, getDb, push } from '../../db'
+import { childEnv } from '../../childEnv'
 import { copilotDirs, effectiveTask, groupAccess, groupNote } from '../tasks/groups'
 import { allowForever, claudeAllow, claudeDeny, copilotAllow, copilotDeny, isAllowed, ruleFor } from '../../permissions'
 import { notify } from '../../notify'
@@ -653,7 +654,7 @@ export function send(convId: string, rawText: string, rawFiles?: Attachment[], e
     })
     chat.sessionId = inv.sessionId
     usageFile = inv.usageFile
-    child = spawn(inv.file, inv.argv, { cwd: task.folder, windowsHide: true })
+    child = spawn(inv.file, inv.argv, { cwd: task.folder, windowsHide: true, env: childEnv() })
     child.stdin?.on('error', () => {})
     child.stdin?.end()
     onLine = (line) => handleCopilot(convId, task.folder, JSON.parse(line) as CopilotEvent)

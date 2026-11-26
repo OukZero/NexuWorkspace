@@ -1,8 +1,10 @@
-import { desktopCapturer, session } from 'electron'
+import { app, desktopCapturer, session } from 'electron'
 import { spawn } from 'child_process'
 import fs from 'fs'
 import path from 'path'
-import type { Meeting, MeetingPatch, MeetingStatus, MeetingTask, Priority } from '../../../shared/types'
+import { Readable } from 'stream'
+import { pipeline } from 'stream/promises'
+import type { Meeting, MeetingPatch, ModelStatus, MeetingStatus, MeetingTask, Priority } from '../../../shared/types'
 import { clip } from '../../../shared/util'
 import { getStatus, isSignedIn } from '../../auth'
 import { commit, dataPath, getDb, uid } from '../../db'
@@ -32,7 +34,8 @@ interface Stored {
   proposals?: MeetingTask[]
 }
 
-const dir = (): string => path.join(path.dirname(dataPath()), 'meetings')
+/** Carpeta elegida en Ajustes o, por defecto, «meetings» junto a los datos de la app. */
+const dir = (): string => getDb().settings.meetingsDir?.trim() || path.join(path.dirname(dataPath()), 'meetings')
 const metaFile = (id: string): string => path.join(dir(), `${id}.json`)
 const pcmFile = (id: string): string => path.join(dir(), `${id}.pcm`)
 const wavFile = (id: string): string => path.join(dir(), `${id}.wav`)
@@ -41,6 +44,7 @@ const live = new Set<string>() // grabaciones en curso en esta sesión
 const busy = new Set<string>() // reuniones que se están transcribiendo o resumiendo
 const extracting = new Set<string>() // reuniones de las que se buscan tareas
 let cache: Map<string, Stored> | null = null
+let cacheDir = '' // carpeta de la que se cargó la caché: si cambia en Ajustes se vuelve a leer
 
 function checkId(id: string): void {
   if (!ID.test(id)) throw new Error('Identificador de reunión no válido.')
@@ -90,7 +94,8 @@ function finalizeWav(id: string): number {
 }
 
 function load(): Map<string, Stored> {
-  if (cache) return cache
+  if (cache && cacheDir === dir()) return cache
+  cacheDir = dir()
   const map = new Map<string, Stored>()
   let files: string[] = []
   try {
@@ -205,13 +210,78 @@ export function retryMeeting(id: string, want: 'auto' | 'summary'): Meeting {
 
 // ---------- transcripción (whisper.cpp) ----------
 
-function transcribe(wav: string): Promise<string> {
+const MODEL_NAME = 'ggml-small.bin'
+const MODEL_URL = `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${MODEL_NAME}`
+const MODEL_MIN_BYTES = 400_000_000 // small pesa ~465 MB: un archivo menor es una descarga cortada
+
+/** whisper-cli que viaja con la app (extraResources en la instalación; resources/whisper en desarrollo). */
+const bundledExe = (): string => path.join(app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), 'resources'), 'whisper', 'whisper-cli.exe')
+const modelsDir = (): string => path.join(process.env['LOCALAPPDATA'] || app.getPath('userData'), 'Shutoki', 'whisper', 'models')
+
+let downloading: Promise<string> | null = null
+let dlPercent = 0
+let dlError = ''
+
+const modelPath = (): string => path.join(modelsDir(), MODEL_NAME)
+const modelPresent = (): boolean => fs.existsSync(modelPath()) && fs.statSync(modelPath()).size >= MODEL_MIN_BYTES
+
+/** Estado del modelo por defecto para Ajustes (el renderer lo consulta mientras se descarga). */
+export function modelStatus(): ModelStatus {
+  return { present: modelPresent(), downloading: !!downloading, percent: dlPercent, error: dlError || undefined }
+}
+
+/** Lanza la descarga sin esperar: el progreso se lee con modelStatus(). */
+export function startModelDownload(): void {
+  if (!modelPresent()) downloadModel().catch(() => {}) // el error queda en dlError
+}
+
+/** Descarga el modelo por defecto una sola vez (a un .part que se renombra al terminar, para no dejar archivos a medias). */
+function downloadModel(): Promise<string> {
+  const dest = modelPath()
+  if (modelPresent()) return Promise.resolve(dest)
+  downloading ??= (async () => {
+    fs.mkdirSync(modelsDir(), { recursive: true })
+    const part = dest + '.part'
+    dlPercent = 0
+    dlError = ''
+    try {
+      const res = await fetch(MODEL_URL)
+      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
+      const total = Number(res.headers.get('content-length')) || 0
+      let got = 0
+      const src = Readable.fromWeb(res.body as never)
+      src.on('data', (b: Buffer) => {
+        got += b.length
+        if (total) dlPercent = Math.min(99, Math.round((got / total) * 100))
+      })
+      await pipeline(src, fs.createWriteStream(part))
+      if (fs.statSync(part).size < MODEL_MIN_BYTES) throw new Error('la descarga quedó incompleta')
+      fs.renameSync(part, dest)
+      dlPercent = 100
+      return dest
+    } catch (e) {
+      fs.rmSync(part, { force: true })
+      dlError = `No se pudo descargar el modelo de voz (${(e as Error).message}). Revisa la conexión y pulsa «Reintentar», o elige un modelo propio en Ajustes → IA.`
+      throw new Error(dlError)
+    } finally {
+      downloading = null
+    }
+  })()
+  return downloading
+}
+
+async function transcribe(wav: string): Promise<string> {
   const s = getDb().settings
-  const exe = s.whisperCmd.trim()
-  const model = s.whisperModel.trim()
-  if (!exe || !model) return Promise.reject(new Error('Falta configurar la transcripción: indica el ejecutable de whisper.cpp y su modelo en Ajustes → IA.'))
-  if (!fs.existsSync(exe)) return Promise.reject(new Error(`No se encuentra el ejecutable de whisper: ${exe}`))
-  if (!fs.existsSync(model)) return Promise.reject(new Error(`No se encuentra el modelo de whisper: ${model}`))
+  const exe = s.whisperCmd.trim() || bundledExe()
+  if (!fs.existsSync(exe)) throw new Error(`No se encuentra el ejecutable de whisper: ${exe}`)
+  let model = s.whisperModel.trim()
+  if (!model) model = await downloadModel() // vacío = modelo por defecto, que se baja la primera vez
+  else if (!fs.existsSync(model)) throw new Error(`No se encuentra el modelo de whisper: ${model}`)
+  return runWhisper(exe, model, wav, s.whisperLang)
+}
+
+function runWhisper(exe: string, model: string, wav: string, lang: string): Promise<string> {
+  const s = { whisperLang: lang }
   const base = wav.replace(/\.wav$/, '')
   const args = ['-m', model, '-f', wav, '-l', s.whisperLang.trim() || 'auto', '-nt', '-np', '-otxt', '-of', base]
   return new Promise((resolve, reject) => {
@@ -393,6 +463,20 @@ export function createMeetingTasks(id: string, tasks: MeetingTask[]): number {
   return n
 }
 
+/** Copia legible (.md) de la reunión en la carpeta elegida, para abrirla sin la app. Un fallo aquí no debe romper la reunión. */
+function saveReadable(m: Stored): void {
+  try {
+    const d = new Date(m.createdAt)
+    const p = (n: number): string => String(n).padStart(2, '0')
+    const stamp = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}-${p(d.getMinutes())}`
+    const name = m.title.replace(/[<>:"/\\|?*\x00-\x1f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Reunión'
+    const body = `# ${m.title}\n\n${d.toLocaleString('es')}\n\n## Resumen\n\n${m.summary.trim()}\n\n## Transcripción\n\n${m.transcript.trim()}\n`
+    fs.writeFileSync(path.join(dir(), `${stamp} ${name} (${m.id.slice(0, 6)}).md`), body, 'utf8')
+  } catch {
+    /* carpeta sin permisos o llena: queda el JSON */
+  }
+}
+
 async function run(id: string, mode: 'full' | 'summary'): Promise<void> {
   const m = load().get(id)
   if (!m || busy.has(id)) return
@@ -409,6 +493,7 @@ async function run(id: string, mode: 'full' | 'summary'): Promise<void> {
     patch(m, { status: 'summarizing', error: undefined })
     const summary = await summarizeTranscript(m.title, m.transcript, getDb().settings.claudeCmd)
     patch(m, { summary, status: 'done', error: undefined })
+    saveReadable(m)
     if (getDb().settings.meetingAutoTasks) {
       // las propuestas son un extra: si fallan, el resumen ya está listo
       extracting.add(id)
@@ -427,22 +512,59 @@ async function run(id: string, mode: 'full' | 'summary'): Promise<void> {
   }
 }
 
-/** Si whisper.cpp está en la carpeta de instalación habitual y los ajustes están vacíos, los rellena. */
-function autoConfigureWhisper(): void {
+/** Retención: con «conservar audio» activo, borra los WAV de reuniones ya terminadas que superan los días indicados (0 = nunca). */
+function sweepAudio(): void {
   const s = getDb().settings
-  if (s.whisperCmd.trim() && s.whisperModel.trim()) return
-  const root = path.join(process.env['LOCALAPPDATA'] || '', 'Shutoki', 'whisper')
-  const exe = path.join(root, 'bin', 'Release', 'whisper-cli.exe')
-  const model = path.join(root, 'models', 'ggml-small.bin')
-  if (!process.env['LOCALAPPDATA'] || !fs.existsSync(exe) || !fs.existsSync(model)) return
-  if (!s.whisperCmd.trim()) s.whisperCmd = exe
-  if (!s.whisperModel.trim()) s.whisperModel = model
+  const days = Number(s.meetingAudioDays) || 0
+  if (!s.meetingKeepAudio || days <= 0) return
+  const limit = Date.now() - days * 86_400_000
+  for (const m of load().values()) {
+    if (m.status !== 'done' || live.has(m.id) || busy.has(m.id)) continue
+    try {
+      if (fs.statSync(wavFile(m.id)).mtimeMs < limit) fs.rmSync(wavFile(m.id), { force: true })
+    } catch {
+      /* sin audio: nada que borrar */
+    }
+  }
+}
+
+/** Mueve las reuniones existentes (metadatos, audio y .md) a otra carpeta y la deja como carpeta de guardado. Devuelve cuántas movió. */
+export function moveMeetings(dest: string): number {
+  if (live.size || busy.size) throw new Error('Hay una reunión grabándose o procesándose: espera a que termine.')
+  const from = path.resolve(dir())
+  const to = path.resolve(dest)
+  if (from === to) return 0
+  fs.mkdirSync(to, { recursive: true })
+  let n = 0
+  let files: string[] = []
+  try {
+    files = fs.readdirSync(from)
+  } catch {
+    /* aún no había carpeta */
+  }
+  for (const f of files) {
+    if (!/\.(json|wav|pcm|md)$/i.test(f)) continue
+    const a = path.join(from, f)
+    const b = path.join(to, f)
+    if (fs.existsSync(b)) continue // no pisa nada que ya hubiera allí
+    try {
+      fs.renameSync(a, b)
+    } catch {
+      fs.copyFileSync(a, b) // entre discos rename falla (EXDEV)
+      fs.rmSync(a, { force: true })
+    }
+    if (f.endsWith('.json')) n++
+  }
+  getDb().settings.meetingsDir = to
   commit()
+  cache = null
+  return n
 }
 
 /** Permite capturar el audio del sistema (la voz del cliente en Teams, Meet, Zoom…) con getDisplayMedia, sin selector de pantalla. */
 export function initMeetings(): void {
-  autoConfigureWhisper()
+  sweepAudio()
+  setInterval(sweepAudio, 6 * 3_600_000)
   session.defaultSession.setDisplayMediaRequestHandler(
     (_req, cb) => {
       if (!isSignedIn()) return cb({})

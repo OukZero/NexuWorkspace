@@ -8,6 +8,8 @@ import { broadcast, commit, getDb } from './db'
 import { lifecycle } from './lifecycle'
 import { stopActive } from './features/time/timer'
 import { cleanup } from './quit'
+import { showUpdating } from './splash'
+import { markInjectedToken } from './childEnv'
 
 const HOUR = 3_600_000
 let state: UpdateState = { status: app.isPackaged ? 'idle' : 'dev', current: app.getVersion() }
@@ -38,6 +40,7 @@ function explain(e: Error): string {
 function applyToken(): void {
   const t = (getDb().settings.updateToken || process.env.GH_TOKEN || '').trim()
   if (!t) return
+  if (process.env.GH_TOKEN !== t) markInjectedToken(t) // solo si lo pone la app: un GH_TOKEN propio del usuario no se toca
   process.env.GH_TOKEN = t // electron-updater lo usa para pedir los assets privados
   autoUpdater.addAuthHeader(`token ${t}`)
 }
@@ -96,8 +99,11 @@ export function install(): void {
     /* sin datos que guardar */
   }
   cleanup()
-  // isSilent=true: el Setup de NSIS corre con /S (sin asistente); el segundo true reabre la app al terminar
-  autoUpdater.quitAndInstall(true, true)
+  // pantalla «Actualizando…» unos segundos y luego se instala, para que no parezca que la app solo se cierra
+  void showUpdating(state.version).then(() => {
+    // isSilent=true: el Setup de NSIS corre con /S (sin asistente); el segundo true reabre la app al terminar
+    autoUpdater.quitAndInstall(true, true)
+  })
 }
 
 export function initUpdater(): void {

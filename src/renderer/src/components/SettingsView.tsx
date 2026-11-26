@@ -11,6 +11,7 @@ import { TelegramSettings } from './TelegramSettings'
 import { TemplatesEditor } from './TemplatesEditor'
 import { ProfilesEditor, TaskTemplatesEditor } from './ListEditors'
 import { UpdateCard } from './UpdateCard'
+import { MeetingsStorageSettings } from './MeetingsStorageSettings'
 import { AppearanceSettings } from './AppearanceSettings'
 import { ALL_CONTEXT, CONTEXT_HINT, CONTEXT_LABEL, DEFAULT_CONTEXT, profilesOf, taskTemplatesOf, templatesOf } from '../../../shared/templates'
 
@@ -199,6 +200,8 @@ export function SettingsView(): ReactNode {
       whisperModel: (s.whisperModel || '').trim(),
       whisperLang: (s.whisperLang || '').trim() || 'es',
       meetingKeepAudio: !!s.meetingKeepAudio,
+      meetingsDir: (s.meetingsDir || '').trim(),
+      meetingAudioDays: Math.max(0, Math.floor(Number(s.meetingAudioDays) || 0)),
       myNames: (s.myNames || '').trim(),
       meetingAutoTasks: !!s.meetingAutoTasks,
       copilotCmd: s.copilotCmd.trim() || 'copilot',
@@ -372,13 +375,14 @@ export function SettingsView(): ReactNode {
 
             </div>
             </Card>
-            <Card icon="datos" title="Reuniones" sub="Transcripción en tu equipo" badge={s.whisperModel?.trim() ? undefined : 'Falta modelo'} tone="warn">
+            <Card icon="datos" title="Reuniones" sub="Transcripción en tu equipo">
             <div className="grid2">
               <div style={wide} className="meta">
-                La voz se transcribe localmente con whisper.cpp: el audio no sale de tu equipo. Solo el texto se envía a Claude para redactar el resumen. Descarga whisper-cli (whisper.cpp) y un modelo ggml, por ejemplo ggml-small.bin.
+                La voz se transcribe localmente con whisper.cpp, que viene integrado en la app: el audio no sale de tu equipo. Solo el texto se envía a Claude para redactar el resumen. La primera transcripción descarga el modelo (ggml-small, ~465 MB). Los dos campos siguientes son opcionales: déjalos vacíos para usar lo integrado.
               </div>
+              <MeetingsStorageSettings s={s} set={set} />
               <div>
-                <label>Ejecutable de whisper.cpp (whisper-cli.exe)</label>
+                <label>Ejecutable propio de whisper.cpp (opcional)</label>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <input style={{ flex: 1, minWidth: 0 }} value={s.whisperCmd} onChange={(e) => set('whisperCmd', e.target.value)} />
                   <button className="btn sm" onClick={() => void ui.run('file:pick', 'app').then((p) => p && set('whisperCmd', p))}>
@@ -387,7 +391,7 @@ export function SettingsView(): ReactNode {
                 </div>
               </div>
               <div>
-                <label>Modelo (ggml-*.bin)</label>
+                <label>Modelo propio (ggml-*.bin, opcional)</label>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <input style={{ flex: 1, minWidth: 0 }} value={s.whisperModel} onChange={(e) => set('whisperModel', e.target.value)} />
                   <button className="btn sm" onClick={() => void ui.run('file:pick', 'file').then((p) => p && set('whisperModel', p))}>

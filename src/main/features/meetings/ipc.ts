@@ -1,5 +1,5 @@
 import { api } from '../../api'
-import { appendChunk, createMeetingTasks, deleteMeeting, extractMeeting, listMeetings, retryMeeting, startMeeting, stopMeeting, updateMeeting } from './service'
+import { appendChunk, createMeetingTasks, deleteMeeting, extractMeeting, listMeetings, modelStatus, moveMeetings, retryMeeting, startModelDownload, startMeeting, stopMeeting, updateMeeting } from './service'
 
 export function registerMeetingsIpc(): void {
   api('meetings:list', () => listMeetings())
@@ -12,4 +12,7 @@ export function registerMeetingsIpc(): void {
   api('meetings:delete', (id) => deleteMeeting(id))
   api('meetings:extract', (id) => extractMeeting(id))
   api('meetings:createTasks', (id, tasks) => createMeetingTasks(id, tasks))
+  api('meetings:modelStatus', () => modelStatus())
+  api('meetings:downloadModel', () => startModelDownload())
+  api('meetings:moveTo', (dest) => moveMeetings(dest))
 }

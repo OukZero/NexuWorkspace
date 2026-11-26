@@ -588,6 +588,10 @@ export interface Settings {
   whisperLang: string
   /** Reuniones: conservar el audio grabado tras transcribirlo (por defecto se borra). */
   meetingKeepAudio: boolean
+  /** Reuniones: carpeta donde se guardan grabaciones y transcripciones. Vacío = la carpeta de datos de la app. */
+  meetingsDir: string
+  /** Reuniones: días que se conserva el audio (con «conservar audio» activo). 0 = indefinidamente. */
+  meetingAudioDays: number
   /** Nombres y alias con los que te nombran en las reuniones, separados por comas. Vacío = se usa el de tu correo. */
   myNames: string
   /** Proponer tareas automáticamente al terminar el resumen de una reunión (nunca las crea sin que las confirmes). */
@@ -1053,6 +1057,9 @@ export interface IpcChannels {
   'meetings:summarize': { args: [string]; ret: Meeting } // rehace solo el resumen a partir de la transcripción
   'meetings:retry': { args: [string]; ret: Meeting } // repite la transcripción (si aún está el audio) y el resumen
   'meetings:delete': { args: [string]; ret: void }
+  'meetings:modelStatus': { args: []; ret: ModelStatus } // modelo de voz por defecto: si está y cómo va la descarga
+  'meetings:downloadModel': { args: []; ret: void } // lanza la descarga; el progreso se consulta con modelStatus
+  'meetings:moveTo': { args: [string]; ret: number } // mueve las reuniones a otra carpeta y la fija como destino; devuelve cuántas
   'meetings:extract': { args: [string]; ret: Meeting } // busca tareas en la reunión (las propone, no las crea)
   'meetings:createTasks': { args: [string, MeetingTask[]]; ret: number } // crea las tareas elegidas y las vincula a la reunión; devuelve cuántas
   'badges:get': { args: []; ret: Record<string, number> } // sin leer actuales (para pintar al abrir o recargar la ventana)
@@ -1323,6 +1330,14 @@ export interface NoteInput {
 export type MeetingStatus = 'recording' | 'transcribing' | 'summarizing' | 'done' | 'error'
 
 /** Reunión grabada: su audio se transcribe en local y Claude redacta el resumen. */
+/** Modelo de voz por defecto de las reuniones (se descarga la primera vez). */
+export interface ModelStatus {
+  present: boolean
+  downloading: boolean
+  percent: number
+  error?: string
+}
+
 export interface Meeting {
   id: string
   title: string
