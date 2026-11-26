@@ -289,6 +289,9 @@ export interface ChatMessage {
   attachments?: Attachment[]
   /** Contexto automático que se anexó a este mensaje (solo etiquetas, para mostrarlas). */
   context?: string[]
+  /** Respuesta de un agente del equipo (en vez del asistente de la conversación). */
+  agentId?: string
+  agentName?: string
 }
 
 /** Consumo de la sesión de Claude de un chat (acumulado desde que se creó o se reinició). */
@@ -844,6 +847,62 @@ export interface AgentTeam {
   activeChat?: string
 }
 
+/** Un paso del guion de un video: la acción en la página, lo que se narra y el subtítulo. */
+export interface VideoStep {
+  action: 'goto' | 'click' | 'fill' | 'press' | 'scroll' | 'wait'
+  /** Selector CSS/Playwright (click, fill, press); URL en goto; píxeles en scroll; ms en wait. */
+  target?: string
+  value?: string
+  /** Texto que se narra con la voz del sistema (y se muestra como subtítulo). */
+  say: string
+  /** Nº de la instrucción del paso a paso a la que responde este paso (0 = intro/cierre). */
+  item?: number
+  /** Cámara en clic/escritura: auto (según el tamaño del control), off (sin zoom) o in (fuerza el acercamiento). */
+  zoom?: 'off' | 'in'
+}
+
+/** Credenciales de prueba para entrar a la app antes de grabar. Nunca se guardan en disco. */
+export interface VideoLogin {
+  user: string
+  password: string
+  /** Opcional: si la pantalla de entrada no es la URL de la app. */
+  loginUrl?: string
+  /** Si es true el video empieza sin sesión y el guion incluye los pasos de login (usa {{usuario}} y {{contraseña}}). */
+  showLogin?: boolean
+}
+
+export interface VideoProject {
+  id: string
+  title: string
+  url: string
+  goal: string
+  steps: VideoStep[]
+  createdAt: number
+  /** Nombre del MP4 final dentro de la carpeta del proyecto; vacío hasta que se graba. */
+  file: string
+  /** Campos del formulario de este video (se guardan para no perderlos). Nunca incluyen credenciales. */
+  notes?: string
+  model?: string
+  useLogin?: boolean
+  showLogin?: boolean
+  loginUrl?: string
+  style?: string
+  /** Voz de la narración: dalia, jorge, elvira, alvaro (neuronales, en línea) o sapi (local). */
+  voice?: string
+  /** Hay una grabación guardada (video sin zoom ni subtítulos + audios): permite reajustar el zoom sin volver a grabar. */
+  session?: boolean
+  /** Cambia con cada montaje; evita que el reproductor muestre una versión en caché. */
+  rev?: number
+}
+
+/** Avance de la generación del guion o de la grabación. */
+export interface VideoProgress {
+  id: string
+  text: string
+  /** Fotograma JPEG en base64 de lo que se está grabando (vista en vivo); sin texto de avance. */
+  frame?: string
+}
+
 /** Línea de progreso en vivo de un agente (herramienta que usa o fase del plan). */
 export interface TeamProgress {
   agentId: string
@@ -1035,6 +1094,7 @@ export interface IpcChannels {
   'attach:pick': { args: [string]; ret: Attachment[] } // convId -> archivos elegidos y copiados
   'attach:save': { args: [string, string, Uint8Array]; ret: Attachment } // convId, nombre, bytes (pegar / arrastrar)
   'attach:preview': { args: [string]; ret: string | null } // ruta -> data URL (miniatura)
+  'chat:askAgent': { args: [string, string, string]; ret: true } // convId, agente, mensaje: el agente responde dentro del hilo de la tarea (solo lectura)
   'chat:cancel': { args: [string]; ret: void }
   'chat:permit': { args: [string, string, PermissionChoice]; ret: void } // convId, id de la solicitud, decisión
   'chat:config': { args: [string, { provider?: Provider; model?: string; mode?: ChatMode; profileId?: string }]; ret: void } // proveedor y modelo de la conversación
@@ -1105,6 +1165,14 @@ export interface IpcChannels {
   'team:orchestrate': { args: [string, Attachment[]?, string?, string?]; ret: TeamOrchestration } // el orquestador reparte la solicitud entre los agentes y integra el resultado
   'team:qa': { args: [string?]; ret: string } // el agente QA prueba en la app aislada lo que cambió el último commit/los cambios sin confirmar
   'team:cancel': { args: []; ret: void } // detiene los agentes que se estén ejecutando
+  'video:script': { args: [{ url: string; goal: string; login?: VideoLogin; model?: string; notes?: string; id?: string; style?: string }]; ret: VideoProject } // abre la app (con login si hace falta), lee sus controles y pide el guion a Claude
+  'video:record': { args: [VideoProject, VideoLogin?]; ret: VideoProject } // ejecuta el guion con Playwright, narra con SAPI y monta el MP4 con FFmpeg
+  'video:remux': { args: [VideoProject]; ret: VideoProject } // vuelve a montar el MP4 desde la grabación guardada (solo cambia el zoom; no abre el navegador)
+  'video:list': { args: []; ret: VideoProject[] }
+  'video:save': { args: [VideoProject]; ret: VideoProject } // guarda cambios del guion
+  'video:delete': { args: [string]; ret: void }
+  'video:reveal': { args: [string]; ret: void } // muestra el video en el Explorador
+  'video:cancel': { args: []; ret: void }
   'team:route': { args: [string, string?]; ret: { agentId: string; reason: string } } // solicitud -> agente que debe atenderla
   'telegram:status': { args: []; ret: TelegramStatus }
   'telegram:save': { args: [{ token: string; on: boolean; details: boolean }]; ret: TelegramStatus }
@@ -1311,4 +1379,6 @@ export interface Api {
   onBadges(cb: (b: Record<string, number>) => void): Unsubscribe
   /** Qué está haciendo ahora el agente que ejecuta una solicitud del chat de equipo. */
   onTeamProgress(cb: (p: TeamProgress) => void): Unsubscribe
+  /** Avance al generar el guion o grabar un video. */
+  onVideoProgress(cb: (p: VideoProgress) => void): Unsubscribe
 }

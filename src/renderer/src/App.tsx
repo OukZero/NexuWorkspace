@@ -523,6 +523,7 @@ export function App(): ReactNode {
     meetings: 'Graba la voz, transcribe en tu equipo y obtén el resumen',
     arch: 'Diseña la arquitectura con Claude: opciones según tipo de tarea y alcance',
     diagrams: 'BPMN, flujo, UML y ER: dibújalos a mano o pídeselos a la IA',
+    videos: 'Graba videos de funcionalidades de tus apps web: guion con IA, voz y MP4',
     team: 'Agentes especializados con su propio prompt y skills; tu personaje decora la sala',
     music: 'Spotify: reproduce, pausa y cambia de pista sin salir de la app',
     groups: 'Conjuntos de carpetas a los que la IA puede acceder',

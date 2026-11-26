@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Api, AuthStatus, TeamProgress, DB, IpcChannels, UpdateState, Unsubscribe } from '../shared/types'
+import type { Api, AuthStatus, TeamProgress, VideoProgress, DB, IpcChannels, UpdateState, Unsubscribe } from '../shared/types'
 
 type Reply<T> = { ok: true; data: T } | { ok: false; error: string }
 
@@ -25,7 +25,8 @@ const api: Api = {
   onAuth: (cb) => on<AuthStatus>('auth', cb),
   onFullscreen: (cb) => on<boolean>('fullscreen', cb),
   onBadges: (cb) => on<Record<string, number>>('badges', cb),
-  onTeamProgress: (cb) => on<TeamProgress>('team:progress', cb)
+  onTeamProgress: (cb) => on<TeamProgress>('team:progress', cb),
+  onVideoProgress: (cb) => on<VideoProgress>('video:progress', cb)
 }
 
 contextBridge.exposeInMainWorld('api', api)

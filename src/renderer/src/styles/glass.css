@@ -1,0 +1,88 @@
+/* =====================================================================
+   Temas «Rubí» y «Lavanda» (PRESETS.rubi / PRESETS.lavanda en theme.ts).
+   Usan la piel de sorvo.css; aquí solo el fondo, el cristal y la barra lateral.
+   ===================================================================== */
+
+/* ── Rubí: degradado carmesí, tarjetas de cristal rosado, barra granate ── */
+html[data-preset="rubi"] {
+  --sv-glow: rgba(120, 10, 20, .35);
+  --grad: linear-gradient(135deg, #ff6a55, #d9302a);
+  --on-accent: #ffffff;
+  --nd-edge: rgba(255, 255, 255, .5);
+  --muted: #7a4045; --dim: #7a4045; --text: #2a0d10;
+}
+html[data-preset="rubi"] body {
+  background: linear-gradient(135deg, #8e1623 0%, #c8323a 45%, #e8665c 100%) fixed;
+}
+html[data-preset="rubi"][data-bg-kind="plano"] body::before {
+  background:
+    radial-gradient(640px 420px at 85% 0%, rgba(255, 190, 170, .4), transparent 70%),
+    radial-gradient(560px 400px at 0% 100%, rgba(60, 0, 10, .45), transparent 70%);
+}
+html[data-preset="rubi"] :is(.bc, .card, .group-card, .limit, .period, .bars, .wbars, .activity, .heat,
+  .hist-row, .addin, .sess, .wsp, .wsp-host, .ti-stats > div, .ti-session, .mu-card, .nt-list, .nt-main,
+  .imp, .row, .empty, .statusbar, .design-list, .design-chat, .gleft, .gright,
+  .files-side, .files-main, .rm-card, .hm-col, .hm-line, .hm-ai, .hm-week, .hm-git, .col) {
+  background: linear-gradient(180deg, rgba(255, 244, 242, .78), rgba(255, 232, 229, .55));
+  border: 1px solid rgba(255, 255, 255, .6);
+  box-shadow: 0 20px 44px -24px rgba(70, 0, 12, .7), inset 0 1px 0 rgba(255, 255, 255, .75);
+  backdrop-filter: blur(18px) saturate(1.25);
+  border-radius: 22px;
+}
+html[data-preset="rubi"] .navrail {
+  background: linear-gradient(180deg, rgba(90, 8, 20, .82), rgba(130, 18, 30, .66));
+  border-right: 1px solid rgba(255, 255, 255, .2);
+  backdrop-filter: blur(18px);
+  --text: #fff1ef; --muted: #f0b9b3; --panel2: rgba(255, 255, 255, .14);
+}
+html[data-preset="rubi"] .navrail .tn-i.on { background: rgba(255, 255, 255, .24); color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .4); }
+/* lo que queda sobre el fondo rojo va en blanco */
+html[data-preset="rubi"] :is(.tb-title h1, .tb-title small, .topbar h1, .eyebrow) { color: #fff; }
+html[data-preset="rubi"] .topbar { border-bottom-color: rgba(255, 255, 255, .25); }
+html[data-preset="rubi"] .tb-search,
+html[data-preset="rubi"] :is(.tb-tools .ib, .topbar > .ib) { background: rgba(255, 255, 255, .22); border-color: rgba(255, 255, 255, .45); color: #fff; }
+html[data-preset="rubi"] .btn { background: rgba(255, 255, 255, .55); border-color: rgba(255, 255, 255, .7); color: #2a0d10; }
+html[data-preset="rubi"] .btn:hover:not(:disabled) { background: rgba(255, 255, 255, .85); }
+html[data-preset="rubi"] .btn.primary, html[data-preset="rubi"] .btn.p { background: #2a0d10; color: #fff; border-color: transparent; }
+html[data-preset="rubi"] :is(.tab, .chat-tab):not(.on):not(.active) { background: rgba(255, 255, 255, .35); border-color: rgba(255, 255, 255, .55); color: #fff; }
+html[data-preset="rubi"] :is(.tab, .chat-tab).on, html[data-preset="rubi"] :is(.tab, .chat-tab).active { background: #2a0d10; color: #fff; }
+
+/* ── Lavanda: fondo lavanda, tarjetas blancas muy redondeadas, barra marino y detalles lima ── */
+html[data-preset="lavanda"] {
+  --sv-glow: rgba(42, 38, 128, .22);
+  --grad: linear-gradient(135deg, #2a2680, #1a1650);
+  --on-accent: #ffffff;
+  --nd-edge: rgba(255, 255, 255, .8);
+  --lav-lime: #d4f04a;
+}
+html[data-preset="lavanda"] body {
+  background: linear-gradient(135deg, #e4e3f6 0%, #eceaf8 55%, #f3f4ea 100%) fixed;
+}
+html[data-preset="lavanda"][data-bg-kind="plano"] body::before {
+  background:
+    radial-gradient(620px 420px at 90% 0%, rgba(200, 230, 58, .18), transparent 70%),
+    radial-gradient(560px 420px at 0% 100%, rgba(120, 110, 220, .16), transparent 70%);
+}
+html[data-preset="lavanda"] :is(.bc, .card, .group-card, .limit, .period, .bars, .wbars, .activity, .heat,
+  .hist-row, .addin, .sess, .wsp, .wsp-host, .ti-stats > div, .ti-session, .mu-card, .nt-list, .nt-main,
+  .imp, .row, .empty, .statusbar, .design-list, .design-chat, .gleft, .gright,
+  .files-side, .files-main, .rm-card, .hm-col, .hm-line, .hm-ai, .hm-week, .hm-git, .col) {
+  background: rgba(255, 255, 255, .88);
+  border: 1px solid rgba(255, 255, 255, .95);
+  box-shadow: 0 14px 34px -22px rgba(42, 38, 128, .45), 0 1px 0 rgba(255, 255, 255, .9) inset;
+  border-radius: 22px;
+}
+html[data-preset="lavanda"] .navrail {
+  background: linear-gradient(180deg, #221f6b, #15124a);
+  border-right: 0;
+  --text: #eceaff; --muted: #a9a6d8; --panel2: rgba(255, 255, 255, .1);
+}
+html[data-preset="lavanda"] .navrail .tn-i.on { background: rgba(255, 255, 255, .16); color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .28); }
+html[data-preset="lavanda"] .navrail .tn-n { background: var(--lav-lime); color: #17143f; }
+html[data-preset="lavanda"] .topbar { border-bottom-color: rgba(42, 38, 128, .1); }
+html[data-preset="lavanda"] .tb-search,
+html[data-preset="lavanda"] :is(.tb-tools .ib, .topbar > .ib) { background: #fff; border-color: #d6d4ec; }
+html[data-preset="lavanda"] .btn { background: #fff; border-color: #d6d4ec; }
+html[data-preset="lavanda"] .btn.primary, html[data-preset="lavanda"] .btn.p { background: var(--lav-lime); color: #17143f; border-color: transparent; font-weight: 650; }
+html[data-preset="lavanda"] :is(.tab, .chat-tab).on, html[data-preset="lavanda"] :is(.tab, .chat-tab).active { background: #221f6b; color: #fff; }
+html[data-preset="lavanda"] ::selection { background: rgba(212, 240, 74, .55); }

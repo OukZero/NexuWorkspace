@@ -20,6 +20,7 @@ import { registerTelegramIpc } from './features/telegram/ipc'
 import { registerSpotifyIpc } from './features/spotify/ipc'
 import { registerAiIpc } from './features/ai/ipc'
 import { registerTeamIpc } from './features/team/ipc'
+import { registerVideoIpc } from './features/video/ipc'
 import { registerDevIpc } from './features/dev/ipc'
 import { registerTasksIpc } from './features/tasks/ipc'
 import { registerTimeIpc } from './features/time/ipc'
@@ -53,6 +54,7 @@ export function registerIpc(): void {
   registerSpotifyIpc()
   registerAiIpc()
   registerTeamIpc()
+  registerVideoIpc()
   registerDevIpc()
   registerWhatsAppApi()
 

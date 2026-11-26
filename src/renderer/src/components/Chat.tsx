@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ClipboardEvent, DragEvent, KeyboardEvent, ReactNode } from 'react'
-import type { Attachment, ChatMode, ContextKind, Provider, PromptTemplate } from '../../../shared/types'
+import type { Attachment, ChatMode, ContextKind, Provider, PromptTemplate, TeamAgent } from '../../../shared/types'
+import { AgentsPanel } from './AgentsPanel'
 import { DEFAULT_CONTEXT, templatesOf } from '../../../shared/templates'
 import { workFolder } from '../../../shared/util'
 import { convLabel, openConvs } from '../conversations'
@@ -139,6 +140,8 @@ export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string
   const [noting, setNoting] = useState(false)
   const [reviewing, setReviewing] = useState(false)
   const [dragging, setDragging] = useState(false)
+  const [agentsOpen, setAgentsOpen] = useState(false)
+  const [agentTo, setAgentTo] = useState<TeamAgent | null>(null) // agente al que va el siguiente mensaje
   const box = useRef<HTMLDivElement>(null)
   const area = useRef<HTMLTextAreaElement>(null)
   const stick = useRef(true) // true = el usuario está al final y seguimos el scroll
@@ -204,6 +207,14 @@ export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string
     const text = (override?.text ?? input).trim()
     if (!text && !files.length) return
     const sent = files
+    // con un agente elegido, el mensaje va a él (sin adjuntos ni contexto: v1)
+    if (agentTo && !override && !sent.length && !text.startsWith('/')) {
+      setInput('')
+      stick.current = true
+      const ok = await ui.run('chat:askAgent', convId, agentTo.id, text)
+      if (ok === undefined) setInput(text)
+      return
+    }
     const kinds = text.startsWith('/') ? [] : (override?.kinds ?? ctxKinds)
     setInput('')
     setFiles([])
@@ -508,7 +519,7 @@ export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string
                 <div className={`msg ${m.role}`} data-ai={m.role === 'assistant' ? provider : undefined}>
                   {m.role === 'assistant' && (
                     <div className="mhead">
-                      <b className="mwho">{ai}</b>
+                      <b className="mwho">{m.agentName ? `🤖 ${m.agentName}` : ai}</b>
                       {m.ts > 0 && <span className="time">{hhmm(m.ts)}</span>}
                     </div>
                   )}
@@ -697,6 +708,10 @@ export function ChatView({ convId, embedded, slot, extraMenu }: { convId: string
               <button className="ib clip" title="Adjuntar archivos o fotos (también puedes pegar o arrastrar)" aria-label="Adjuntar" onClick={() => void pickFiles()}>
                 <G n="files" size={16} />
               </button>
+              <button className={`cfg-btn${agentsOpen || agentTo ? ' on' : ''}`} title="Ver agentes del equipo y dirigirles el mensaje" aria-expanded={agentsOpen} onClick={() => setAgentsOpen((o) => !o)}>
+                🤖 {agentTo ? <span className="ag-chip" style={{ ['--c' as string]: agentTo.color }}>→ {agentTo.name}</span> : 'Agentes'}
+              </button>
+              {agentsOpen && <AgentsPanel value={agentTo?.id ?? ''} onPick={(a) => { setAgentTo(a); setAgentsOpen(false) }} onClose={() => setAgentsOpen(false)} />}
               {chat?.kind !== 'design' && <ContextBar taskId={taskId} kinds={ctxKinds} onChange={setCtxKinds} terminalText={terminalText} />}
               <button
                 className={`cfg-btn${cfgOpen ? ' on' : ''}`}
