@@ -12,6 +12,7 @@ import { SettingsView } from './components/SettingsView'
 import { ArchitectureView } from './components/ArchitectureView'
 import { DiagramsView } from './components/DiagramsView'
 import { TeamView } from './components/TeamView'
+import { VideosView } from './components/VideosView'
 import { Usage } from './components/Usage'
 import { WebView } from './components/WebView'
 import { WhatsAppView } from './components/WhatsAppView'
@@ -35,6 +36,7 @@ export const VIEWS: Partial<Record<View, ComponentType>> = {
   notes: NotesView,
   meetings: MeetingsView,
   team: TeamView,
+  videos: VideosView,
   arch: ArchitectureView,
   diagrams: DiagramsView,
   web: WebView,

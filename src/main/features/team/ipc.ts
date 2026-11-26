@@ -6,6 +6,7 @@ import { execFileSync } from 'child_process'
 import { api } from '../../api'
 import { broadcast, commit, getDb } from '../../db'
 import { notify } from '../../notify'
+import { effectiveTask } from '../tasks/groups'
 import { askClaude, type AskRun } from '../ai/summary'
 import { DEFAULT_ESTIMATE_TEMPLATES, detectLevel } from '../../../shared/estimateTemplates'
 import type { EstimateLevel } from '../../../shared/estimateTemplates'
@@ -72,7 +73,41 @@ export function registerTeamIpc(): void {
     getDb().agentTeam = t
     commit()
   })
-  api('team:ask', async (id, message, files, history, convDir) => {
+  api('chat:askAgent', async (convId, agentId, message) => {
+    const db = getDb()
+    const chat = db.chats[convId]
+    if (!chat) throw new Error('Conversación no encontrada')
+    if (chat.running) throw new Error('Espera a que termine la respuesta en curso.')
+    const a = (db.agentTeam ?? DEFAULT_TEAM).agents.find((x) => x.id === agentId)
+    if (!a) throw new Error('Agente no encontrado.')
+    // v1: solo lectura; los agentes que editan código necesitan el flujo de permisos del chat
+    if (a.canEdit) throw new Error(`${a.name} edita código: úsalo desde la pestaña Equipo.`)
+    const text = message.trim()
+    if (!text) throw new Error('Escribe un mensaje.')
+    const task = db.tasks.find((t) => t.id === chat.taskId)
+    const dir = chat.worktree?.dir ?? (task ? effectiveTask(task).folder : undefined)
+    // lo anterior del hilo, para que el agente entienda las referencias
+    const history = chat.messages
+      .filter((m) => m.role !== 'system' && m.text.trim())
+      .slice(-12)
+      .map((m) => `${m.role === 'user' ? 'Usuario' : m.agentName ?? 'Asistente'}: ${m.text.slice(0, 2500)}`)
+      .join('\n\n')
+    chat.messages.push({ role: 'user', text: `@${a.name} ${text}`, ts: Date.now() })
+    chat.running = true
+    commit()
+    try {
+      const out = await askAgent(a.id, text, undefined, history, dir)
+      chat.messages.push({ role: 'assistant', text: out, ts: Date.now(), agentId: a.id, agentName: a.name })
+    } catch (e) {
+      chat.messages.push({ role: 'system', text: `${a.name} no pudo responder: ${(e as Error).message}`, ts: Date.now() })
+    } finally {
+      chat.running = false
+      commit()
+    }
+    return true as const
+  })
+  api('team:ask', (id, message, files, history, convDir) => askAgent(id, message, files, history, convDir))
+  const askAgent = async (id: string, message: string, files: Attachment[] | undefined, history?: string, convDir?: string): Promise<string> => {
     const team = getDb().agentTeam ?? DEFAULT_TEAM
     const a = team.agents.find((x) => x.id === id)
     if (!a) throw new Error('Agente no encontrado.')
@@ -95,7 +130,7 @@ export function registerTeamIpc(): void {
 
 ${histBlock(history)}---\n${message || 'Revisa los archivos adjuntos.'}`
     return tracked(`${a.name} respondió.`, (signal) => runAgent(a, prompt, files, signal, convDir))
-  })
+  }
   // QA bajo demanda (cuesta tokens, nunca automático): recibe el diff y prueba solo lo afectado con la app en modo de pruebas
   api('team:qa', async (dirArg) => {
     const team = getDb().agentTeam ?? DEFAULT_TEAM

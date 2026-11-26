@@ -120,6 +120,20 @@ export const PRESETS: Record<string, Preset> = {
     { bg: '#bfe8f2', panel: '#eefaff', panel2: '#d6eff6', line: '#9fcddb', text: '#082030', muted: '#2f5266', user: '#cdeaf3', code: '#d9eef5', over: '#e3f4f9' },
     ['#14425e', '#14425e']
   ),
+  // paleta «Rubí»: degradado carmesí con cristal rosado y acento rojo coral (ver styles/glass.css)
+  rubi: mk(
+    'Rubí',
+    'light',
+    { bg: '#c8323a', panel: '#fbeceb', panel2: '#f3d6d6', line: '#e7b9b9', text: '#2a0d10', muted: '#7a4045', user: '#f6d3d1', code: '#f4dfdf', over: '#f7e3e2' },
+    ['#ff6a55', '#d9302a']
+  ),
+  // paleta «Lavanda»: fondo lavanda claro, barra marino y acento lima (ver styles/glass.css)
+  lavanda: mk(
+    'Lavanda',
+    'light',
+    { bg: '#e8e7f6', panel: '#ffffff', panel2: '#efeefa', line: '#d6d4ec', text: '#17143f', muted: '#5d5a8a', user: '#e0defa', code: '#ecebf8', over: '#f5f4fd' },
+    ['#c8e63a', '#2a2680']
+  ),
   medianoche: {
     label: 'Medianoche',
     base: 'dark',

@@ -110,7 +110,7 @@ function Avatar({ c, size = 150, live }: { c: TeamCharacter; size?: number; live
 }
 
 /** Robot de un agente: cabeza con pantalla, antena que late y emoji en el pecho. */
-function Robot({ a, state, size = 86 }: { a: TeamAgent; state: 'idle' | 'work' | 'done'; size?: number }): ReactNode {
+export function Robot({ a, state, size = 86 }: { a: TeamAgent; state: 'idle' | 'work' | 'done'; size?: number }): ReactNode {
   const L = a.look ?? {}
   const head = L.head ?? 'redonda'
   const eyes = L.eyes ?? 'pixel'
@@ -191,7 +191,7 @@ function Room({ team, working, routing, done, sel, selAgent, progress, onStop, o
         return (
           <div
             key={a.id}
-            className={`tr-desk ${st} ${a.id === selAgent ? 'sel' : ''}`}
+            className={`tr-desk ${st} ${a.id === selAgent ? 'picked' : ''}`}
             style={{ left: `${left}%`, top: `${top}%`, ['--ds' as string]: two ? 0.72 : 1, ['--c' as string]: a.color, zIndex: 40 + row }}
             role="button"
             tabIndex={0}
@@ -274,6 +274,20 @@ const kept = { draft: '', files: [] as Attachment[], msg: '' }
 // carpeta de adjuntos del equipo (el main la crea al guardar el primero)
 const TEAM_ATT = 'equipo'
 
+/** Ejemplos de encargo por agente (clic = rellena la barra, sin enviar). */
+const SUGGESTED: Record<string, string[]> = {
+  revisor: ['Revisa los cambios del último commit', 'Busca riesgos de seguridad en el login'],
+  estimador: ['Cubica este requerimiento: …', 'Divide esto en tareas con horas'],
+  qa: ['Propón casos de prueba para: …', 'Casos de regresión del último cambio'],
+  corrector: ['Aplica estos hallazgos de la revisión: …', 'Corrige el comentario del PR: …'],
+  desarrollador: ['Implementa: …', 'Arregla el error de tipos del typecheck'],
+  cazabugs: ['Este síntoma ocurre cuando…: ¿causa probable?', 'Cómo reproducir y arreglar: …'],
+  disenador: ['Critica la pantalla de … y propón mejoras', 'Mejora los estados vacíos de …'],
+  'buenas-practicas': ['Revisa buenas prácticas en la carpeta …', 'Detecta duplicación y nombres confusos'],
+  ideas: ['Dame 5 ideas para: …', 'Ideas para simplificar el flujo de …']
+}
+const SUGGESTED_DEFAULT = ['Resume qué puedes hacer', 'Analiza este código: …']
+
 export function TeamView(): ReactNode {
   const ui = useUi()
   const groups = useDB().groups ?? []
@@ -293,6 +307,9 @@ export function TeamView(): ReactNode {
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState('')
   const [tab, setTab] = useState<'chat' | 'edit'>('chat')
+  const [editRoom, setEditRoom] = useState(false)
+  const [showChar, setShowChar] = useState(false) // personalización del personaje, oculta por defecto
+  const [target, setTarget] = useState('') // '' = todo el equipo (se enruta solo)
   const [charTab, setCharTab] = useState<'cara' | 'pelo' | 'ropa'>('cara')
   const [draft, setDraftRaw] = useState(kept.draft)
   const setDraft = (v: string): void => {
@@ -397,8 +414,8 @@ export function TeamView(): ReactNode {
   }
   const pickAgent = (id: string): void => {
     setSel(id)
+    setTarget(id)
     setReply('')
-    setTab('edit')
     setConfirmDel(false)
     requestAnimationFrame(() => document.querySelector(`.rs-chip[data-id="${id}"]`)?.scrollIntoView({ inline: 'center', block: 'nearest' }))
   }
@@ -577,7 +594,8 @@ export function TeamView(): ReactNode {
     const sent = files
     setDraft('')
     setFiles([])
-    await dispatch(text, sent)
+    // una @mención escrita manda sobre el destinatario elegido
+    await dispatch(text, sent, !mentioned(text) && byId(target) ? target : undefined)
   }
   // acciones por mensaje
   const prevUser = (id: string): TeamChatMsg | undefined => {
@@ -661,8 +679,9 @@ export function TeamView(): ReactNode {
   const field = (label: string, body: ReactNode): ReactNode => <div className="tm-field"><span className="tm-lbl">{label}</span>{body}</div>
 
   return (
-    <div className="tm-wrap">
-      <section className="card tm-char">
+    <div className="tm-wrap tm-v2">
+      {showChar && <section className="card tm-char tm-char-pop" role="dialog" aria-label="Personalizar mi personaje">
+        <button className="btn sm tm-char-x" aria-label="Cerrar" onClick={() => setShowChar(false)}>✕ Cerrar</button>
         <div className="tm-head">
           <div className="tm-stage"><Avatar c={team.character} size={92} live="idle" /></div>
           <div className="tm-id">
@@ -696,10 +715,10 @@ export function TeamView(): ReactNode {
           {field('Color de ropa', swatches(OUTFIT_COLORS, ch.outfitColor ?? OUTFIT_COLOR[ch.outfit], (outfitColor) => setChar({ outfitColor }), 'Ropa'))}
           {field('Accesorio', opts(GEAR, ch.gear === 'barba' ? 'ninguno' : ch.gear, (gear) => setChar({ gear })))}
         </>}
-      </section>
+      </section>}
 
       <section className="card tm-mid">
-        <div className="eyebrow">La sala <span className="tm-hint">arrastra los objetos donde quieras</span></div>
+        <div className="eyebrow">La sala <button className="btn sm tm-me" title="Personalizar tu personaje" onClick={() => setShowChar(true)}>🎭 Mi personaje</button></div>
         <Room
           team={team}
           working={working}
@@ -714,7 +733,36 @@ export function TeamView(): ReactNode {
           onProps={(p) => setTeam({ ...team, props: p })}
           onDrop={() => teamRef.current && void ui.run('team:save', teamRef.current)}
         />
-        <div className="tr-bar">
+        {byId(target) && (() => {
+          const ag = byId(target) as TeamAgent
+          const last = [...all].reverse().find((m) => m.role === 'agent' && m.agentId === ag.id)
+          const state = ag.id === working || ag.id === chatWork ? 'trabajando…' : last ? (ag.id === done ? 'terminó · ver resultado' : 'libre') : 'libre'
+          return (
+            <div className="tr-panel" style={{ ['--c' as string]: ag.color }}>
+              <div className="tr-ph"><b>{ag.emoji} {ag.name}</b> <small>{state}</small></div>
+              <p className="tr-role">{ag.prompt.split(/[.\n]/)[0]}.</p>
+              {last && (
+                <div className="tr-last">
+                  <div className="tr-lt">{last.text.slice(0, 280)}{last.text.length > 280 ? '…' : ''}</div>
+                  <div className="tr-la">
+                    <button className="btn sm" onClick={() => copyMsg(last.text)}>Copiar</button>
+                    <button className="btn sm" onClick={() => setTab('edit')}>⚙ Editar agente</button>
+                    <select aria-label="Pasar a otro agente" value="" onChange={(e) => { if (e.target.value) forward(last, e.target.value) }}>
+                      <option value="">Pasar a…</option>
+                      {team.agents.filter((x) => x.id !== ag.id).map((x) => <option key={x.id} value={x.id}>{x.emoji} {x.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+              )}
+              <div className="tr-sugg">
+                {(SUGGESTED[ag.id] ?? SUGGESTED_DEFAULT).map((s) => <button key={s} onClick={() => { setDraft(s); setTab('chat') }}>{s}</button>)}
+              </div>
+              {!last && <button className="btn sm" onClick={() => setTab('edit')}>⚙ Editar agente</button>}
+            </div>
+          )
+        })()}
+        <button className="tr-editbtn" aria-expanded={editRoom} onClick={() => { setEditRoom(!editRoom); if (editRoom) { setPop(''); setSelProp('') } }}>✎ {editRoom ? 'Listo' : 'Editar oficina'}</button>
+        {editRoom && <div className="tr-bar">
           <div className="tm-popwrap">
             <button className="tr-objbtn" aria-expanded={pop === 'obj'} aria-haspopup="true" onClick={() => setPop(pop === 'obj' ? '' : 'obj')}>🪑 Objetos</button>
             {pop === 'obj' && (
@@ -733,7 +781,7 @@ export function TeamView(): ReactNode {
               <button title="Quitar (Supr)" aria-label="Quitar" onClick={() => { update({ ...team, props: props.filter((p) => p.id !== selProp) }); setSelProp('') }}>🗑</button>
             </div>
           ) : <span className="tr-hintbar">Selecciona un objeto para ajustarlo · flechas, + − F, Supr</span>}
-        </div>
+        </div>}
         <div className="tm-agents-h">
           <div className="eyebrow">Agentes <span className="tm-count">{team.agents.length}</span></div>
           <div className="tm-popwrap">
@@ -933,10 +981,13 @@ export function TeamView(): ReactNode {
             </div>
             <div className={`tc-comp ${dragging ? 'drag' : ''}`} onDragOver={(e) => { e.preventDefault(); setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={onDrop}>
               {files.length > 0 && <AttachmentList items={files} onRemove={(i) => setFiles(files.filter((_, j) => j !== i))} />}
+              <div className="tr-to" style={{ ['--c' as string]: byId(target)?.color ?? 'var(--accent)' }}>
+                {byId(target) ? <>Hablando con: <b>{byId(target)?.emoji} {byId(target)?.name}</b> <button aria-label="Hablar con todo el equipo" title="Todo el equipo" onClick={() => setTarget('')}>✕</button></> : <>Todo el equipo <small>(se asigna solo)</small></>}
+              </div>
               <textarea
                 value={draft}
                 rows={2}
-                placeholder="¿Qué necesitas? Ej.: revisa la seguridad del login…"
+                placeholder={byId(target) ? `Encárgale algo a ${byId(target)?.name}…` : '¿Qué necesitas? Ej.: revisa la seguridad del login…'}
                 onChange={(e) => { setDraft(e.target.value); setSugg(0) }}
                 onPaste={onPaste}
                 onKeyDown={(e) => {

@@ -19,6 +19,7 @@ import './styles/cockpit.css'
 import './styles/nuevo-diseno.css'
 import './styles/equipo.css'
 import './styles/sorvo.css'
+import './styles/glass.css'
 import './styles/diagramas.css'
 
 initTheme()
