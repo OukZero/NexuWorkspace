@@ -77,6 +77,8 @@ export interface RecState {
   paused: boolean
   /** Si se está capturando también el audio del sistema (la voz del cliente). */
   system: boolean
+  /** Empezó sola desde el calendario (y para sola al terminar la llamada). */
+  auto?: boolean
 }
 
 let rec: RecState | null = null
@@ -103,8 +105,14 @@ interface Live {
   queue: Promise<unknown>
   /** Tiempo grabado en ms (sin contar las pausas). */
   elapsed: number
+  /** Solo en grabaciones automáticas: fin previsto del evento y estado del silencio para detectar que la llamada acabó. */
+  auto?: { endAt: number; heard: boolean; lastSound: number; stopping: boolean }
 }
 let live: Live | null = null
+
+const SOUND_RMS = 0.008 // por debajo se considera silencio
+const SILENCE_MS = 3 * 60_000 // tanto silencio, tras haber oído la llamada, = la reunión terminó
+const OVERRUN_MS = 30 * 60_000 // tope de seguridad tras la hora de fin del evento
 
 const FLUSH_SAMPLES = 16000 * 4 // ~4 s por trozo
 
@@ -123,7 +131,7 @@ function send(l: Live, id: string, all: boolean): void {
 }
 
 /** Empieza a grabar. Devuelve un aviso si no se pudo capturar el audio del sistema (se graba solo el micrófono). */
-export async function startRecording(title: string, taskId: string | undefined, system: boolean): Promise<string | undefined> {
+export async function startRecording(title: string, taskId: string | undefined, system: boolean, autoEndAt?: number): Promise<string | undefined> {
   if (rec) throw new Error('Ya hay una grabación en curso.')
   let warning: string | undefined
   const streams: MediaStream[] = []
@@ -151,12 +159,30 @@ export async function startRecording(title: string, taskId: string | undefined, 
     const id = await window.api.call('meetings:start', title, taskId)
     const node = ctx.createScriptProcessor(4096, 1, 1)
     const l: Live = { ctx, node, streams, pending: [], pendingLen: 0, queue: Promise.resolve(), elapsed: 0 }
+    if (autoEndAt) l.auto = { endAt: autoEndAt, heard: false, lastSound: Date.now(), stopping: false }
     live = l
     node.onaudioprocess = (e) => {
       if (rec?.paused) return
       const f = e.inputBuffer.getChannelData(0)
       const pcm = new Int16Array(f.length)
-      for (let i = 0; i < f.length; i++) pcm[i] = Math.max(-1, Math.min(1, f[i])) * 0x7fff
+      let sum = 0
+      for (let i = 0; i < f.length; i++) {
+        pcm[i] = Math.max(-1, Math.min(1, f[i])) * 0x7fff
+        sum += f[i] * f[i]
+      }
+      const a = l.auto
+      if (a && !a.stopping) {
+        const now = Date.now()
+        if (Math.sqrt(sum / f.length) > SOUND_RMS) {
+          a.heard = true
+          a.lastSound = now
+        }
+        // fin de la llamada: silencio prolongado tras haberla oído, o se pasó la hora de fin (sin haber oído nada / tope de seguridad)
+        if ((a.heard && now - a.lastSound > SILENCE_MS) || (!a.heard && now > a.endAt) || now > a.endAt + OVERRUN_MS) {
+          a.stopping = true
+          void stopRecording().catch(() => undefined)
+        }
+      }
       l.pending.push(pcm)
       l.pendingLen += pcm.length
       l.elapsed += (f.length / 16000) * 1000
@@ -164,7 +190,7 @@ export async function startRecording(title: string, taskId: string | undefined, 
     }
     mix.connect(node)
     node.connect(ctx.destination) // sin salida no se dispara el procesado; no se escribe nada en la salida, así que no suena
-    setRec({ id, title, startedAt: Date.now(), paused: false, system: withSystem })
+    setRec({ id, title, startedAt: Date.now(), paused: false, system: withSystem, auto: !!autoEndAt })
     return warning
   } catch (e) {
     streams.forEach((s) => s.getTracks().forEach((t) => t.stop()))
@@ -194,4 +220,10 @@ export async function stopRecording(): Promise<Meeting | null> {
   const m = await window.api.call('meetings:stop', r.id, l.elapsed)
   upsert(m)
   return m
+}
+
+// Punto de entrada para la grabación automática: el proceso principal lo invoca con un gesto de usuario simulado (necesario para getDisplayMedia).
+;(window as unknown as { __autoRecord?: (title: string, endAt: number) => void }).__autoRecord = (title, endAt) => {
+  if (rec) return
+  void startRecording(title, undefined, true, endAt).catch(() => undefined)
 }

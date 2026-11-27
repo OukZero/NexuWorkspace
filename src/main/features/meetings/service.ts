@@ -393,6 +393,30 @@ export function createMeetingTasks(id: string, tasks: MeetingTask[]): number {
   return n
 }
 
+/** Hay una grabación en curso (la usa el calendario para no empezar otra encima). */
+export const isRecording = (): boolean => live.size > 0
+
+/** Guarda la transcripción y el resumen como .md y .txt en la carpeta elegida en Ajustes. Un fallo aquí nunca rompe la reunión. */
+function exportTranscript(m: Stored): void {
+  const root = (getDb().settings.meetingExportDir ?? '').trim()
+  if (!root) return
+  try {
+    fs.mkdirSync(root, { recursive: true })
+    const d = new Date(m.createdAt)
+    const p2 = (n: number): string => String(n).padStart(2, '0')
+    const day = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`
+    const when = `${day} ${p2(d.getHours())}:${p2(d.getMinutes())}`
+    const safe = m.title.replace(/[<>:"/\\|?*\x00-\x1f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Reunión'
+    const base = path.join(root, `${day} ${p2(d.getHours())}${p2(d.getMinutes())} - ${safe}`)
+    const mins = Math.round(m.durationMs / 60000)
+    const head = `${m.title}\n${when} · ${mins} min\n`
+    fs.writeFileSync(`${base}.md`, `# ${m.title}\n\n*${when} · ${mins} min*\n\n## Resumen\n\n${m.summary.trim()}\n\n## Transcripción\n\n${m.transcript.trim()}\n`, 'utf8')
+    fs.writeFileSync(`${base}.txt`, `${head}\nRESUMEN\n${m.summary.trim()}\n\nTRANSCRIPCIÓN\n${m.transcript.trim()}\n`, 'utf8')
+  } catch (e) {
+    patch(m, { error: `No se pudo guardar la transcripción en la carpeta elegida: ${(e as Error).message}` })
+  }
+}
+
 async function run(id: string, mode: 'full' | 'summary'): Promise<void> {
   const m = load().get(id)
   if (!m || busy.has(id)) return
@@ -409,6 +433,7 @@ async function run(id: string, mode: 'full' | 'summary'): Promise<void> {
     patch(m, { status: 'summarizing', error: undefined })
     const summary = await summarizeTranscript(m.title, m.transcript, getDb().settings.claudeCmd)
     patch(m, { summary, status: 'done', error: undefined })
+    exportTranscript(m)
     if (getDb().settings.meetingAutoTasks) {
       // las propuestas son un extra: si fallan, el resumen ya está listo
       extracting.add(id)

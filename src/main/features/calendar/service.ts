@@ -8,7 +8,8 @@ import { clip, mergedMs } from '../../../shared/util'
 import { commit, getDb, uid } from '../../db'
 import { notify } from '../../notify'
 import { startTimer } from '../time/timer'
-import { emit, showWin } from '../../windows'
+import { isRecording } from '../meetings/service'
+import { emit, getMain, showWin } from '../../windows'
 
 /**
  * Calendario de Outlook (Microsoft Graph, solo lectura) + bloques de enfoque locales.
@@ -290,6 +291,7 @@ export async function listEvents(force = false): Promise<CalEvent[]> {
 export function checkMeetings(): void {
   const mins = getDb().settings.meetingRemindMin ?? 10
   void sync()
+  autoRecord(Date.now())
   if (mins <= 0) return
   const now = Date.now()
   for (const e of events) {
@@ -310,6 +312,20 @@ export function checkMeetings(): void {
     })
   }
   for (const k of reminded) if (Number(k.split(':').pop()) < now - DAY) reminded.delete(k)
+}
+
+const autoStarted = new Set<string>() // eventos ya intentados: si paras a mano, no se vuelve a empezar
+
+/** Modo automático: al arrancar un evento empieza a grabar. El renderer decide cuándo parar (silencio de la llamada). */
+function autoRecord(now: number): void {
+  if (!getDb().settings.meetingAutoRecord || isRecording()) return
+  const win = getMain()
+  if (!win || win.isDestroyed()) return
+  const e = events.find((x) => !x.allDay && x.busy && !autoStarted.has(`${x.id}:${x.start}`) && x.start - 30_000 <= now && now < x.end && x.end - x.start <= 8 * 3600_000)
+  if (!e) return
+  autoStarted.add(`${e.id}:${e.start}`)
+  // userGesture=true: Chromium exige un gesto del usuario para getDisplayMedia (audio del sistema)
+  void win.webContents.executeJavaScript(`window.__autoRecord && window.__autoRecord(${JSON.stringify(e.title)}, ${e.end})`, true).catch(() => undefined)
 }
 
 // ---------- bloques de enfoque ----------
