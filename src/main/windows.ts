@@ -6,6 +6,7 @@ import { commit, getDb, registerWindow } from './db'
 import { lifecycle } from './lifecycle'
 import { isSignedIn } from './auth'
 import { closeSplash } from './splash'
+import type { RecInfo } from '../shared/types'
 
 let win: BrowserWindow | null = null
 let mini: BrowserWindow | null = null
@@ -170,6 +171,54 @@ function createMini(): void {
   screen.on('display-metrics-changed', refit)
   mini.once('closed', () => screen.removeListener('display-metrics-changed', refit))
   loadPage(mini, 'mini')
+}
+
+// ---------- ventana flotante de grabación (tiempo, pausa, detener, preguntas) ----------
+let recWin: BrowserWindow | null = null
+let recInfo: RecInfo | null = null
+
+/** Abre, actualiza o cierra la ventana de grabación según el estado que informa el grabador (null = no se graba). */
+export function setRecState(info: RecInfo | null): void {
+  recInfo = info
+  if (!info) {
+    if (recWin && !recWin.isDestroyed()) recWin.close()
+    return
+  }
+  if (recWin && !recWin.isDestroyed()) {
+    recWin.webContents.send('rec:state', info)
+    return
+  }
+  const a = screen.getPrimaryDisplay().workArea
+  const w = new BrowserWindow({
+    width: 340,
+    height: 120,
+    x: a.x + a.width - 340 - 16,
+    y: a.y + 16,
+    frame: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
+    fullscreenable: false,
+    show: false,
+    backgroundColor: '#171a21',
+    webPreferences: { preload: preload(), contextIsolation: true, nodeIntegration: false }
+  })
+  w.setAlwaysOnTop(true, 'screen-saver')
+  registerWindow(w)
+  recWin = w
+  w.once('ready-to-show', () => w.showInactive()) // sin robar el foco a la llamada
+  w.webContents.on('did-finish-load', () => w.webContents.send('rec:state', recInfo))
+  w.on('closed', () => (recWin = null))
+  loadPage(w, 'mini', { rec: '1' })
+}
+
+/** Cambia el alto de la ventana de grabación (crece al mostrar las preguntas sugeridas). */
+export function resizeRecWin(h: number): void {
+  if (!recWin || recWin.isDestroyed()) return
+  const b = recWin.getBounds()
+  recWin.setBounds({ ...b, height: Math.min(520, Math.max(100, Math.round(h))) })
 }
 
 // ---------- ventanas sueltas (una tarea sacada de la ventana principal) ----------

@@ -173,3 +173,19 @@ html body.edge-mode[data-busy="1"] { box-shadow: none; animation: none; }
 .dkc-att { display: flex; flex-direction: column; gap: 2px; margin-bottom: 4px; font-size: 11px; opacity: .85; }
 /* los extremos de las filas se difuminan para sugerir que hay más al desplazar */
 .dkc-tasks, .dkc-convs { -webkit-mask-image: linear-gradient(90deg, transparent, #000 18px, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(90deg, transparent, #000 18px, #000 calc(100% - 18px), transparent); }
+
+/* ventana flotante de grabación */
+.recmini { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 8px 0; }
+.recmini .rtop { display: flex; align-items: center; gap: 8px; }
+.recmini .rdot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); flex: none; animation: p 1.2s ease-in-out infinite; }
+.recmini .rdot.paused { animation: none; opacity: .45; }
+.recmini .rtime { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.recmini .rtitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.recmini .rbtns { display: flex; gap: 6px; -webkit-app-region: no-drag; }
+.recmini button { background: var(--btn); color: var(--fg); border: 1px solid var(--line); border-radius: 7px; padding: 4px 9px; font: inherit; cursor: pointer; }
+.recmini button.stop { background: var(--danger); border-color: var(--danger); color: var(--on-accent); }
+.recmini button:disabled { opacity: .6; cursor: default; }
+.recmini ul { margin: 0; padding-left: 16px; max-height: 300px; overflow-y: auto; -webkit-app-region: no-drag; user-select: text; }
+.recmini li { margin-bottom: 4px; line-height: 1.35; }
+.recmini .rerr { color: var(--warn); font-size: 12px; }
+@media (prefers-reduced-motion: reduce) { .recmini .rdot { animation: none; } }

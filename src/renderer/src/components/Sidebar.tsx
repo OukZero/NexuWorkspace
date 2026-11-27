@@ -22,6 +22,7 @@ import {
   type Density,
   type ThemeMode
 } from '../theme'
+import { recElapsed, useRecording } from '../meetings'
 import { useDB } from '../store'
 import { useUi, type View } from '../ui'
 import { UpdateChip } from './UpdateCard'
@@ -415,6 +416,27 @@ export function Rail({ onSearch }: { onSearch: () => void }): ReactNode {
   )
 }
 
+/** Aviso visible en toda la app mientras se graba una reunión: punto rojo, tiempo y acceso a la vista de reuniones. */
+function RecIndicator(): ReactNode {
+  const rec = useRecording()
+  const ui = useUi()
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    if (!rec) return
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [rec])
+  if (!rec) return null
+  const s = Math.floor(recElapsed(rec, now) / 1000)
+  const t = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+  return (
+    <button className={`rec-chip${rec.paused ? ' paused' : ''}`} title={`${rec.paused ? 'Grabación en pausa' : 'Grabando'}: ${rec.title}. Pulsa para ir a Reuniones`} aria-label={`${rec.paused ? 'En pausa' : 'Grabando'} ${t}. Ir a Reuniones`} onClick={() => ui.go('meetings')}>
+      <span className="rec-dot" aria-hidden />
+      {rec.paused ? 'Pausa' : 'REC'} {t}
+    </button>
+  )
+}
+
 /** Utilidades de la barra superior: búsqueda, reproductor, timer, avisos, pantalla completa y salir. */
 export function TopTools({ onSearch, fullscreen, onFullscreen }: { onSearch: () => void; fullscreen: boolean; onFullscreen: () => void }): ReactNode {
   const { closeApp } = useNavModel()
@@ -425,6 +447,7 @@ export function TopTools({ onSearch, fullscreen, onFullscreen }: { onSearch: () 
         <span>Buscar o ejecutar…</span>
         <kbd>Ctrl K</kbd>
       </button>
+      <RecIndicator />
       <MiniPlayer />
       <TimerBar />
       <NotificationBell variant="top" />

@@ -1,5 +1,6 @@
 import { api } from '../../api'
-import { appendChunk, createMeetingTasks, deleteMeeting, extractMeeting, listMeetings, modelStatus, moveMeetings, retryMeeting, startModelDownload, startMeeting, stopMeeting, updateMeeting } from './service'
+import { emit, resizeRecWin, setRecState } from '../../windows'
+import { liveQuestions, appendChunk, createMeetingTasks, deleteMeeting, extractMeeting, listMeetings, modelStatus, moveMeetings, retryMeeting, startModelDownload, startMeeting, stopMeeting, updateMeeting } from './service'
 
 export function registerMeetingsIpc(): void {
   api('meetings:list', () => listMeetings())
@@ -15,4 +16,9 @@ export function registerMeetingsIpc(): void {
   api('meetings:modelStatus', () => modelStatus())
   api('meetings:downloadModel', () => startModelDownload())
   api('meetings:moveTo', (dest) => moveMeetings(dest))
+  api('meetings:liveQuestions', (id) => liveQuestions(id))
+  api('meetings:recState', (info) => setRecState(info))
+  api('meetings:recResize', (h) => resizeRecWin(h))
+  // la ventana flotante no tiene el grabador: la orden se reenvía a la ventana principal, que sí lo tiene
+  api('meetings:recCmd', (cmd) => emit('rec:cmd', cmd))
 }

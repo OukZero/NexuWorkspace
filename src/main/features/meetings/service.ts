@@ -172,6 +172,7 @@ export function appendChunk(id: string, data: ArrayBuffer): void {
 export function stopMeeting(id: string, durationMs: number): Meeting {
   const m = get(id)
   live.delete(id)
+  liveState.delete(id)
   const real = finalizeWav(id)
   patch(m, { durationMs: real || Math.max(0, Math.round(durationMs)), status: 'transcribing', error: undefined })
   void run(id, 'full')
@@ -465,6 +466,72 @@ export function createMeetingTasks(id: string, tasks: MeetingTask[]): number {
 
 /** Hay una grabación en curso (la usa el calendario para no empezar otra encima). */
 export const isRecording = (): boolean => live.size > 0
+
+// ---------- preguntas mientras se escucha ----------
+// Bajo demanda (no periódico, para no gastar uso de la IA): se transcribe solo el audio nuevo desde la última vez
+// con whisper (local, gratis) y Haiku propone preguntas útiles a partir de lo dicho hasta ahora.
+const liveState = new Map<string, { offset: number; text: string; asked: string[]; busy: boolean }>()
+
+function wavFrom(pcm: Buffer): Buffer {
+  const h = Buffer.alloc(44)
+  h.write('RIFF', 0)
+  h.writeUInt32LE(36 + pcm.length, 4)
+  h.write('WAVEfmt ', 8)
+  h.writeUInt32LE(16, 16)
+  h.writeUInt16LE(1, 20)
+  h.writeUInt16LE(1, 22)
+  h.writeUInt32LE(RATE, 24)
+  h.writeUInt32LE(BYTES_PER_SEC, 28)
+  h.writeUInt16LE(2, 32)
+  h.writeUInt16LE(16, 34)
+  h.write('data', 36)
+  h.writeUInt32LE(pcm.length, 40)
+  return Buffer.concat([h, pcm])
+}
+
+export async function liveQuestions(id: string): Promise<string[]> {
+  checkId(id)
+  if (!live.has(id)) throw new Error('Esta grabación ya no está en curso.')
+  const st = liveState.get(id) ?? { offset: 0, text: '', asked: [], busy: false }
+  liveState.set(id, st)
+  if (st.busy) throw new Error('Ya se están preparando preguntas.')
+  st.busy = true
+  const tmp = path.join(dir(), `${id}.live.wav`)
+  try {
+    // lo grabado desde la última vez (los trozos del renderer llegan cada ~4 s, así que puede faltar la cola más reciente)
+    const size = fs.statSync(pcmFile(id)).size & ~1
+    if (size - st.offset >= BYTES_PER_SEC * 5) {
+      const fd = fs.openSync(pcmFile(id), 'r')
+      const buf = Buffer.alloc(size - st.offset)
+      try {
+        fs.readSync(fd, buf, 0, buf.length, st.offset)
+      } finally {
+        fs.closeSync(fd)
+      }
+      fs.writeFileSync(tmp, wavFrom(buf))
+      const text = await transcribe(tmp)
+      st.offset = size
+      if (text.trim()) st.text += (st.text ? '\n' : '') + text
+    }
+    if (st.text.trim().length < 80) throw new Error('Todavía hay poco audio transcrito para sugerir preguntas. Prueba de nuevo en un minuto.')
+    const before = st.asked.length ? `\nPreguntas ya sugeridas (no las repitas):\n${st.asked.map((q) => `- ${q}`).join('\n')}\n` : ''
+    const raw = await askClaude(
+      'Estás escuchando una reunión en curso. A partir de lo dicho hasta ahora, propón de 3 a 5 preguntas breves y útiles que el usuario podría hacer a continuación: ' +
+        'aclarar dudas, concretar plazos, responsables, cifras o decisiones que quedaron ambiguas. La transcripción es automática y puede tener errores: no inventes datos.' +
+        `${before}\nResponde SOLO con un arreglo JSON de textos, sin bloques de código.\n\n${clip(st.text.slice(-12000), 12000)}`,
+      getDb().settings.claudeCmd,
+      90000
+    )
+    const m = raw.match(/\[[\s\S]*\]/)
+    const arr = m ? (JSON.parse(m[0]) as unknown) : []
+    const qs = (Array.isArray(arr) ? arr : []).filter((q): q is string => typeof q === 'string').map((q) => q.trim().slice(0, 200)).filter(Boolean).slice(0, 5)
+    st.asked.push(...qs)
+    return qs
+  } finally {
+    st.busy = false
+    fs.rmSync(tmp, { force: true })
+  }
+}
 
 /** Copias legibles (.md y .txt) de la reunión en la carpeta de reuniones, para abrirlas sin la app. Un fallo aquí no debe romper la reunión. */
 function saveReadable(m: Stored): void {

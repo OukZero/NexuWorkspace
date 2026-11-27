@@ -75,6 +75,9 @@ export interface RecState {
   title: string
   startedAt: number
   paused: boolean
+  /** Tiempo ya pausado y desde cuándo está en pausa (si lo está): el tiempo grabado es ahora − inicio − pausas. */
+  pausedMs: number
+  pausedAt: number | null
   /** Si se está capturando también el audio del sistema (la voz del cliente). */
   system: boolean
   /** Empezó sola desde el calendario (y para sola al terminar la llamada). */
@@ -86,7 +89,14 @@ const recSubs = new Set<() => void>()
 const setRec = (next: RecState | null): void => {
   rec = next
   recSubs.forEach((f) => f())
+  // la ventana flotante de grabación se entera por el proceso principal
+  void window.api
+    .call('meetings:recState', next && { id: next.id, title: next.title, startedAt: next.startedAt, pausedMs: next.pausedMs, pausedAt: next.pausedAt, system: next.system })
+    .catch(() => undefined)
 }
+/** Milisegundos grabados (sin las pausas). */
+export const recElapsed = (r: { startedAt: number; pausedMs: number; pausedAt: number | null }, now = Date.now()): number =>
+  Math.max(0, (r.pausedAt ?? now) - r.startedAt - r.pausedMs)
 export const useRecording = (): RecState | null =>
   useSyncExternalStore(
     (cb) => {
@@ -190,7 +200,7 @@ export async function startRecording(title: string, taskId: string | undefined, 
     }
     mix.connect(node)
     node.connect(ctx.destination) // sin salida no se dispara el procesado; no se escribe nada en la salida, así que no suena
-    setRec({ id, title, startedAt: Date.now(), paused: false, system: withSystem, auto: !!autoEndAt })
+    setRec({ id, title, startedAt: Date.now(), paused: false, pausedMs: 0, pausedAt: null, system: withSystem, auto: !!autoEndAt })
     return warning
   } catch (e) {
     streams.forEach((s) => s.getTracks().forEach((t) => t.stop()))
@@ -201,7 +211,9 @@ export async function startRecording(title: string, taskId: string | undefined, 
 }
 
 export const pauseRecording = (paused: boolean): void => {
-  if (rec) setRec({ ...rec, paused })
+  if (!rec || rec.paused === paused) return
+  const now = Date.now()
+  setRec({ ...rec, paused, pausedAt: paused ? now : null, pausedMs: paused ? rec.pausedMs : rec.pausedMs + (now - (rec.pausedAt ?? now)) })
 }
 
 /** Cierra la grabación y lanza la transcripción y el resumen en segundo plano. */
@@ -220,6 +232,14 @@ export async function stopRecording(): Promise<Meeting | null> {
   const m = await window.api.call('meetings:stop', r.id, l.elapsed)
   upsert(m)
   return m
+}
+
+// Órdenes de la ventana flotante de grabación (solo la ventana principal tiene el grabador).
+if (!location.search.includes('rec=1')) {
+  window.api.onRecCmd((c) => {
+    if (c === 'stop') void stopRecording().catch(() => undefined)
+    else pauseRecording(c === 'pause')
+  })
 }
 
 // Punto de entrada para la grabación automática: el proceso principal lo invoca con un gesto de usuario simulado (necesario para getDisplayMedia).

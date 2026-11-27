@@ -1072,6 +1072,10 @@ export interface IpcChannels {
   'meetings:modelStatus': { args: []; ret: ModelStatus } // modelo de voz por defecto: si está y cómo va la descarga
   'meetings:downloadModel': { args: []; ret: void } // lanza la descarga; el progreso se consulta con modelStatus
   'meetings:moveTo': { args: [string]; ret: number } // mueve las reuniones a otra carpeta y la fija como destino; devuelve cuántas
+  'meetings:recState': { args: [RecInfo | null]; ret: void } // el renderer informa de la grabación en curso (null = terminó): abre o cierra la ventana flotante
+  'meetings:recCmd': { args: [RecCmd]; ret: void } // la ventana flotante pide pausar, reanudar o detener
+  'meetings:recResize': { args: [number]; ret: void } // alto de la ventana flotante (crece al mostrar preguntas)
+  'meetings:liveQuestions': { args: [string]; ret: string[] } // transcribe lo nuevo de la grabación en curso y sugiere preguntas (bajo demanda)
   'meetings:extract': { args: [string]; ret: Meeting } // busca tareas en la reunión (las propone, no las crea)
   'meetings:createTasks': { args: [string, MeetingTask[]]; ret: number } // crea las tareas elegidas y las vincula a la reunión; devuelve cuántas
   'badges:get': { args: []; ret: Record<string, number> } // sin leer actuales (para pintar al abrir o recargar la ventana)
@@ -1408,4 +1412,18 @@ export interface Api {
   onTeamProgress(cb: (p: TeamProgress) => void): Unsubscribe
   /** Avance al generar el guion o grabar un video. */
   onVideoProgress(cb: (p: VideoProgress) => void): Unsubscribe
+  /** Estado de la grabación de reuniones (para la ventana flotante) y órdenes de esa ventana hacia el grabador. */
+  onRecState(cb: (r: RecInfo | null) => void): Unsubscribe
+  onRecCmd(cb: (c: RecCmd) => void): Unsubscribe
 }
+
+/** Grabación en curso tal como la ve la ventana flotante. `pausedMs` es lo ya pausado; `pausedAt`, desde cuándo está en pausa (si lo está). */
+export interface RecInfo {
+  id: string
+  title: string
+  startedAt: number
+  pausedMs: number
+  pausedAt: number | null
+  system: boolean
+}
+export type RecCmd = 'pause' | 'resume' | 'stop'

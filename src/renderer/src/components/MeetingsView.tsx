@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Meeting } from '../../../shared/types'
-import { createTasks, deleteMeeting, extractTasks, pauseRecording, resummarizeMeeting, retryMeeting, startRecording, stopRecording, updateMeeting, useMeetings, useRecording } from '../meetings'
+import { createTasks, deleteMeeting, extractTasks, pauseRecording, recElapsed, resummarizeMeeting, retryMeeting, startRecording, stopRecording, updateMeeting, useMeetings, useRecording } from '../meetings'
 import { requestNote, saveNote } from '../notes'
 import { useDB } from '../store'
 import { useUi } from '../ui'
@@ -43,8 +43,8 @@ function Recorder({ onStopped }: { onStopped: (m: Meeting) => void }): ReactNode
   const [system, setSystem] = useState(true)
   const [busy, setBusy] = useState(false)
   const [now, setNow] = useState(Date.now())
-  const [pausedMs, setPausedMs] = useState(0)
-  const [pausedAt, setPausedAt] = useState<number | null>(null)
+  const [questions, setQuestions] = useState<string[]>([])
+  const [asking, setAsking] = useState(false)
 
   useEffect(() => {
     if (!rec) return
@@ -59,8 +59,7 @@ function Recorder({ onStopped }: { onStopped: (m: Meeting) => void }): ReactNode
     try {
       const name = title.trim() || `Reunión ${new Date().toLocaleDateString('es', { day: 'numeric', month: 'short' })}`
       const warn = await startRecording(name, taskId || undefined, system)
-      setPausedMs(0)
-      setPausedAt(null)
+      setQuestions([])
       setNow(Date.now())
       if (warn) ui.toast(warn, true)
     } catch (e) {
@@ -85,21 +84,26 @@ function Recorder({ onStopped }: { onStopped: (m: Meeting) => void }): ReactNode
     }
   }
   const pause = (): void => {
+    if (rec) pauseRecording(!rec.paused)
+  }
+  // preguntas que se podrían hacer según lo hablado hasta ahora (transcribe lo nuevo en local y pide a Claude; solo al pulsar)
+  const ask = async (): Promise<void> => {
     if (!rec) return
-    if (rec.paused) {
-      setPausedMs(pausedMs + (Date.now() - (pausedAt ?? Date.now())))
-      setPausedAt(null)
-    } else setPausedAt(Date.now())
-    pauseRecording(!rec.paused)
+    setAsking(true)
+    try {
+      const qs = await ui.run('meetings:liveQuestions', rec.id)
+      if (qs) setQuestions((a) => [...a, ...qs])
+    } finally {
+      setAsking(false)
+    }
   }
 
   if (rec) {
-    const gone = pausedMs + (rec.paused && pausedAt ? now - pausedAt : 0)
     return (
       <div className="mt-rec on" role="status" aria-live="polite">
         <div className="mt-rec-top">
           <span className={`mt-dot ${rec.paused ? 'paused' : ''}`} aria-hidden />
-          <b className="mt-time">{clock(now - rec.startedAt - gone)}</b>
+          <b className="mt-time">{clock(recElapsed(rec, now))}</b>
           <span className="meta">{rec.paused ? 'En pausa' : 'Grabando'}</span>
         </div>
         <div className="mt-rec-title">{rec.title}</div>
@@ -111,7 +115,17 @@ function Recorder({ onStopped }: { onStopped: (m: Meeting) => void }): ReactNode
           <button className="btn sm p" onClick={() => void stop()} disabled={busy}>
             <G n="stop" size={13} /> Detener y resumir
           </button>
+          <button className="btn sm" onClick={() => void ask()} disabled={asking} title="Transcribe lo hablado hasta ahora y sugiere preguntas">
+            {asking ? 'Escuchando…' : 'Sugerir preguntas'}
+          </button>
         </div>
+        {questions.length > 0 && (
+          <ul className="mt-questions" aria-label="Preguntas sugeridas">
+            {questions.map((q, i) => (
+              <li key={i}>{q}</li>
+            ))}
+          </ul>
+        )}
       </div>
     )
   }

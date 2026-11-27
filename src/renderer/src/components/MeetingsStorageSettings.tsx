@@ -66,7 +66,7 @@ export function MeetingsStorageSettings({ s, set }: { s: Settings; set: <K exten
             Mover reuniones…
           </button>
         </div>
-        <div className="meta">«Elegir» solo cambia dónde se guardan las nuevas (al guardar los ajustes). «Mover» traslada también las existentes, de inmediato. Cada reunión deja un .md con resumen y transcripción.</div>
+        <div className="meta">«Elegir» solo cambia dónde se guardan las nuevas (al guardar los ajustes). «Mover» traslada también las existentes, de inmediato. Cada reunión deja un .md (resumen y transcripción) y un .txt (solo texto).</div>
       </div>
       <div>
         <label>Borrar el audio conservado tras (días, 0 = nunca)</label>
