@@ -5,6 +5,7 @@ import { designConv } from '../conversations'
 import { findTask, useDB, useNow } from '../store'
 import { useUi } from '../ui'
 import { AttachmentList } from './Chat'
+import { DesignStyleModal } from './DesignStyleModal'
 import { G } from './glyphs'
 import { IconStop } from './icons'
 import { Markdown } from './Markdown'
@@ -23,6 +24,7 @@ export function DesignView({ taskId }: { taskId: string }): ReactNode {
   const conv = designConv(db, taskId)
   const running = !!conv?.chat.running
   const now = useNow(1000)
+  const [styleOpen, setStyleOpen] = useState(false)
   const [since, setSince] = useState(0)
   useEffect(() => setSince(running ? Date.now() : 0), [running])
   const act = conv?.chat.activity ?? []
@@ -38,6 +40,18 @@ export function DesignView({ taskId }: { taskId: string }): ReactNode {
   const [files, setFiles] = useState<MockupFile[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [device, setDevice] = useState<Device>('desktop')
+  // 'fit' = reducir el mockup al ancho disponible (se renderiza a su ancho real y se escala); un número = zoom fijo
+  const [zoom, setZoom] = useState<'fit' | number>('fit')
+  const [listOpen, setListOpen] = useState(true)
+  const stageRef = useRef<HTMLDivElement>(null)
+  const [stageSize, setStageSize] = useState({ w: 0, h: 0 })
+  useEffect(() => {
+    const el = stageRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setStageSize({ w: el.clientWidth, h: el.clientHeight }))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   const [prompt, setPrompt] = useState('')
   const [iterate, setIterate] = useState(true)
   const [attached, setAttached] = useState<Attachment[]>([])
@@ -119,14 +133,24 @@ export function DesignView({ taskId }: { taskId: string }): ReactNode {
     void refresh()
   }
 
+  // espacio útil del visor (menos el relleno); el iframe mide el ancho real del dispositivo y se escala para que quepa entero
+  const availW = Math.max(200, stageSize.w - 24)
+  const availH = Math.max(200, stageSize.h - 24)
+  const fitScale = Math.min(1, availW / WIDTH[device])
+  const scale = zoom === 'fit' ? fitScale : zoom
+  const frameH = Math.max(320, Math.round(availH / scale))
   const current = files.find((f) => f.name === selected)
   const src = current ? `shutoki-mockup://m/${encodeURIComponent(taskId)}/${encodeURIComponent(current.name)}?v=${Math.round(current.mtime)}` : null
 
   return (
     <div className="design">
-      <aside className="design-list">
+      {styleOpen && <DesignStyleModal onClose={() => setStyleOpen(false)} />}
+      <aside className="design-list" hidden={!listOpen}>
         <div className="design-list-h">
           <b>Mockups</b>
+          <button className="icon" title="Estilo de diseño: guía, referencias e imágenes para todos los mockups" onClick={() => setStyleOpen(true)}>
+            🎨
+          </button>
           <button className="icon" title="Abrir la carpeta de mockups" onClick={() => ui.run('mockup:reveal', taskId)}>
             📂
           </button>
@@ -164,7 +188,14 @@ export function DesignView({ taskId }: { taskId: string }): ReactNode {
               </button>
             ))}
           </div>
+          <button className="icon" title={listOpen ? 'Ocultar la lista de mockups' : 'Mostrar la lista de mockups'} aria-pressed={!listOpen} onClick={() => setListOpen((v) => !v)}>◧</button>
           <span className="grow meta">{task?.title}</span>
+          <div className="seg" role="group" aria-label="Zoom">
+            <button title="Reducir" onClick={() => setZoom(Math.max(0.25, +(scale - 0.1).toFixed(2)))}>−</button>
+            <button className={zoom === 'fit' ? 'on' : ''} title="Ajustar al ancho disponible" onClick={() => setZoom('fit')}>{zoom === 'fit' ? `Ajustar · ${Math.round(scale * 100)}%` : `${Math.round(scale * 100)}%`}</button>
+            <button title="Ampliar" onClick={() => setZoom(Math.min(2, +(scale + 0.1).toFixed(2)))}>+</button>
+            <button className={zoom === 1 ? 'on' : ''} title="Tamaño real" onClick={() => setZoom(1)}>100%</button>
+          </div>
           <button className="btn sm" disabled={!selected} onClick={() => void exportAs('png')}>
             Exportar PNG
           </button>
@@ -172,10 +203,10 @@ export function DesignView({ taskId }: { taskId: string }): ReactNode {
             Exportar PDF
           </button>
         </div>
-        <div className="design-stage">
+        <div className="design-stage" ref={stageRef}>
           {src ? (
-            <div className="design-frame" style={{ width: device === 'desktop' ? '100%' : WIDTH[device] }}>
-              <iframe key={src} title={current?.name} src={src} sandbox="allow-scripts" />
+            <div className="design-frame" style={{ width: WIDTH[device] * scale, height: frameH * scale }}>
+              <iframe key={src} title={current?.name} src={src} sandbox="allow-scripts" style={{ width: WIDTH[device], height: frameH, transform: `scale(${scale})` }} />
             </div>
           ) : (
             <div className="empty" style={{ margin: 'auto', maxWidth: 420 }}>

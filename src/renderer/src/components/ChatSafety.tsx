@@ -176,7 +176,7 @@ export function ProfileSelect({ convId }: { convId: string }): ReactNode {
   const ui = useUi()
   const chat = db.chats[convId]
   const profiles = profilesOf(db.settings)
-  if (!profiles.length || chat?.kind) return null
+  if (!profiles.length || (chat?.kind && chat.kind !== 'diagram')) return null
   return (
     <Select
       className="mini-sel"

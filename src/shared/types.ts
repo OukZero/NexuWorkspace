@@ -289,6 +289,9 @@ export interface ChatMessage {
   attachments?: Attachment[]
   /** Contexto automático que se anexó a este mensaje (solo etiquetas, para mostrarlas). */
   context?: string[]
+  /** Respuesta de un agente del equipo (en vez del asistente de la conversación). */
+  agentId?: string
+  agentName?: string
 }
 
 /** Consumo de la sesión de Claude de un chat (acumulado desde que se creó o se reinició). */
@@ -328,7 +331,7 @@ export type PermissionChoice = 'allow' | 'always' | 'deny'
 
 /** Cómo se tratan los comandos de shell que no están en la lista permitida. */
 export type CommandPolicy = 'ask' | 'all' | 'list'
-export type MiniFormat = 'full' | 'compact' | 'timer'
+export type MiniFormat = 'full' | 'compact' | 'timer' | 'edge'
 export type ChatMode = 'agent' | 'ask'
 
 /** Copia del trabajo guardada antes de cada respuesta de la IA, para poder volver atrás. */
@@ -429,7 +432,7 @@ export interface Chat {
   /** Aviso de límite de la cuenta ya mostrado en este chat (para no repetirlo). */
   limitHint?: string
   /** 'design' = conversación de la pestaña Diseño (no aparece entre las conversaciones normales). */
-  kind?: 'design' | 'review'
+  kind?: 'design' | 'review' | 'diagram'
   taskId: string
   createdAt: number
   title?: string
@@ -547,6 +550,16 @@ export interface MockupFile {
   size: number
 }
 
+/** Guía de estilo del front: se inyecta en toda conversación de la pestaña Diseño para que los mockups sean coherentes. */
+export interface DesignStyle {
+  /** Descripción libre: personalidad, tono, colores (hex), tipografías, radios, espaciado, componentes, qué evitar. */
+  brief: string
+  /** Webs de referencia que Claude consulta con WebFetch. */
+  links: string[]
+  /** Capturas/logos de referencia (copiados a la carpeta de estilo de la app). */
+  refs: { name: string; path: string }[]
+}
+
 export interface Subtask {
   id: string
   text: string
@@ -575,6 +588,10 @@ export interface Settings {
   whisperLang: string
   /** Reuniones: conservar el audio grabado tras transcribirlo (por defecto se borra). */
   meetingKeepAudio: boolean
+  /** Reuniones: carpeta donde se guardan grabaciones y transcripciones. Vacío = la carpeta de datos de la app. */
+  meetingsDir: string
+  /** Reuniones: días que se conserva el audio (con «conservar audio» activo). 0 = indefinidamente. */
+  meetingAudioDays: number
   /** Nombres y alias con los que te nombran en las reuniones, separados por comas. Vacío = se usa el de tu correo. */
   myNames: string
   /** Proponer tareas automáticamente al terminar el resumen de una reunión (nunca las crea sin que las confirmes). */
@@ -788,15 +805,25 @@ export interface TeamAgent {
   model: 'haiku' | 'sonnet' | 'opus'
   prompt: string
   skills: string[]
+  /** Puede leer y modificar archivos de `workdir` (agente desarrollador). Sin carpeta elegida no se ejecuta. */
+  canEdit?: boolean
+  workdir?: string
+  /** Documentos de referencia fijos (p. ej. una estimación previa para el estimador): se le pasan en cada encargo. */
+  refs?: Attachment[]
   /** Apariencia del robot (opcional: los agentes antiguos usan los valores por defecto). */
   look?: RobotLook
 }
 
 export interface RobotLook {
   head?: 'redonda' | 'cuadrada' | 'tv' | 'domo'
-  eyes?: 'pixel' | 'redondos' | 'visor' | 'felices'
+  eyes?: 'pixel' | 'redondos' | 'visor' | 'felices' | 'enojados' | 'dormidos' | 'estrellas' | 'guino'
   antenna?: 'bola' | 'doble' | 'helice' | 'ninguna'
-  acc?: 'ninguno' | 'gorro' | 'sombrero' | 'corona' | 'audifonos' | 'lentes'
+  acc?: 'ninguno' | 'gorro' | 'sombrero' | 'corona' | 'audifonos' | 'lentes' | 'orejas' | 'halo' | 'cuernos' | 'parche' | 'gafasSol'
+  /** Boca bajo la pantalla; 'ninguna' deja solo los ojos. */
+  mouth?: 'ninguna' | 'sonrisa' | 'neutral' | 'o' | 'diente'
+  cheeks?: 'ninguno' | 'rubor' | 'pecas'
+  /** Ropa sobre el cuerpo. */
+  outfit?: 'ninguna' | 'corbata' | 'mono' | 'bufanda' | 'capa' | 'delantal' | 'chaleco' | 'hoodie'
 }
 
 /** Personaje del usuario: rasgos que el avatar dibuja en capas. Los opcionales se añadieron después. */
@@ -806,13 +833,18 @@ export interface TeamCharacter {
   skin: string
   hair: 'corto' | 'rizado' | 'gorro' | 'largo' | 'mono' | 'rapado' | 'cresta' | 'calvo'
   /** 'barba' es heredado: ahora va en `facial`. */
-  gear: 'ninguno' | 'lentes' | 'sol' | 'audifonos' | 'gorra' | 'aretes' | 'barba'
-  outfit: 'sudadera' | 'camisa' | 'bata' | 'polera' | 'chaqueta' | 'traje'
+  gear: 'ninguno' | 'lentes' | 'sol' | 'audifonos' | 'gorra' | 'aretes' | 'barba' | 'orejas' | 'lazo' | 'halo' | 'corona' | 'bandana' | 'sombrero' | 'cinta' | 'mascarilla' | 'parche' | 'collar' | 'flor' | 'cuernos' | 'monoculo'
+  outfit: 'sudadera' | 'camisa' | 'bata' | 'polera' | 'chaqueta' | 'traje' | 'capucha' | 'overol' | 'delantal' | 'bufanda' | 'rayas' | 'hawaiana' | 'vestido' | 'kimono' | 'armadura' | 'camiseta'
+  /** Color del accesorio (si no, el propio de cada uno). */
+  gearColor?: string
+  /** Segundo accesorio, con su propio color. */
+  gear2?: TeamCharacter['gear']
+  gear2Color?: string
   hairColor?: string
   eyeColor?: string
   outfitColor?: string
-  mouth?: 'sonrisa' | 'grande' | 'neutral' | 'sorpresa'
-  face?: 'normal' | 'pecas' | 'rubor'
+  mouth?: 'sonrisa' | 'grande' | 'neutral' | 'sorpresa' | 'lengua' | 'enojada'
+  face?: 'normal' | 'pecas' | 'rubor' | 'lunar' | 'cicatriz'
   facial?: 'ninguno' | 'barba' | 'bigote' | 'perilla'
 }
 
@@ -826,6 +858,82 @@ export interface AgentTeam {
   props?: TeamProp[]
   /** Chat general del equipo: cada solicitud y la respuesta del agente al que se asignó (últimos 60). */
   chat?: TeamChatMsg[]
+  /** Plantillas de estimación que reemplazan a las de por defecto (vacío = usar la de por defecto). */
+  estimateTemplates?: { technical?: string; commercial?: string }
+  /** Varias conversaciones; si existe, sustituye a `chat` (que se migra a la primera). */
+  chats?: TeamConv[]
+  activeChat?: string
+}
+
+/** Un paso del guion de un video: la acción en la página, lo que se narra y el subtítulo. */
+export interface VideoStep {
+  action: 'goto' | 'click' | 'fill' | 'press' | 'scroll' | 'wait'
+  /** Selector CSS/Playwright (click, fill, press); URL en goto; píxeles en scroll; ms en wait. */
+  target?: string
+  value?: string
+  /** Texto que se narra con la voz del sistema (y se muestra como subtítulo). */
+  say: string
+  /** Nº de la instrucción del paso a paso a la que responde este paso (0 = intro/cierre). */
+  item?: number
+  /** Cámara en clic/escritura: auto (según el tamaño del control), off (sin zoom) o in (fuerza el acercamiento). */
+  zoom?: 'off' | 'in'
+}
+
+/** Credenciales de prueba para entrar a la app antes de grabar. Nunca se guardan en disco. */
+export interface VideoLogin {
+  user: string
+  password: string
+  /** Opcional: si la pantalla de entrada no es la URL de la app. */
+  loginUrl?: string
+  /** Si es true el video empieza sin sesión y el guion incluye los pasos de login (usa {{usuario}} y {{contraseña}}). */
+  showLogin?: boolean
+}
+
+export interface VideoProject {
+  id: string
+  title: string
+  url: string
+  goal: string
+  steps: VideoStep[]
+  createdAt: number
+  /** Nombre del MP4 final dentro de la carpeta del proyecto; vacío hasta que se graba. */
+  file: string
+  /** Campos del formulario de este video (se guardan para no perderlos). Nunca incluyen credenciales. */
+  notes?: string
+  model?: string
+  useLogin?: boolean
+  showLogin?: boolean
+  loginUrl?: string
+  style?: string
+  /** Voz de la narración: dalia, jorge, elvira, alvaro (neuronales, en línea) o sapi (local). */
+  voice?: string
+  /** Hay una grabación guardada (video sin zoom ni subtítulos + audios): permite reajustar el zoom sin volver a grabar. */
+  session?: boolean
+  /** Cambia con cada montaje; evita que el reproductor muestre una versión en caché. */
+  rev?: number
+}
+
+/** Avance de la generación del guion o de la grabación. */
+export interface VideoProgress {
+  id: string
+  text: string
+  /** Fotograma JPEG en base64 de lo que se está grabando (vista en vivo); sin texto de avance. */
+  frame?: string
+}
+
+/** Línea de progreso en vivo de un agente (herramienta que usa o fase del plan). */
+export interface TeamProgress {
+  agentId: string
+  text: string
+}
+
+/** Una conversación del chat de equipo. */
+export interface TeamConv {
+  id: string
+  name: string
+  msgs: TeamChatMsg[]
+  /** Carpeta del proyecto de esta conversación: la usan todos los agentes. */
+  workdir?: string
 }
 
 export interface TeamChatMsg {
@@ -837,6 +945,13 @@ export interface TeamChatMsg {
   agentId?: string
   /** Por qué se eligió ese agente (lo explica el enrutador). */
   reason?: string
+  /** Archivos adjuntos a la solicitud (role 'user'). */
+  attachments?: Attachment[]
+}
+
+export interface TeamOrchestration {
+  steps: Array<{ agentId: string; instruction: string; output: string }>
+  summary: string
 }
 
 export interface TeamProp {
@@ -850,7 +965,41 @@ export interface TeamProp {
   flip?: boolean
 }
 
+/** Diseño de arquitectura guiado por Claude: de la aclaración de requisitos a opciones, decisión y ADR. */
+export interface ArchDoc {
+  id: string
+  title: string
+  /** Tipo de solución: 'app-web', 'api', 'integracion', 'datos', 'automatizacion', 'otro'… */
+  kind: string
+  /** Alcance: prototipo/pequeño, mediano o grande/producción. */
+  scope: 'small' | 'medium' | 'large'
+  /** Carpeta de un proyecto existente (opcional): Claude la lee para proponer algo coherente con lo que ya hay. */
+  dir: string
+  brief: string
+  messages: { role: 'user' | 'assistant'; text: string; at: number }[]
+  createdAt: number
+  updatedAt: number
+}
+
+/** Tipos de diagrama: los cinco primeros se dibujan con Mermaid (texto); BPMN usa un modelador gráfico (XML). */
+export type DiagramType = 'flow' | 'sequence' | 'class' | 'state' | 'er' | 'bpmn'
+
+/** Diagrama guardado. `code` es Mermaid o XML BPMN según `type`; `convId` es la conversación con la IA que lo ayuda a generarlo. */
+export interface Diagram {
+  id: string
+  title: string
+  type: DiagramType
+  code: string
+  taskId?: string
+  convId?: string
+  createdAt: number
+  updatedAt: number
+}
+
 export interface DB {
+  diagrams?: Diagram[]
+  architectures?: ArchDoc[]
+  designStyle?: DesignStyle
   tasks: Task[]
   entries: Entry[]
   settings: Settings
@@ -922,6 +1071,9 @@ export interface IpcChannels {
   'meetings:summarize': { args: [string]; ret: Meeting } // rehace solo el resumen a partir de la transcripción
   'meetings:retry': { args: [string]; ret: Meeting } // repite la transcripción (si aún está el audio) y el resumen
   'meetings:delete': { args: [string]; ret: void }
+  'meetings:modelStatus': { args: []; ret: ModelStatus } // modelo de voz por defecto: si está y cómo va la descarga
+  'meetings:downloadModel': { args: []; ret: void } // lanza la descarga; el progreso se consulta con modelStatus
+  'meetings:moveTo': { args: [string]; ret: number } // mueve las reuniones a otra carpeta y la fija como destino; devuelve cuántas
   'meetings:extract': { args: [string]; ret: Meeting } // busca tareas en la reunión (las propone, no las crea)
   'meetings:createTasks': { args: [string, MeetingTask[]]; ret: number } // crea las tareas elegidas y las vincula a la reunión; devuelve cuántas
   'badges:get': { args: []; ret: Record<string, number> } // sin leer actuales (para pintar al abrir o recargar la ventana)
@@ -963,6 +1115,7 @@ export interface IpcChannels {
   'attach:pick': { args: [string]; ret: Attachment[] } // convId -> archivos elegidos y copiados
   'attach:save': { args: [string, string, Uint8Array]; ret: Attachment } // convId, nombre, bytes (pegar / arrastrar)
   'attach:preview': { args: [string]; ret: string | null } // ruta -> data URL (miniatura)
+  'chat:askAgent': { args: [string, string, string]; ret: true } // convId, agente, mensaje: el agente responde dentro del hilo de la tarea (solo lectura)
   'chat:cancel': { args: [string]; ret: void }
   'chat:permit': { args: [string, string, PermissionChoice]; ret: void } // convId, id de la solicitud, decisión
   'chat:config': { args: [string, { provider?: Provider; model?: string; mode?: ChatMode; profileId?: string }]; ret: void } // proveedor y modelo de la conversación
@@ -999,6 +1152,20 @@ export interface IpcChannels {
   'mockup:list': { args: [string]; ret: MockupFile[] }
   'mockup:delete': { args: [string, string]; ret: void }
   'mockup:export': { args: [string, string, 'png' | 'pdf', number]; ret: string | null } // tarea, archivo, formato, ancho
+  'design:style-get': { args: []; ret: DesignStyle }
+  'design:style-save': { args: [{ brief: string; links: string[] }]; ret: DesignStyle }
+  'design:style-add': { args: [string, Uint8Array]; ret: DesignStyle } // nombre, bytes de una imagen de referencia
+  'design:style-remove': { args: [string]; ret: DesignStyle }
+  'arch:list': { args: []; ret: ArchDoc[] }
+  'arch:save': { args: [Pick<ArchDoc, 'title' | 'kind' | 'scope' | 'dir' | 'brief'> & { id?: string }]; ret: ArchDoc }
+  'arch:delete': { args: [string]; ret: ArchDoc[] }
+  /** step: 'start' | 'options' | 'compare' | 'decide' | 'adr' | 'free'. Devuelve el documento con la respuesta añadida. */
+  'arch:ask': { args: [string, string, string?]; ret: ArchDoc }
+  'diagram:list': { args: []; ret: Diagram[] }
+  'diagram:save': { args: [{ id?: string; title: string; type: DiagramType; code: string }]; ret: Diagram }
+  'diagram:delete': { args: [string]; ret: Diagram[] }
+  'diagram:chat': { args: [string, string]; ret: string } // diagrama, tarea -> id de la conversación con la IA (se crea si hace falta)
+  'diagram:export': { args: [string, 'svg' | 'png' | 'mmd' | 'bpmn', string]; ret: string | null } // nombre, formato, contenido (PNG en base64)
   'mockup:reveal': { args: [string]; ret: void }
   'chat:close': { args: [string]; ret: void }
   'chat:reopen': { args: [string]; ret: void }
@@ -1015,8 +1182,19 @@ export interface IpcChannels {
   'notif:clear': { args: []; ret: void }
   'team:get': { args: []; ret: AgentTeam }
   'team:save': { args: [AgentTeam]; ret: void }
-  'team:ask': { args: [string, string]; ret: string } // id del agente y mensaje -> respuesta
-  'team:route': { args: [string]; ret: { agentId: string; reason: string } } // solicitud -> agente que debe atenderla
+  'team:ask': { args: [string, string, Attachment[]?, string?, string?]; ret: string } // id del agente, mensaje y adjuntos -> respuesta
+  'team:orchestrate': { args: [string, Attachment[]?, string?, string?]; ret: TeamOrchestration } // el orquestador reparte la solicitud entre los agentes y integra el resultado
+  'team:qa': { args: [string?]; ret: string } // el agente QA prueba en la app aislada lo que cambió el último commit/los cambios sin confirmar
+  'team:cancel': { args: []; ret: void } // detiene los agentes que se estén ejecutando
+  'video:script': { args: [{ url: string; goal: string; login?: VideoLogin; model?: string; notes?: string; id?: string; style?: string }]; ret: VideoProject } // abre la app (con login si hace falta), lee sus controles y pide el guion a Claude
+  'video:record': { args: [VideoProject, VideoLogin?]; ret: VideoProject } // ejecuta el guion con Playwright, narra con SAPI y monta el MP4 con FFmpeg
+  'video:remux': { args: [VideoProject]; ret: VideoProject } // vuelve a montar el MP4 desde la grabación guardada (solo cambia el zoom; no abre el navegador)
+  'video:list': { args: []; ret: VideoProject[] }
+  'video:save': { args: [VideoProject]; ret: VideoProject } // guarda cambios del guion
+  'video:delete': { args: [string]; ret: void }
+  'video:reveal': { args: [string]; ret: void } // muestra el video en el Explorador
+  'video:cancel': { args: []; ret: void }
+  'team:route': { args: [string, string?]; ret: { agentId: string; reason: string } } // solicitud -> agente que debe atenderla
   'telegram:status': { args: []; ret: TelegramStatus }
   'telegram:save': { args: [{ token: string; on: boolean; details: boolean }]; ret: TelegramStatus }
   'telegram:link': { args: []; ret: string }
@@ -1166,6 +1344,14 @@ export interface NoteInput {
 export type MeetingStatus = 'recording' | 'transcribing' | 'summarizing' | 'done' | 'error'
 
 /** Reunión grabada: su audio se transcribe en local y Claude redacta el resumen. */
+/** Modelo de voz por defecto de las reuniones (se descarga la primera vez). */
+export interface ModelStatus {
+  present: boolean
+  downloading: boolean
+  percent: number
+  error?: string
+}
+
 export interface Meeting {
   id: string
   title: string
@@ -1220,4 +1406,8 @@ export interface Api {
   onFullscreen(cb: (on: boolean) => void): Unsubscribe
   /** Mensajes sin leer por servicio de mensajería (id de la vista → número). */
   onBadges(cb: (b: Record<string, number>) => void): Unsubscribe
+  /** Qué está haciendo ahora el agente que ejecuta una solicitud del chat de equipo. */
+  onTeamProgress(cb: (p: TeamProgress) => void): Unsubscribe
+  /** Avance al generar el guion o grabar un video. */
+  onVideoProgress(cb: (p: VideoProgress) => void): Unsubscribe
 }

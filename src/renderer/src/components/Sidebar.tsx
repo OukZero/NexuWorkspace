@@ -1,6 +1,6 @@
 import * as Popover from '@radix-ui/react-popover'
-import { useEffect, useState } from 'react'
-import type { ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import {
   ACCENTS,
   PRESETS,
@@ -28,6 +28,7 @@ import { UpdateChip } from './UpdateCard'
 import { MiniPlayer } from './MiniPlayer'
 import { TimerBar } from './TimerBar'
 import { NotificationBell } from './NotificationBell'
+import { CommandsBell } from './CommandsBell'
 import { showSettingsTab } from './SettingsView'
 import { NAV_GROUPS } from '../navDefs'
 import { BackgroundPicker } from './BackgroundPicker'
@@ -226,7 +227,7 @@ function Profile({ wide }: { wide?: boolean }): ReactNode {
   )
 }
 
-const NAV_ICON: Record<string, GlyphName> = { today: 'panelhome', workspace: 'workspace', board: 'board', groups: 'folders', history: 'history', chat: 'chats', hours: 'hours', redmine: 'redmine', usage: 'usage', dashboard: 'usage', music: 'music', notes: 'files', meetings: 'volume', web: 'popout', whatsapp: 'chat' }
+const NAV_ICON: Record<string, GlyphName> = { today: 'panelhome', workspace: 'workspace', board: 'board', groups: 'folders', history: 'history', chat: 'chats', hours: 'hours', redmine: 'redmine', usage: 'usage', dashboard: 'usage', music: 'music', notes: 'files', meetings: 'volume', arch: 'workspace', diagrams: 'board', web: 'popout', whatsapp: 'chat' }
 
 /** Mensajes sin leer de los servicios de mensajería (vista → número), enviados por el proceso principal. */
 function useBadges(): Record<string, number> {
@@ -293,16 +294,69 @@ function useNavModel(): {
 export function Rail({ onSearch }: { onSearch: () => void }): ReactNode {
   const { ui, chatTip, badgeOf, isOn, pinned, rest, restBadge } = useNavModel()
   const [more, setMore] = useState(false)
+  const app = useAppearance()
+  // Plegado de la barra (solo lo muestra el tema Sorvo): se recuerda entre sesiones
+  const [folded, setFolded] = useState(() => {
+    try {
+      return localStorage.getItem('railFolded') === '1'
+    } catch {
+      return false
+    }
+  })
+  const navRef = useRef<HTMLElement>(null)
+  const before = useRef<Map<Element, DOMRect> | null>(null)
+  const flipTargets = (): Element[] => Array.from(navRef.current?.querySelectorAll('.tn-logo, .tn-fold, .tn-items > .tn-i, .rail-av') ?? [])
+  const toggleFold = (): void => {
+    // FLIP: se anotan las posiciones, React pliega la barra y en el layout siguiente cada elemento se desliza desde donde estaba
+    before.current = new Map(flipTargets().map((el) => [el, el.getBoundingClientRect()]))
+    setFolded((f) => {
+      try {
+        localStorage.setItem('railFolded', f ? '0' : '1')
+      } catch {
+        /* sin storage */
+      }
+      return !f
+    })
+  }
+  // Ctrl+B pliega/despliega la barra desde cualquier lugar
+  const toggleRef = useRef(toggleFold)
+  toggleRef.current = toggleFold
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault()
+        toggleRef.current()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  useLayoutEffect(() => {
+    const prev = before.current
+    before.current = null
+    if (!prev || document.documentElement.dataset.motion === 'off' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    for (const el of flipTargets()) {
+      const a = prev.get(el)
+      if (!a) continue
+      const b = el.getBoundingClientRect()
+      const dx = a.left - b.left
+      const dy = a.top - b.top
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue
+      el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 620, easing: 'cubic-bezier(.645, .045, .355, 1)' })
+    }
+  }, [folded])
   return (
-    <nav className="navrail" id="nav" aria-label="Principal">
-      <button className="tn-logo" title="Nexu Workspace · Ctrl+K" aria-label="Búsqueda global" onClick={onSearch}>
-        N
-      </button>
+    <nav className="navrail" id="nav" aria-label="Principal" ref={navRef} data-folded={folded}>
+      <div className="tn-head">
+        <button className="tn-logo" title="Nexu Workspace · Ctrl+K" aria-label="Búsqueda global" onClick={onSearch}>
+          N
+        </button>
+      </div>
       <div className="tn-items">
-        {pinned.map(({ id: v, label }) => {
+        {pinned.map(({ id: v, label }, i) => {
           const b = badgeOf(v)
           return (
-            <button key={v} className={`tn-i${isOn(v) ? ' on' : ''}`} title={v === 'chat' ? chatTip(label) : label} aria-current={ui.view === v ? 'page' : undefined} onClick={() => ui.go(v)}>
+            <button key={v} className={`tn-i${isOn(v) ? ' on' : ''}`} style={{ '--i': i } as CSSProperties} title={v === 'chat' ? chatTip(label) : label} aria-current={ui.view === v ? 'page' : undefined} onClick={() => ui.go(v)}>
               <G n={NAV_ICON[v] ?? 'today'} size={16} />
               <span className="tn-t">{label}</span>
               {b.n > 0 ? <span className={`tn-n${b.need ? ' need' : ''}`}>{b.n > 9 ? '9+' : b.n}</span> : b.dot ? <span className="tn-dot" aria-hidden /> : null}
@@ -318,7 +372,7 @@ export function Rail({ onSearch }: { onSearch: () => void }): ReactNode {
               </button>
             </Popover.Trigger>
             <Popover.Portal>
-              <Popover.Content className="pmenu tn-more" side="right" align="end" sideOffset={10} collisionPadding={12}>
+              <Popover.Content className="pmenu tn-more" side={app.dock === 'right' ? 'left' : 'right'} align="end" sideOffset={10} collisionPadding={12}>
                 {NAV_GROUPS.map((g) => {
                   const items = rest.filter((x) => x.group === g.title)
                   if (!items.length) return null
@@ -352,6 +406,10 @@ export function Rail({ onSearch }: { onSearch: () => void }): ReactNode {
         )}
       </div>
       <span className="nr-sp" />
+      <button className="tn-fold" title={`${folded ? 'Desplegar' : 'Plegar'} menú (Ctrl+B)`} aria-label={folded ? 'Desplegar menú' : 'Plegar menú'} aria-pressed={folded} onClick={toggleFold}>
+        <G n="chevron" size={16} />
+        <span className="tn-t">Plegar menú</span>
+      </button>
       <Profile />
     </nav>
   )
@@ -370,6 +428,7 @@ export function TopTools({ onSearch, fullscreen, onFullscreen }: { onSearch: () 
       <MiniPlayer />
       <TimerBar />
       <NotificationBell variant="top" />
+      <CommandsBell variant="top" />
       <UpdateChip />
       <button className="ib" title={fullscreen ? 'Salir de pantalla completa (F11)' : 'Pantalla completa (F11)'} aria-label={fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'} aria-pressed={fullscreen} onClick={onFullscreen}>
         <G n={fullscreen ? 'shrink' : 'expand'} size={16} />

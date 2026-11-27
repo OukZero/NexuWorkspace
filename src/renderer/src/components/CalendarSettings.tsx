@@ -46,12 +46,11 @@ export function CalendarSettings(): ReactNode {
 
   return (
     <>
-      <h3>Calendario de Outlook</h3>
-      <div className="meta" style={{ maxWidth: 700, marginBottom: 8 }}>
+      <div className="meta" style={{ marginBottom: 8 }}>
         Muestra tus reuniones en «Hoy» y en la línea de tiempo, avisa antes de cada una y las descuenta de las horas disponibles. Solo lee tu calendario. Registra una app en el portal de Azure (Microsoft Entra ID → Registros de aplicaciones → Nuevo registro), añade la plataforma{' '}
         <b>Aplicación móvil y de escritorio</b> con la URI de redirección <b>http://localhost</b>, concede el permiso <b>Calendars.Read</b> (delegado) y pega aquí el Id. de aplicación (cliente).
       </div>
-      <div className="grid2" style={{ maxWidth: 700 }}>
+      <div className="grid2">
         <div>
           <label>Id. de aplicación (cliente)</label>
           <input autoComplete="off" value={clientId} placeholder="11111111-2222-3333-4444-555555555555" onChange={(e) => setClientId(e.target.value)} />

@@ -32,6 +32,9 @@ const VIEWS: Array<[View, string]> = [
   ['groups', 'Carpetas'],
   ['notes', 'Notas'],
   ['meetings', 'Reuniones (grabar y resumir)'],
+  ['arch', 'Arquitectura (diseñar con Claude)'],
+  ['videos', 'Videos de funcionalidades'],
+  ['diagrams', 'Diagramas (BPMN, flujo, UML, ER)'],
   ['web', 'Web (pestañas y sitios guardados)'],
   ['music', 'Música (Spotify)'],
   ['settings', 'Ajustes']

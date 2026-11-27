@@ -1,7 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import type { PointerEvent as RPointerEvent, ReactNode } from 'react'
-import type { AgentTeam, RobotLook, TeamAgent, TeamCharacter, TeamChatMsg, TeamProp } from '../../../shared/types'
+import type { ClipboardEvent, DragEvent, KeyboardEvent as RKeyEvent, PointerEvent as RPointerEvent, ReactNode } from 'react'
+import { AttachmentList } from './Chat'
+import { G } from './glyphs'
+import { Markdown } from './Markdown'
+import { useTyping } from '../typing'
+import { useAppearance } from '../theme'
+import type { CharStyle } from '../theme'
+import { GEAR_COLOR, OUTFIT_COLOR, StyledAvatar, StyledRobot, gearLayer, outfitLayer } from './CharStyles'
+import type { AgentTeam, Attachment, RobotLook, SkillInfo, TeamAgent, TeamCharacter, TeamChatMsg, TeamConv, TeamProp } from '../../../shared/types'
+import { AGENT_TEMPLATES, ORCHESTRATOR_ID } from '../../../shared/teamTemplates'
 import { useUi } from '../ui'
+import { useDB } from '../store'
+import { DEFAULT_ESTIMATE_TEMPLATES, ESTIMATE_LEVELS } from '../../../shared/estimateTemplates'
 import { ASSETS, ASSET_BY_KEY, EMOJI_TO_ASSET } from './teamAssets'
 
 type Opt<T> = Array<[T, string]>
@@ -11,19 +21,23 @@ const HAIR_COLORS = ['#2b2f4a', '#141414', '#6b4226', '#b5652b', '#e8c46a', '#e8
 const EYE_COLORS = ['#1a1c28', '#5a3a22', '#2f7bd8', '#2fbf8a', '#8a5ad8', '#c0392b']
 const OUTFIT_COLORS = ['#5b73f0', '#ff7a9c', '#2fbf8a', '#ffb868', '#8a5ad8', '#2b3150', '#e8ebf4', '#c0392b']
 const HAIR: Opt<TeamCharacter['hair']> = [['corto', 'Corto'], ['largo', 'Largo'], ['rizado', 'Rizado'], ['mono', 'Moño'], ['cresta', 'Cresta'], ['rapado', 'Rapado'], ['calvo', 'Calvo'], ['gorro', 'Gorro']]
-const GEAR: Opt<TeamCharacter['gear']> = [['ninguno', 'Ninguno'], ['lentes', 'Lentes'], ['sol', 'Gafas de sol'], ['audifonos', 'Audífonos'], ['gorra', 'Gorra'], ['aretes', 'Aretes']]
-const OUTFIT: Opt<TeamCharacter['outfit']> = [['sudadera', 'Sudadera'], ['polera', 'Polera'], ['camisa', 'Camisa'], ['chaqueta', 'Chaqueta'], ['traje', 'Traje'], ['bata', 'Bata']]
-const MOUTH: Opt<NonNullable<TeamCharacter['mouth']>> = [['sonrisa', 'Sonrisa'], ['grande', 'Alegre'], ['neutral', 'Neutral'], ['sorpresa', 'Sorpresa']]
-const FACE: Opt<NonNullable<TeamCharacter['face']>> = [['normal', 'Normal'], ['pecas', 'Pecas'], ['rubor', 'Rubor']]
+const GEAR: Opt<TeamCharacter['gear']> = [['ninguno', 'Ninguno'], ['lentes', 'Lentes'], ['sol', 'Gafas de sol'], ['audifonos', 'Audífonos'], ['gorra', 'Gorra'], ['aretes', 'Aretes'], ['orejas', 'Orejas de gato'], ['lazo', 'Lazo'], ['halo', 'Aureola'], ['corona', 'Corona'], ['bandana', 'Bandana'], ['sombrero', 'Sombrero'], ['cinta', 'Cinta'], ['mascarilla', 'Mascarilla'], ['parche', 'Parche'], ['collar', 'Collar'], ['flor', 'Flor'], ['cuernos', 'Cuernitos'], ['monoculo', 'Monóculo']]
+const OUTFIT: Opt<TeamCharacter['outfit']> = [['sudadera', 'Sudadera'], ['polera', 'Polera'], ['camisa', 'Camisa'], ['chaqueta', 'Chaqueta'], ['traje', 'Traje'], ['bata', 'Bata'], ['capucha', 'Capucha'], ['overol', 'Overol'], ['delantal', 'Delantal'], ['bufanda', 'Bufanda'], ['camiseta', 'Camiseta'], ['rayas', 'Rayas'], ['hawaiana', 'Hawaiana'], ['vestido', 'Vestido'], ['kimono', 'Kimono'], ['armadura', 'Armadura']]
+const GEAR_COLORS = ['#16182a', '#e8ebf4', '#ffd166', '#ff7a9c', '#e0443e', '#8fa4ff', '#2fbf8a', '#8a5ad8']
+const MOUTH: Opt<NonNullable<TeamCharacter['mouth']>> = [['sonrisa', 'Sonrisa'], ['grande', 'Alegre'], ['neutral', 'Neutral'], ['sorpresa', 'Sorpresa'], ['lengua', 'Lengua'], ['enojada', 'Enojada']]
+const FACE: Opt<NonNullable<TeamCharacter['face']>> = [['normal', 'Normal'], ['pecas', 'Pecas'], ['rubor', 'Rubor'], ['lunar', 'Lunar'], ['cicatriz', 'Cicatriz']]
 const FACIAL: Opt<NonNullable<TeamCharacter['facial']>> = [['ninguno', 'Ninguno'], ['barba', 'Barba'], ['bigote', 'Bigote'], ['perilla', 'Perilla']]
 const HEADS: Opt<NonNullable<RobotLook['head']>> = [['redonda', 'Redonda'], ['cuadrada', 'Cuadrada'], ['tv', 'Tele'], ['domo', 'Domo']]
-const BOT_EYES: Opt<NonNullable<RobotLook['eyes']>> = [['pixel', 'Píxel'], ['redondos', 'Redondos'], ['visor', 'Visor'], ['felices', 'Felices']]
+const BOT_EYES: Opt<NonNullable<RobotLook['eyes']>> = [['pixel', 'Píxel'], ['redondos', 'Redondos'], ['visor', 'Visor'], ['felices', 'Felices'], ['enojados', 'Enojados'], ['dormidos', 'Dormidos'], ['estrellas', 'Estrellas'], ['guino', 'Guiño']]
+const BOT_MOUTH: Opt<NonNullable<RobotLook['mouth']>> = [['ninguna', 'Sin boca'], ['sonrisa', 'Sonrisa'], ['neutral', 'Neutral'], ['o', 'Sorpresa'], ['diente', 'Dientes']]
+const BOT_CHEEKS: Opt<NonNullable<RobotLook['cheeks']>> = [['ninguno', 'Ninguno'], ['rubor', 'Rubor'], ['pecas', 'Pecas']]
+const BOT_OUTFIT: Opt<NonNullable<RobotLook['outfit']>> = [['ninguna', 'Ninguna'], ['corbata', 'Corbata'], ['mono', 'Moño'], ['bufanda', 'Bufanda'], ['capa', 'Capa'], ['delantal', 'Delantal'], ['chaleco', 'Chaleco'], ['hoodie', 'Capucha']]
 const ANTENNAS: Opt<NonNullable<RobotLook['antenna']>> = [['bola', 'Bola'], ['doble', 'Doble'], ['helice', 'Hélice'], ['ninguna', 'Sin antena']]
-const BOT_ACC: Opt<NonNullable<RobotLook['acc']>> = [['ninguno', 'Ninguno'], ['gorro', 'Gorro'], ['sombrero', 'Sombrero'], ['corona', 'Corona'], ['audifonos', 'Audífonos'], ['lentes', 'Lentes']]
-const SKILLS = ['review', 'seguridad', 'cubicación', 'leer-repo', 'tests', 'git', 'web']
+const BOT_ACC: Opt<NonNullable<RobotLook['acc']>> = [['ninguno', 'Ninguno'], ['gorro', 'Gorro'], ['sombrero', 'Sombrero'], ['corona', 'Corona'], ['audifonos', 'Audífonos'], ['lentes', 'Lentes'], ['gafasSol', 'Gafas de sol'], ['orejas', 'Orejas de gato'], ['halo', 'Aureola'], ['cuernos', 'Cuernitos'], ['parche', 'Parche']]
 const MODELS: TeamAgent['model'][] = ['haiku', 'sonnet', 'opus']
 // color base de cada prenda si el usuario no eligió uno propio
-const OUTFIT_COLOR: Record<TeamCharacter['outfit'], string> = { sudadera: '#5b73f0', polera: '#ff7a9c', camisa: '#d6dbea', chaqueta: '#2fbf8a', traje: '#2b3150', bata: '#f4f6fc' }
+// prendas nuevas: se dibujan con el mismo código que los estilos alternativos
+const NEW_OUTFITS: TeamCharacter['outfit'][] = ['rayas', 'hawaiana', 'vestido', 'kimono', 'armadura', 'camiseta']
 const HAIR_COLOR = '#2b2f4a'
 const clamp = (n: number, a: number, b: number): number => Math.min(b, Math.max(a, n))
 const pick = <T,>(l: T[]): T => l[Math.floor(Math.random() * l.length)]
@@ -35,8 +49,22 @@ const darken = (hex: string, f = 0.72): string => {
   return `#${ch(16)}${ch(8)}${ch(0)}`
 }
 
-/** Avatar en capas (SVG). Las clases av-* las anima el CSS: respiración, parpadeo y tecleo. */
-function Avatar({ c, size = 150, live }: { c: TeamCharacter; size?: number; live?: 'idle' | 'work' }): ReactNode {
+/** Avatar según el estilo elegido en Apariencia (`style` fuerza uno, p. ej. en las vistas previas). */
+export function Avatar({ c, size = 150, live, style }: { c: TeamCharacter; size?: number; live?: 'idle' | 'work' | 'type'; style?: CharStyle }): ReactNode {
+  const ap = useAppearance()
+  const s = style ?? ap.charStyle
+  return s === 'clasico' ? <ClassicAvatar c={c} size={size} live={live} /> : <StyledAvatar c={c} size={size} live={live} style={s} />
+}
+
+/** Robot según el estilo elegido en Apariencia. */
+export function Robot({ a, state, size = 86, style }: { a: TeamAgent; state: 'idle' | 'work' | 'done'; size?: number; style?: CharStyle }): ReactNode {
+  const ap = useAppearance()
+  const s = style ?? ap.charStyle
+  return s === 'clasico' ? <ClassicRobot a={a} state={state} size={size} /> : <StyledRobot a={a} state={state} size={size} style={s} />
+}
+
+/** Avatar clásico en capas (SVG). Las clases av-* las anima el CSS: respiración, parpadeo y tecleo. */
+function ClassicAvatar({ c, size = 150, live }: { c: TeamCharacter; size?: number; live?: 'idle' | 'work' | 'type' }): ReactNode {
   const o1 = c.outfitColor ?? OUTFIT_COLOR[c.outfit] ?? '#5b73f0'
   const o2 = darken(o1)
   const hc = c.hairColor ?? HAIR_COLOR
@@ -58,6 +86,8 @@ function Avatar({ c, size = 150, live }: { c: TeamCharacter; size?: number; live
       <g className="av-body">
         {/* hombros y brazos */}
         <path d="M18 168 q2 -50 34 -58 h46 q32 8 34 58z" fill="url(#avO)" />
+        <path d="M28 150 q6 -22 26 -34 M122 150 q-6 -22 -26 -34" stroke="#fff" strokeOpacity=".14" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+        <path d="M44 166 q3 -22 12 -34 M106 166 q-3 -22 -12 -34" stroke="#000" strokeOpacity=".12" strokeWidth="2" strokeLinecap="round" fill="none" />
         <path className="av-arm l" d="M24 168 q-2 -34 12 -50 l14 6 q-12 18 -8 44z" fill={o2} />
         <path className="av-arm r" d="M126 168 q2 -34 -12 -50 l-14 6 q12 18 8 44z" fill={o2} />
         {c.outfit === 'sudadera' && <><path d="M54 110 q21 22 42 0 l-4 -6 q-17 14 -34 0z" fill={shade} /><path d="M68 124 v18 M82 124 v18" stroke="#e8ebf4" strokeWidth="2.5" strokeLinecap="round" /></>}
@@ -66,16 +96,25 @@ function Avatar({ c, size = 150, live }: { c: TeamCharacter; size?: number; live
         {c.outfit === 'polera' && <path d="M58 107 q17 12 34 0" stroke={o2} strokeWidth="5" fill="none" strokeLinecap="round" />}
         {c.outfit === 'chaqueta' && <><path d="M62 106 l13 60 l13 -60z" fill="#e8ebf4" /><path d="M62 106 l13 60 M88 106 l-13 60" stroke={o2} strokeWidth="3" /><path d="M38 146 h16 M96 146 h16" stroke={o2} strokeWidth="2.5" strokeLinecap="round" /></>}
         {c.outfit === 'traje' && <><path d="M62 106 l13 34 l13 -34z" fill="#fff" /><path d="M75 112 l-4 6 l4 24 l4 -24z" fill="#c0392b" /><path d="M62 106 l13 34 l-11 -8z M88 106 l-13 34 l11 -8z" fill={o2} /></>}
+        {c.outfit === 'capucha' && <><path d="M36 116 q39 -34 78 0 v12 q-39 -26 -78 0z" fill={o2} /><path d="M56 110 q19 16 38 0" stroke={shade} strokeWidth="6" fill="none" /><path d="M68 124 v20 M82 124 v20" stroke="#e8ebf4" strokeWidth="2.5" strokeLinecap="round" /></>}
+        {c.outfit === 'overol' && <><rect x="54" y="136" width="42" height="32" rx="6" fill="#4a6fa5" /><path d="M58 112 v26 M92 112 v26" stroke="#4a6fa5" strokeWidth="8" /><circle cx="58" cy="138" r="2.5" fill="#ffd166" /><circle cx="92" cy="138" r="2.5" fill="#ffd166" /><rect x="66" y="148" width="18" height="10" rx="2" fill="none" stroke="#2e4a73" /></>}
+        {c.outfit === 'delantal' && <><path d="M58 112 l-6 18 M92 112 l6 18" stroke="#e8ebf4" strokeWidth="4" strokeLinecap="round" /><rect x="50" y="128" width="50" height="40" rx="9" fill="#e8ebf4" /><rect x="62" y="146" width="26" height="12" rx="3" fill="none" stroke="#c9cfe0" /></>}
+        {c.outfit === 'bufanda' && <><path d="M50 104 q25 18 50 0 v13 q-25 18 -50 0z" fill="#ff7a9c" /><rect x="86" y="114" width="14" height="38" rx="5" fill="#e0557a" /><path d="M54 110 q21 14 42 0 M88 128 h10 M88 138 h10" stroke="#fff" strokeOpacity=".3" strokeWidth="2" fill="none" /></>}
+        {NEW_OUTFITS.includes(c.outfit) && <g transform="translate(0 8)">{outfitLayer(c, o1, o2)}</g>}
         {/* cuello y cabeza */}
         <rect x="64" y="90" width="22" height="24" rx="8" fill={c.skin} /><rect x="64" y="90" width="22" height="24" rx="8" fill={shade} />
         <circle cx="36" cy="68" r="8" fill={c.skin} /><circle cx="114" cy="68" r="8" fill={c.skin} />
-        {c.gear === 'aretes' && <g fill="#ffd166" stroke="#d9a13a"><circle cx="35" cy="78" r="3" /><circle cx="115" cy="78" r="3" /></g>}
+        <circle cx="35" cy="69" r="4" fill="rgba(0,0,0,.14)" /><circle cx="115" cy="69" r="4" fill="rgba(0,0,0,.14)" />
+        <ellipse cx="75" cy="102" rx="22" ry="7" fill="rgba(0,0,0,.2)" />
         {c.hair === 'mono' && <circle cx="75" cy="13" r="13" fill={hc} />}
         <ellipse cx="75" cy="64" rx="38" ry="40" fill={c.skin} />
         <ellipse cx="75" cy="64" rx="38" ry="40" fill="url(#avF)" />
+        <ellipse cx="75" cy="64" rx="37" ry="39" fill="none" stroke="rgba(0,0,0,.09)" strokeWidth="2.5" />
+        <path d="M75 70 q-3.5 8 -1 10.5 q3 1.6 6 -.5" stroke="rgba(0,0,0,.3)" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+        <path d="M76 69 q1.5 3 .5 6" stroke="#fff" strokeOpacity=".3" strokeWidth="1.6" fill="none" strokeLinecap="round" />
         {c.face === 'pecas' && <g fill="#8a5a3c" opacity=".55">{[[47, 77], [53, 81], [44, 83], [103, 77], [97, 81], [106, 83]].map(([x, y]) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.4" />)}</g>}
         {facial === 'barba' && <path d="M40 70 q35 56 70 0 q-6 26 -35 28 q-29 -2 -35 -28z" fill={hc} />}
-        {(c.hair === 'corto' || c.hair === 'largo' || c.hair === 'mono') && <>{cap}<path d="M52 24 q14 -6 28 -2" stroke="#fff" strokeOpacity=".22" strokeWidth="3" fill="none" strokeLinecap="round" /></>}
+        {(c.hair === 'corto' || c.hair === 'largo' || c.hair === 'mono') && <>{cap}<path d="M52 24 q14 -6 28 -2" stroke="#fff" strokeOpacity=".22" strokeWidth="3" fill="none" strokeLinecap="round" /><path d="M46 44 q5 -14 18 -20 M88 24 q14 4 20 22 M70 22 q-4 8 -12 14" stroke="#000" strokeOpacity=".22" strokeWidth="1.6" fill="none" strokeLinecap="round" /></>}
         {c.hair === 'rizado' && <g fill={hc}>{[44, 60, 76, 92, 106].map((x, i) => <circle key={x} cx={x} cy={i % 2 ? 26 : 30} r="14" />)}</g>}
         {c.hair === 'rapado' && <path d="M37 58 q-1 -42 38 -42 q39 0 38 42 q-8 -20 -38 -20 q-30 0 -38 20z" fill={hc} opacity=".55" />}
         {c.hair === 'cresta' && <path d="M64 36 l-5 -16 l9 4 l7 -22 l7 22 l9 -4 l-5 16 q-11 -5 -22 0z" fill={hc} />}
@@ -84,6 +123,7 @@ function Avatar({ c, size = 150, live }: { c: TeamCharacter; size?: number; live
         <path d="M52 52 q8 -5 16 -1 M82 51 q8 -4 16 1" stroke={hc} strokeWidth="3" strokeLinecap="round" fill="none" />
         <g className="av-eyes">
           <ellipse cx="60" cy="66" rx="5" ry="6" fill="#fff" /><ellipse cx="90" cy="66" rx="5" ry="6" fill="#fff" />
+          <path d="M54.5 63 q5.5 -5 11 0 M84.5 63 q5.5 -5 11 0" stroke="#1a1c28" strokeOpacity=".55" strokeWidth="1.5" fill="none" strokeLinecap="round" />
           <circle cx="61" cy="67" r="3.4" fill={eye} /><circle cx="91" cy="67" r="3.4" fill={eye} />
           <circle cx="61" cy="67" r="1.7" fill="#0b0c14" /><circle cx="91" cy="67" r="1.7" fill="#0b0c14" />
           <circle cx="62.2" cy="65.6" r="1.1" fill="#fff" /><circle cx="92.2" cy="65.6" r="1.1" fill="#fff" />
@@ -93,26 +133,117 @@ function Avatar({ c, size = 150, live }: { c: TeamCharacter; size?: number; live
         {mouth === 'grande' && <path className="av-mouth" d="M64 82 q11 14 22 0z" fill="#1a1c28" stroke="#1a1c28" strokeWidth="2" strokeLinejoin="round" />}
         {mouth === 'neutral' && <path className="av-mouth" d="M67 86 h16" stroke="#1a1c28" strokeWidth="2.6" strokeLinecap="round" />}
         {mouth === 'sorpresa' && <ellipse className="av-mouth" cx="75" cy="87" rx="4" ry="5" fill="#1a1c28" />}
+        {mouth === 'lengua' && <g className="av-mouth"><ellipse cx="76" cy="91" rx="4.5" ry="6" fill="#ff7a9c" /><path d="M76 86 v8" stroke="#d9507a" strokeWidth="1.2" /><path d="M65 83 q10 9 20 0" fill="none" stroke="#1a1c28" strokeWidth="2.6" strokeLinecap="round" /></g>}
+        {mouth === 'enojada' && <path className="av-mouth" d="M66 88 q9 -7 18 0" fill="none" stroke="#1a1c28" strokeWidth="2.6" strokeLinecap="round" />}
+        {c.face === 'lunar' && <circle cx="100" cy="79" r="2" fill="#5c3a26" />}
+        {c.face === 'cicatriz' && <g stroke="#c9877a" strokeWidth="2" strokeLinecap="round"><path d="M97 50 l-9 22" /><path d="M93 58 l5 2 M91 64 l5 2" strokeWidth="1.5" /></g>}
         {facial === 'bigote' && <path d="M62 81 q6 -6 13 -2 q7 -4 13 2 q-6 3 -13 0 q-7 3 -13 0z" fill={hc} />}
         {facial === 'perilla' && <path d="M69 94 q6 4 12 0 q-1 8 -6 10 q-5 -2 -6 -10z" fill={hc} />}
-        {c.gear === 'lentes' && <g fill="rgba(143,164,255,.22)" stroke="#16182a" strokeWidth="3"><rect x="46" y="55" width="26" height="22" rx="7" /><rect x="78" y="55" width="26" height="22" rx="7" /><path d="M72 64 h6" /></g>}
-        {c.gear === 'sol' && <><g fill="#16182a" stroke="#16182a" strokeWidth="3"><rect x="46" y="57" width="26" height="18" rx="7" /><rect x="78" y="57" width="26" height="18" rx="7" /><path d="M72 64 h6" /></g><path d="M51 62 h7 M83 62 h7" stroke="#fff" strokeOpacity=".45" strokeWidth="2" strokeLinecap="round" /></>}
-        {c.gear === 'audifonos' && <g fill="none" stroke="#e8ebf4" strokeWidth="5" strokeLinecap="round"><path d="M37 68 q0 -48 38 -48 q38 0 38 48" /><rect x="30" y="62" width="11" height="22" rx="5" fill="#8fa4ff" stroke="none" /><rect x="109" y="62" width="11" height="22" rx="5" fill="#8fa4ff" stroke="none" /></g>}
-        {c.gear === 'gorra' && <><path d="M35 54 q0 -40 40 -40 q40 0 40 40z" fill={o1} /><path d="M35 54 q40 -8 80 0" stroke={o2} strokeWidth="3" fill="none" /><path d="M80 52 q26 -4 46 6 q-22 4 -46 0z" fill={o2} /><circle cx="75" cy="15" r="3.5" fill={o2} /></>}
+        {/* accesorios (hasta dos, cada uno con su color); mismo dibujo que los estilos nuevos, bajado para este cráneo */}
+        <g transform="translate(0 3)">{gearLayer(c, hc, o1, o2, {}, true)}</g>
       </g>
+      {/* teclado: aparece al escribir (o con el timer en marcha); las teclas se encienden en desorden */}
+      {(live === 'type' || live === 'work') && (
+        <g className="av-kb">
+          <rect x="22" y="147" width="106" height="21" rx="6" fill="#222740" stroke="#8fa4ff" strokeOpacity=".5" />
+          {[0, 1, 2].flatMap((r) => Array.from({ length: 9 }, (_, k) => (
+            <rect key={`${r}-${k}`} className="av-key" x={30 + k * 10 + (r === 1 ? 2 : r === 2 ? 4 : 0)} y={150.5 + r * 5.4} width="8" height="4" rx="1.2" fill="#8fa4ff" style={{ animationDelay: `${((r * 9 + k) * 37 % 100) * 0.006}s` }} />
+          )))}
+          <circle className="av-hand l" cx="54" cy="146" r="6.5" fill={c.skin} stroke="rgba(0,0,0,.18)" />
+          <circle className="av-hand r" cx="96" cy="146" r="6.5" fill={c.skin} stroke="rgba(0,0,0,.18)" />
+        </g>
+      )}
     </svg>
   )
 }
 
+const optsRow = <T extends string>(list: Array<[T, string]>, cur: T, on: (v: T) => void): ReactNode => (
+  <div className="tm-opts">{list.map(([v, l]) => <button key={v} className={cur === v ? 'on' : ''} onClick={() => on(v)}>{l}</button>)}</div>
+)
+// muestras de color + selector libre (el último círculo abre el selector del sistema)
+const swatchRow = (list: string[], cur: string | undefined, on: (v: string) => void, label: string): ReactNode => {
+  const custom = !!cur && !list.includes(cur)
+  return (
+    <div className="tm-sw" style={{ gridTemplateColumns: `repeat(${list.length + 1}, minmax(0, 20px))` }}>
+      {list.map((s) => <button key={s} type="button" style={{ background: s }} className={cur === s ? 'on' : ''} aria-label={`${label} ${s}`} aria-pressed={cur === s} onClick={() => on(s)} />)}
+      <label className={`tm-sw-custom ${custom ? 'on' : ''}`} title="Color personalizado" style={custom ? { background: cur } : undefined}>
+        <input type="color" value={cur && /^#[0-9a-f]{6}$/i.test(cur) ? cur : '#888888'} onChange={(e) => on(e.target.value)} aria-label={`${label}: color personalizado`} />
+        {!custom && <span aria-hidden>＋</span>}
+      </label>
+      <input key={cur} className="tm-hex" defaultValue={cur ?? ''} maxLength={7} spellCheck={false} aria-label={`${label}: código hexadecimal`} placeholder="#rrggbb"
+        onBlur={(e) => { const v = e.target.value.trim(); if (/^#[0-9a-f]{6}$/i.test(v)) on(v.toLowerCase()); else e.target.value = cur ?? '' }}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }} />
+    </div>
+  )
+}
+
+/** Editor del personaje del usuario (vista previa, nombre, pestañas Cara/Pelo/Ropa). Lo usan el diálogo del Equipo y Apariencia. */
+export function CharacterEditor({ char: ch, onChange }: { char: TeamCharacter; onChange: (p: Partial<TeamCharacter>) => void }): ReactNode {
+  const [tab, setTab] = useState<'cara' | 'pelo' | 'ropa'>('cara')
+  const typing = useTyping()
+  const field = (label: string, body: ReactNode): ReactNode => <div className="tm-field"><span className="tm-lbl">{label}</span>{body}</div>
+  const random = (): void => {
+    onChange({
+      skin: pick(SKINS.slice(0, 6)), hair: pick(HAIR)[0], gear: pick(GEAR)[0], gearColor: Math.random() < 0.5 ? undefined : pick(GEAR_COLORS), gear2: Math.random() < 0.6 ? 'ninguno' : pick(GEAR)[0], gear2Color: undefined, outfit: pick(OUTFIT)[0],
+      hairColor: pick(HAIR_COLORS), eyeColor: pick(EYE_COLORS), outfitColor: pick(OUTFIT_COLORS),
+      mouth: pick(MOUTH)[0], face: pick(FACE)[0], facial: Math.random() < 0.7 ? 'ninguno' : pick(FACIAL)[0]
+    })
+  }
+  return (
+    <>
+      <div className="tm-head">
+        <div className="tm-stage"><Avatar c={ch} size={92} live={typing ? 'type' : 'idle'} /></div>
+        <div className="tm-id">
+          <div className="eyebrow">Tu personaje</div>
+          <input className="tm-name" value={ch.name} onChange={(e) => onChange({ name: e.target.value })} aria-label="Nombre del personaje" />
+          <input className="tm-name sub" value={ch.role} onChange={(e) => onChange({ role: e.target.value })} aria-label="Rol del personaje" />
+          <button className="btn sm tm-rand" onClick={random}>🎲 Aleatorio</button>
+        </div>
+      </div>
+      {/* por pestañas: con tantas opciones, una sola columna se volvía interminable */}
+      <div className="tm-subtabs" role="tablist">
+        {(['cara', 'pelo', 'ropa'] as const).map((k) => (
+          <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
+            {k === 'cara' ? 'Cara' : k === 'pelo' ? 'Pelo' : 'Ropa y extras'}
+          </button>
+        ))}
+      </div>
+      {tab === 'cara' && <>
+        {field('Piel', swatchRow(SKINS, ch.skin, (skin) => onChange({ skin }), 'Piel'))}
+        {field('Ojos', swatchRow(EYE_COLORS, ch.eyeColor ?? '#1a1c28', (eyeColor) => onChange({ eyeColor }), 'Ojos'))}
+        {field('Boca', optsRow(MOUTH, ch.mouth ?? 'sonrisa', (mouth) => onChange({ mouth })))}
+        {field('Mejillas', optsRow(FACE, ch.face ?? 'normal', (face) => onChange({ face })))}
+        {field('Vello facial', optsRow(FACIAL, ch.facial ?? 'ninguno', (facial) => onChange({ facial })))}
+      </>}
+      {tab === 'pelo' && <>
+        {field('Peinado', optsRow(HAIR, ch.hair, (hair) => onChange({ hair })))}
+        {field('Color de pelo', swatchRow(HAIR_COLORS, ch.hairColor ?? HAIR_COLOR, (hairColor) => onChange({ hairColor }), 'Pelo'))}
+      </>}
+      {tab === 'ropa' && <>
+        {field('Ropa', optsRow(OUTFIT, ch.outfit, (outfit) => onChange({ outfit })))}
+        {field('Color de ropa', swatchRow(OUTFIT_COLORS, ch.outfitColor ?? OUTFIT_COLOR[ch.outfit], (outfitColor) => onChange({ outfitColor }), 'Ropa'))}
+        {field('Accesorio', optsRow(GEAR, ch.gear === 'barba' ? 'ninguno' : ch.gear, (gear) => onChange({ gear, gearColor: undefined })))}
+        {ch.gear !== 'ninguno' && ch.gear !== 'barba' && GEAR_COLOR[ch.gear] && field('Color del accesorio', swatchRow(GEAR_COLORS, ch.gearColor ?? GEAR_COLOR[ch.gear]!, (gearColor) => onChange({ gearColor }), 'Accesorio'))}
+        {field('Segundo accesorio', optsRow(GEAR, ch.gear2 ?? 'ninguno', (gear2) => onChange({ gear2, gear2Color: undefined })))}
+        {ch.gear2 && ch.gear2 !== 'ninguno' && ch.gear2 !== 'barba' && GEAR_COLOR[ch.gear2] && field('Color del 2.º accesorio', swatchRow(GEAR_COLORS, ch.gear2Color ?? GEAR_COLOR[ch.gear2]!, (gear2Color) => onChange({ gear2Color }), '2.º accesorio'))}
+      </>}
+    </>
+  )
+}
+
 /** Robot de un agente: cabeza con pantalla, antena que late y emoji en el pecho. */
-function Robot({ a, state, size = 86 }: { a: TeamAgent; state: 'idle' | 'work' | 'done'; size?: number }): ReactNode {
+function ClassicRobot({ a, state, size = 86 }: { a: TeamAgent; state: 'idle' | 'work' | 'done'; size?: number }): ReactNode {
   const L = a.look ?? {}
   const head = L.head ?? 'redonda'
   const eyes = L.eyes ?? 'pixel'
   const ant = L.antenna ?? 'bola'
   const acc = L.acc ?? 'ninguno'
   // un sombrero tapa la antena: no se dibujan juntos
-  const hat = acc === 'gorro' || acc === 'sombrero' || acc === 'corona'
+  const hat = acc === 'gorro' || acc === 'sombrero' || acc === 'corona' || acc === 'orejas' || acc === 'halo' || acc === 'cuernos'
+  const mouth = L.mouth ?? 'ninguna'
+  const cheeks = L.cheeks ?? 'ninguno'
+  const outfit = L.outfit ?? 'ninguna'
+  const emojiX = outfit === 'corbata' || outfit === 'mono' ? 26 : 43
   const rx = head === 'cuadrada' ? 5 : head === 'tv' ? 8 : 16
   const skull = (fill: string): ReactNode =>
     head === 'domo'
@@ -122,6 +253,7 @@ function Robot({ a, state, size = 86 }: { a: TeamAgent; state: 'idle' | 'work' |
     <svg className={`bot bot-${state}`} width={size} height={(size * 96) / 86} viewBox="0 0 86 96" style={{ ['--c' as string]: a.color }}>
       <ellipse cx="43" cy="92" rx="30" ry="4" fill="#000" opacity=".25" />
       <g className="bot-body">
+        {outfit === 'capa' && <g className="bot-cape"><path d="M12 60 q-12 22 -8 36 h78 q4 -14 -8 -36z" fill={a.color} opacity=".7" /><path d="M12 60 q-12 22 -8 36 h78 q4 -14 -8 -36z" fill="#000" opacity=".18" /></g>}
         {!hat && ant === 'bola' && <><line x1="43" y1="6" x2="43" y2="18" stroke="#8a92aa" strokeWidth="3" /><circle className="bot-ant" cx="43" cy="6" r="5" fill={a.color} /></>}
         {!hat && ant === 'doble' && <><path d="M33 20 L27 7 M53 20 L59 7" stroke="#8a92aa" strokeWidth="3" strokeLinecap="round" /><circle className="bot-ant" cx="27" cy="6" r="4" fill={a.color} /><circle className="bot-ant" cx="59" cy="6" r="4" fill={a.color} /></>}
         {!hat && ant === 'helice' && <><line x1="43" y1="6" x2="43" y2="18" stroke="#8a92aa" strokeWidth="3" /><ellipse className="bot-prop" cx="43" cy="5" rx="13" ry="3" fill={a.color} /><circle cx="43" cy="5" r="2.5" fill="#8a92aa" /></>}
@@ -134,13 +266,38 @@ function Robot({ a, state, size = 86 }: { a: TeamAgent; state: 'idle' | 'work' |
           {eyes === 'redondos' && <><circle cx="33.5" cy="39" r="5.5" stroke="none" /><circle cx="52.5" cy="39" r="5.5" stroke="none" /></>}
           {eyes === 'visor' && <rect x="26" y="35" width="34" height="8" rx="4" stroke="none" />}
           {eyes === 'felices' && <path d="M28 42 q5.5 -8 11 0 M47 42 q5.5 -8 11 0" fill="none" strokeWidth="3" strokeLinecap="round" />}
+          {eyes === 'enojados' && <><rect x="29" y="35" width="9" height="11" rx="4" stroke="none" /><rect x="48" y="35" width="9" height="11" rx="4" stroke="none" /><path d="M26 30 l14 6 M60 30 l-14 6" fill="none" strokeWidth="3" strokeLinecap="round" /></>}
+          {eyes === 'dormidos' && <><path d="M28 40 h11 M47 40 h11" fill="none" strokeWidth="3" strokeLinecap="round" /><text className="bot-z" x="58" y="34" fontSize="9" stroke="none">z</text></>}
+          {eyes === 'estrellas' && <><text x="33.5" y="45" textAnchor="middle" fontSize="15" stroke="none">★</text><text x="52.5" y="45" textAnchor="middle" fontSize="15" stroke="none">★</text></>}
+          {eyes === 'guino' && <><rect x="29" y="33" width="9" height="12" rx="4" stroke="none" /><path d="M47 41 q5.5 -7 11 0" fill="none" strokeWidth="3" strokeLinecap="round" /></>}
         </g>
+        {cheeks === 'rubor' && <g className="bot-cheeks" fill="#ff7a9c" opacity=".55"><ellipse cx="26" cy="48" rx="4" ry="2.4" /><ellipse cx="60" cy="48" rx="4" ry="2.4" /></g>}
+        {cheeks === 'pecas' && <g fill={a.color} opacity=".7"><circle cx="25" cy="47" r="1" /><circle cx="29" cy="49" r="1" /><circle cx="57" cy="49" r="1" /><circle cx="61" cy="47" r="1" /></g>}
+        {mouth !== 'ninguna' && (
+          <g className="bot-mouth" fill="none" stroke={a.color} strokeWidth="2" strokeLinecap="round">
+            {mouth === 'sonrisa' && <path d="M36 48 q7 5 14 0" />}
+            {mouth === 'neutral' && <path d="M37 49.5 h12" />}
+            {mouth === 'o' && <circle cx="43" cy="49" r="2.4" />}
+            {mouth === 'diente' && <><path d="M35 47.5 q8 6 16 0" /><rect x="40" y="48" width="6" height="3" rx="1" fill="#e8ebf4" stroke="none" /></>}
+          </g>
+        )}
         {acc !== 'audifonos' && <><rect x="4" y="30" width="8" height="18" rx="4" fill="#8a92aa" /><rect x="74" y="30" width="8" height="18" rx="4" fill="#8a92aa" /></>}
-        <text x="43" y="76" textAnchor="middle" fontSize="17">{a.emoji}</text>
+        {outfit === 'corbata' && <path d="M43 63 l-4 4 l4 3 l4 -3z M43 70 l-5 5 l5 11 l5 -11z" fill={a.color} stroke="#000" strokeOpacity=".25" />}
+        {outfit === 'mono' && <g className="bot-bow"><path d="M43 68 l-11 -6 v12z M43 68 l11 -6 v12z" fill={a.color} stroke="#000" strokeOpacity=".25" /><circle cx="43" cy="68" r="3" fill="#e8ebf4" /></g>}
+        {outfit === 'bufanda' && <g className="bot-scarf"><rect x="11" y="60" width="64" height="9" rx="4.5" fill="#ff7a9c" /><rect x="52" y="64" width="10" height="20" rx="3" fill="#e0557a" /><path d="M16 64 h50 M53 76 h8" stroke="#fff" strokeOpacity=".35" strokeWidth="1.5" /></g>}
+        {outfit === 'delantal' && <><rect x="24" y="66" width="38" height="20" rx="6" fill="#e8ebf4" opacity=".92" /><path d="M30 66 l-5 -4 M56 66 l5 -4" stroke="#e8ebf4" strokeWidth="2.5" strokeLinecap="round" /></>}
+        {outfit === 'chaleco' && <g fill="#1b1d2c" opacity=".88"><path d="M10 62 h22 v24 h-14 a8 8 0 0 1 -8 -8z" /><path d="M76 62 h-22 v24 h14 a8 8 0 0 0 8 -8z" /><circle cx="22" cy="74" r="1.6" fill={a.color} /><circle cx="64" cy="74" r="1.6" fill={a.color} /></g>}
+        {outfit === 'hoodie' && <g><path d="M18 62 q25 18 50 0 v7 q-25 18 -50 0z" fill={a.color} opacity=".9" /><path d="M38 72 v10 M48 72 v10" stroke="#e8ebf4" strokeWidth="2" strokeLinecap="round" /></g>}
+        <text x={emojiX} y="76" textAnchor="middle" fontSize={emojiX === 43 ? 17 : 14}>{a.emoji}</text>
         {acc === 'gorro' && <><path d="M15 24 q0 -20 28 -20 q28 0 28 20z" fill="#ff7a9c" /><rect x="13" y="19" width="60" height="7" rx="3.5" fill="#e0557a" /><circle cx="43" cy="4" r="4" fill="#e8ebf4" /></>}
         {acc === 'sombrero' && <><rect x="29" y="1" width="28" height="15" rx="2" fill="#1b1d2c" /><rect x="29" y="11" width="28" height="3" fill={a.color} /><rect x="19" y="15" width="48" height="4" rx="2" fill="#1b1d2c" /></>}
         {acc === 'corona' && <path d="M25 19 l2 -15 l8 7 l8 -10 l8 10 l8 -7 l2 15z" fill="#ffd166" stroke="#d9a13a" strokeWidth="1.5" strokeLinejoin="round" />}
         {acc === 'audifonos' && <><path d="M8 34 q0 -28 35 -28 q35 0 35 28" stroke="#e8ebf4" strokeWidth="4" fill="none" /><rect x="2" y="27" width="11" height="22" rx="5" fill="#e8ebf4" /><rect x="73" y="27" width="11" height="22" rx="5" fill="#e8ebf4" /></>}
+        {acc === 'orejas' && <g className="bot-ears"><path d="M17 24 l1 -20 l16 12z" fill={a.color} /><path d="M69 24 l-1 -20 l-16 12z" fill={a.color} /><path d="M21 17 l.8 -9 l7 5.5z M65 17 l-.8 -9 l-7 5.5z" fill="#ff9db8" /></g>}
+        {acc === 'halo' && <ellipse className="bot-halo" cx="43" cy="7" rx="15" ry="4" fill="none" stroke="#ffd166" strokeWidth="3" />}
+        {acc === 'cuernos' && <><path d="M21 22 q-6 -4 -5 -16 q9 3 15 12z" fill="#ff5d5d" /><path d="M65 22 q6 -4 5 -16 q-9 3 -15 12z" fill="#ff5d5d" /></>}
+        {acc === 'parche' && <><path d="M16 26 L70 44" stroke="#1b1d2c" strokeWidth="2.5" /><ellipse cx="33.5" cy="39" rx="9" ry="10" fill="#1b1d2c" stroke="#8a92aa" strokeWidth="1" /></>}
+        {acc === 'gafasSol' && <g fill="#05060c" stroke="#e8ebf4" strokeWidth="2"><rect x="24" y="31" width="19" height="15" rx="5" /><rect x="44" y="31" width="19" height="15" rx="5" /><path d="M43 37 h1" /><path d="M27 34 l5 -1.5 M47 34 l5 -1.5" stroke={a.color} strokeLinecap="round" /></g>}
         {acc === 'lentes' && <g fill="none" stroke="#e8ebf4" strokeWidth="2.5"><rect x="25" y="30" width="17" height="18" rx="5" /><rect x="44" y="30" width="17" height="18" rx="5" /></g>}
       </g>
     </svg>
@@ -148,12 +305,13 @@ function Robot({ a, state, size = 86 }: { a: TeamAgent; state: 'idle' | 'work' |
 }
 
 /** Sala: escritorios con agentes, tu personaje y objetos que arrastras donde quieras (se guardan al soltar). */
-function Room({ team, working, routing, done, sel, onSel, onProps, onDrop }: {
-  team: AgentTeam; working?: string; routing?: boolean; done?: string; sel: string
-  onSel: (id: string) => void; onProps: (p: TeamProp[]) => void; onDrop: () => void
+function Room({ team, working, routing, done, sel, selAgent, progress, onStop, onSel, onAgent, onProps, onDrop }: {
+  team: AgentTeam; working?: string; routing?: boolean; done?: string; sel: string; selAgent?: string; progress?: string; onStop?: () => void
+  onSel: (id: string) => void; onAgent: (id: string) => void; onProps: (p: TeamProp[]) => void; onDrop: () => void
 }): ReactNode {
   const ref = useRef<HTMLDivElement>(null)
   const drag = useRef<string | null>(null)
+  const typing = useTyping()
   const props = team.props ?? []
   const n = Math.max(team.agents.length, 1)
   const move = (e: RPointerEvent): void => {
@@ -176,8 +334,25 @@ function Room({ team, working, routing, done, sel, onSel, onProps, onDrop }: {
       <i className="tr-pend p1" /><i className="tr-pend p2" />
       {team.agents.map((a, i) => {
         const st = a.id === working ? 'work' : a.id === done ? 'done' : 'idle'
+        // hasta 3 agentes: una fila; con más, dos filas más pequeñas para que los escritorios no se pisen
+        const two = n > 3
+        const cols = two ? Math.ceil(n / 2) : n
+        const row = two ? Math.floor(i / cols) : 0
+        const inRow = two ? (row === 0 ? cols : n - cols) : n
+        const left = two ? ((i % cols) + 0.5) / inRow * 74 + 4 : ((i + 0.5) / (n + 1)) * 88 + 4
+        const top = two ? (row === 0 ? 62 : 86) : 79
         return (
-          <div key={a.id} className={`tr-desk ${st}`} style={{ left: `${((i + 0.5) / (n + 1)) * 88 + 4}%`, ['--c' as string]: a.color }}>
+          <div
+            key={a.id}
+            className={`tr-desk ${st} ${a.id === selAgent ? 'picked' : ''}`}
+            style={{ left: `${left}%`, top: `${top}%`, ['--ds' as string]: two ? 0.72 : 1, ['--c' as string]: a.color, zIndex: 40 + row }}
+            role="button"
+            tabIndex={0}
+            aria-label={`${a.name}${st === 'work' ? ', trabajando' : st === 'done' ? ', terminó' : ''}`}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => onAgent(a.id)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAgent(a.id) } }}
+          >
             {/* al trabajar: foco desde arriba, anillo en el suelo y código que sale del portátil */}
             {st === 'work' && <><i className="tr-beam" /><i className="tr-ping" /><div className="tr-fx" aria-hidden><i>{'{ }'}</i><i>&lt;/&gt;</i><i>01</i><i>✦</i></div></>}
             {st !== 'idle' && <div className="tr-bubble">{st === 'work' ? <><i /><i /><i /></> : '✓ listo'}</div>}
@@ -185,12 +360,19 @@ function Room({ team, working, routing, done, sel, onSel, onProps, onDrop }: {
             <div className="tr-top"><div className="tr-lap"><span /><span /><span /></div></div>
             <div className="tr-legs"><i /><i /></div>
             <small className="tr-tag">{a.name}</small>
+            {/* progreso en vivo justo bajo el agente que ejecuta, con su botón de detener */}
+            {st === 'work' && onStop && (
+              <span className="tr-prog" onClick={(e) => e.stopPropagation()}>
+                <span>{progress || 'Trabajando…'}</span>
+                <button aria-label={`Detener a ${a.name}`} title="Detener" onClick={onStop}>■</button>
+              </span>
+            )}
           </div>
         )
       })}
       <div className={`tr-me ${working ? 'work' : ''}`} style={{ left: '90%' }}>
         {routing && <div className="tr-bubble think">¿Quién lo atiende?</div>}
-        <Avatar c={team.character} size={92} live={working ? 'work' : 'idle'} />
+        <Avatar c={team.character} size={92} live={typing ? 'type' : working ? 'work' : 'idle'} />
         <small className="tr-tag">{team.character.name}</small>
       </div>
       {props.map((p) => {
@@ -204,11 +386,15 @@ function Room({ team, working, routing, done, sel, onSel, onProps, onDrop }: {
             title="Arrástralo o usa las flechas (Mayús = más rápido)"
             tabIndex={0}
             role="button"
-            aria-label={`${as.label}: flechas para mover, Supr para quitar`}
+            aria-label={`${as.label}: flechas para mover, + y - para el tamaño, F para voltear, Supr para quitar`}
             onFocus={() => onSel(p.id)}
             onKeyDown={(e) => {
               const k = e.key
               if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); onProps(props.filter((q) => q.id !== p.id)); onDrop(); return }
+              const scale = (ds: number): void => { e.preventDefault(); onProps(props.map((q) => (q.id === p.id ? { ...q, s: clamp(q.s + ds, 0.6, 2.2) } : q))); onDrop() }
+              if (k === '+' || k === '=') return scale(0.15)
+              if (k === '-') return scale(-0.15)
+              if (k === 'f' || k === 'F') { e.preventDefault(); onProps(props.map((q) => (q.id === p.id ? { ...q, flip: !q.flip } : q))); onDrop(); return }
               const d = e.shiftKey ? 5 : 1
               const dx = k === 'ArrowLeft' ? -d : k === 'ArrowRight' ? d : 0
               const dy = k === 'ArrowUp' ? -d : k === 'ArrowDown' ? d : 0
@@ -236,33 +422,97 @@ function withProps(t0: AgentTeam): AgentTeam {
   return { ...t, props }
 }
 
+// borradores fuera del componente: al cambiar de vista se desmonta, pero lo escrito y los adjuntos pendientes se conservan
+const kept = { draft: '', files: [] as Attachment[], msg: '' }
+// carpeta de adjuntos del equipo (el main la crea al guardar el primero)
+const TEAM_ATT = 'equipo'
+
+/** Ejemplos de encargo por agente (clic = rellena la barra, sin enviar). */
+const SUGGESTED: Record<string, string[]> = {
+  revisor: ['Revisa los cambios del último commit', 'Busca riesgos de seguridad en el login'],
+  estimador: ['Cubica este requerimiento: …', 'Divide esto en tareas con horas'],
+  qa: ['Propón casos de prueba para: …', 'Casos de regresión del último cambio'],
+  corrector: ['Aplica estos hallazgos de la revisión: …', 'Corrige el comentario del PR: …'],
+  desarrollador: ['Implementa: …', 'Arregla el error de tipos del typecheck'],
+  cazabugs: ['Este síntoma ocurre cuando…: ¿causa probable?', 'Cómo reproducir y arreglar: …'],
+  disenador: ['Critica la pantalla de … y propón mejoras', 'Mejora los estados vacíos de …'],
+  'buenas-practicas': ['Revisa buenas prácticas en la carpeta …', 'Detecta duplicación y nombres confusos'],
+  ideas: ['Dame 5 ideas para: …', 'Ideas para simplificar el flujo de …']
+}
+const SUGGESTED_DEFAULT = ['Resume qué puedes hacer', 'Analiza este código: …']
+
 export function TeamView(): ReactNode {
   const ui = useUi()
+  const groups = useDB().groups ?? []
   const [team, setTeam] = useState<AgentTeam | null>(null)
   const [sel, setSel] = useState<string>('')
   const [selProp, setSelProp] = useState('')
-  const [msg, setMsg] = useState('')
+  const [msg, setMsgRaw] = useState(kept.msg)
+  const setMsg = (v: string): void => {
+    kept.msg = v
+    setMsgRaw(v)
+  }
+  const [files, setFilesRaw] = useState<Attachment[]>(kept.files)
+  const setFiles = (f: Attachment[] | ((c: Attachment[]) => Attachment[])): void =>
+    setFilesRaw((c) => (kept.files = typeof f === 'function' ? f(c) : f))
+  const [dragging, setDragging] = useState(false)
   const [reply, setReply] = useState('')
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState('')
   const [tab, setTab] = useState<'chat' | 'edit'>('chat')
-  const [charTab, setCharTab] = useState<'cara' | 'pelo' | 'ropa'>('cara')
-  const [draft, setDraft] = useState('')
+  const [editRoom, setEditRoom] = useState(false)
+  const [showChar, setShowChar] = useState(false) // personalización del personaje, oculta por defecto
+  const [target, setTarget] = useState('') // '' = todo el equipo (se enruta solo)
+  const [draft, setDraftRaw] = useState(kept.draft)
+  const setDraft = (v: string): void => {
+    kept.draft = v
+    setDraftRaw(v)
+  }
   const [routing, setRouting] = useState(false)
   const [chatWork, setChatWork] = useState('')
+  const [progress, setProgress] = useState('')
+  const [q, setQ] = useState('')
+  const [sugg, setSugg] = useState(0)
+  const [renaming, setRenaming] = useState(false)
+  const [dirOpen, setDirOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [fwd, setFwd] = useState('')
   const [since, setSince] = useState(0)
   const [, tick] = useState(0)
   const logRef = useRef<HTMLDivElement>(null)
   const teamRef = useRef<AgentTeam | null>(null)
+  const [pop, setPop] = useState<'' | 'obj' | 'add' | 'more'>('')
+  const [sub, setSub] = useState<'id' | 'brain' | 'test'>('id')
+  const [confirmDel, setConfirmDel] = useState(false)
+  // skills realmente instaladas: solo estas se pueden asignar (antes era una lista fija)
+  const [installed, setInstalled] = useState<SkillInfo[]>([])
+  useEffect(() => {
+    if (sub !== 'brain') return
+    void window.api.call('skills:list').then((l) => setInstalled(l.filter((s) => s.installed))).catch(() => setInstalled([]))
+  }, [sub])
+  // los popovers se cierran con Esc o al pulsar fuera
+  useEffect(() => {
+    if (!pop) return
+    const down = (e: PointerEvent): void => { if (!(e.target as Element).closest('.tm-popwrap')) setPop('') }
+    const key = (e: KeyboardEvent): void => { if (e.key === 'Escape') setPop('') }
+    document.addEventListener('pointerdown', down)
+    document.addEventListener('keydown', key)
+    return () => { document.removeEventListener('pointerdown', down); document.removeEventListener('keydown', key) }
+  }, [pop])
   teamRef.current = team
-  const chatLen = team?.chat?.length ?? 0
+  const chatLen = (team?.chats?.find((c) => c.id === team.activeChat) ?? team?.chats?.[0])?.msgs.length ?? team?.chat?.length ?? 0
 
   // baja al último mensaje cuando llega uno nuevo o cambia el estado del agente
   useEffect(() => {
     const el = logRef.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [chatLen, chatWork, routing, tab])
+  }, [chatLen, chatWork, routing, tab, team?.activeChat])
   // cronómetro del agente que trabaja (solo repinta mientras hay trabajo)
+  // lo que el agente está haciendo (herramienta en uso / paso del plan)
+  useEffect(() => window.api.onTeamProgress((p) => setProgress(p.text)), [])
+  useEffect(() => {
+    if (!chatWork && !busy) setProgress('')
+  }, [chatWork, busy])
   useEffect(() => {
     if (!chatWork) return
     const t = setInterval(() => tick((n) => n + 1), 1000)
@@ -299,10 +549,37 @@ export function TeamView(): ReactNode {
     setReply('')
     setTab('edit')
   }
+  // plantillas que aún no están en el equipo (el id es fijo, así no se duplican)
+  const missingTpl = AGENT_TEMPLATES.filter((t) => !team.agents.some((a) => a.id === t.id))
+  const addTemplate = (t: TeamAgent): void => {
+    update({ ...team, agents: [...team.agents, { ...t, skills: [...t.skills], look: t.look && { ...t.look } }] })
+    setSel(t.id)
+    setReply('')
+    setTab('edit')
+  }
   const removeAgent = (): void => {
     const agents = team.agents.filter((a) => a.id !== sel)
     update({ ...team, agents })
     setSel(agents[0]?.id ?? '')
+    setConfirmDel(false)
+    setPop('')
+  }
+  const pickAgent = (id: string): void => {
+    setSel(id)
+    setTarget(id)
+    setReply('')
+    setConfirmDel(false)
+    requestAnimationFrame(() => document.querySelector(`.rs-chip[data-id="${id}"]`)?.scrollIntoView({ inline: 'center', block: 'nearest' }))
+  }
+  // roving tabindex: las flechas mueven la selección dentro de la lista
+  const rosterKey = (e: RKeyEvent): void => {
+    const ids = team.agents.map((a) => a.id)
+    const i = ids.indexOf(sel)
+    const next = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? Math.min(i + 1, ids.length - 1) : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? Math.max(i - 1, 0) : e.key === 'Home' ? 0 : e.key === 'End' ? ids.length - 1 : -1
+    if (next < 0) return
+    e.preventDefault()
+    pickAgent(ids[next])
+    requestAnimationFrame(() => (document.querySelector(`.rs-chip[data-id="${ids[next]}"]`) as HTMLElement | null)?.focus())
   }
   const props = team.props ?? []
   const addProp = (k: string): void => {
@@ -313,19 +590,13 @@ export function TeamView(): ReactNode {
   }
   const patchProp = (p: Partial<TeamProp>): void => update({ ...team, props: props.map((x) => (x.id === selProp ? { ...x, ...p } : x)) })
   const curProp = props.find((p) => p.id === selProp)
-  const random = (): void => {
-    setChar({
-      skin: pick(SKINS.slice(0, 6)), hair: pick(HAIR)[0], gear: pick(GEAR)[0], outfit: pick(OUTFIT)[0],
-      hairColor: pick(HAIR_COLORS), eyeColor: pick(EYE_COLORS), outfitColor: pick(OUTFIT_COLORS),
-      mouth: pick(MOUTH)[0], face: pick(FACE)[0], facial: Math.random() < 0.7 ? 'ninguno' : pick(FACIAL)[0]
-    })
-  }
   const setLook = (p: Partial<RobotLook>): void => setAgent({ look: { ...agent?.look, ...p } })
   const randomBot = (): void =>
-    setAgent({ color: pick(COLORS), look: { head: pick(HEADS)[0], eyes: pick(BOT_EYES)[0], antenna: pick(ANTENNAS)[0], acc: pick(BOT_ACC)[0] } })
+    setAgent({ color: pick(COLORS), look: { head: pick(HEADS)[0], eyes: pick(BOT_EYES)[0], antenna: pick(ANTENNAS)[0], acc: pick(BOT_ACC)[0], mouth: pick(BOT_MOUTH)[0], cheeks: pick(BOT_CHEEKS)[0], outfit: pick(BOT_OUTFIT)[0] } })
   const ask = async (): Promise<void> => {
     if (!agent) return
     const id = agent.id
+    if (!(await okOpus(id))) return
     setBusy(true)
     setReply('')
     try {
@@ -339,51 +610,195 @@ export function TeamView(): ReactNode {
     }
   }
 
-  // ---- chat general: la solicitud se asigna sola al agente adecuado (o al que menciones con @) ----
-  const pushChat = (m: Omit<TeamChatMsg, 'id' | 'at'>): void => {
+  const runQa = async (): Promise<void> => {
+    if (!agent) return
+    setBusy(true)
+    setReply('')
+    try {
+      const r = await ui.run('team:qa', agent.workdir)
+      if (typeof r === 'string') {
+        setReply(r)
+        setDone(agent.id)
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // ---- conversaciones: `chats` guarda varias; el chat antiguo (`chat`) pasa a ser la primera ----
+  const convsOf = (t: AgentTeam): TeamConv[] => (t.chats?.length ? t.chats : [{ id: 'main', name: 'Principal', msgs: t.chat ?? [] }])
+  const convs = convsOf(team)
+  const activeId = convs.some((c) => c.id === team.activeChat) ? (team.activeChat as string) : convs[0].id
+  const writeConvs = (t: AgentTeam, next: TeamConv[], active: string): AgentTeam => ({ ...t, chat: undefined, chats: next, activeChat: active })
+  const mapConv = (t: AgentTeam, id: string, fn: (c: TeamConv) => TeamConv): AgentTeam => {
+    const cur = convsOf(t)
+    return writeConvs(t, cur.map((c) => (c.id === id ? fn(c) : c)), t.activeChat ?? cur[0].id)
+  }
+  const newConv = (): void => {
+    const id = Math.random().toString(36).slice(2, 8)
+    update(writeConvs(team, [...convs, { id, name: `Conversación ${convs.length + 1}`, msgs: [], workdir: convs.find((c) => c.id === activeId)?.workdir }], id))
+    setQ('')
+  }
+  const delConv = (): void => {
+    const rest = convs.filter((c) => c.id !== activeId)
+    update(writeConvs(team, rest.length ? rest : [{ id: 'main', name: 'Principal', msgs: [] }], (rest[0] ?? { id: 'main' }).id))
+  }
+  // escribe en la conversación donde se pidió (aunque el usuario cambie de conversación mientras el agente trabaja)
+  const pushChat = (m: Omit<TeamChatMsg, 'id' | 'at'>, convId = activeId): void => {
     const t = teamRef.current
     if (!t) return
-    update({ ...t, chat: [...(t.chat ?? []), { ...m, id: Math.random().toString(36).slice(2, 9), at: Date.now() }].slice(-60) })
+    update(mapConv(t, convId, (c) => ({ ...c, msgs: [...c.msgs, { ...m, id: Math.random().toString(36).slice(2, 9), at: Date.now() }].slice(-60) })))
   }
   const mentioned = (text: string): TeamAgent | undefined => {
     const low = text.toLowerCase()
     return [...team.agents].sort((a, b) => b.name.length - a.name.length).find((a) => low.startsWith(`@${a.name.toLowerCase()}`))
   }
-  const send = async (): Promise<void> => {
-    const text = draft.trim()
-    if (!text || routing || chatWork) return
-    setDraft('')
-    pushChat({ role: 'user', text })
-    const forced = mentioned(text)
-    const body = forced ? text.slice(forced.name.length + 1).trim() || text : text
+  // un agente con Opus gasta mucho más de la ventana de uso: se avisa siempre antes de lanzarlo
+  const okOpus = async (agentId: string): Promise<boolean> => {
+    const a = team.agents.find((x) => x.id === agentId)
+    const names = agentId === ORCHESTRATOR_ID ? team.agents.filter((x) => x.model === 'opus').map((x) => x.name) : a?.model === 'opus' ? [a.name] : []
+    if (!names.length) return true
+    return ui.confirm(`${names.join(', ')} usa${names.length > 1 ? 'n' : ''} Opus, el modelo que más consume de tu límite de uso. ${agentId === ORCHESTRATOR_ID ? 'El orquestador puede llamar a esos agentes. ' : ''}¿Continuar?`, { title: 'Este agente usa Opus', confirmLabel: 'Sí, usar Opus' })
+  }
+  const stop = (): void => void window.api.call('team:cancel')
+  /** Lanza una solicitud: `forced` fuerza el agente (reintentar / enviar a otro); si no, se enruta solo o por @mención. */
+  const dispatch = async (text: string, sent: Attachment[], forced?: string): Promise<void> => {
+    const cid = activeId
+    const convDir = convs.find((c) => c.id === cid)?.workdir
+    // lo anterior de esta conversación, para que el agente entienda referencias como «la idea 3»
+    const history = (convs.find((c) => c.id === cid)?.msgs ?? [])
+      .filter((m) => m.role !== 'system' && m.text.trim())
+      .slice(-14)
+      // las dos últimas respuestas de agentes (propuestas y lo ya aplicado) van casi completas para que no se pierdan; el resto, resumido
+      .map((m, i, a) => {
+        const lastAgent = a.map((x, j) => (x.role !== 'user' ? j : -1)).filter((j) => j >= 0).slice(-2)
+        return `${m.role === 'user' ? 'Usuario' : byId(m.agentId)?.name ?? 'Agente'}: ${m.text.slice(0, m.role !== 'user' && lastAgent.includes(i) ? 6000 : m.role === 'user' ? 3000 : 1500)}`
+      })
+      .join('\n\n')
+    pushChat({ role: 'user', text, attachments: sent.length ? sent : undefined }, cid)
+    const at = forced ? undefined : mentioned(text)
+    const body = at ? text.slice(at.name.length + 1).trim() || text : text
     let route: { agentId: string; reason: string } | undefined
-    if (forced) route = { agentId: forced.id, reason: 'Lo mencionaste con @' }
+    if (forced) route = { agentId: forced, reason: 'Elegido por ti' }
+    else if (at) route = { agentId: at.id, reason: 'Lo mencionaste con @' }
     else {
       setRouting(true)
       try {
-        route = (await ui.run('team:route', text)) ?? undefined
+        route = (await ui.run('team:route', text, history)) ?? undefined
       } finally {
         setRouting(false)
       }
     }
     if (!route) return
-    pushChat({ role: 'system', text: '', agentId: route.agentId, reason: route.reason })
+    pushChat({ role: 'system', text: '', agentId: route.agentId, reason: route.reason }, cid)
+    if (!(await okOpus(route.agentId))) {
+      pushChat({ role: 'system', text: 'Cancelado: no se ejecutó porque usa Opus.' }, cid)
+      return
+    }
     setChatWork(route.agentId)
     setSince(Date.now())
     try {
-      const r = await ui.run('team:ask', route.agentId, body)
+      if (route.agentId === ORCHESTRATOR_ID) {
+        // el orquestador reparte el trabajo: cada paso aparece como instrucción + respuesta del agente, y al final su resumen
+        const o = await ui.run('team:orchestrate', body, sent, history, convDir)
+        if (o) {
+          for (const s of o.steps) {
+            pushChat({ role: 'system', text: '', agentId: s.agentId, reason: s.instruction.slice(0, 200) }, cid)
+            pushChat({ role: 'agent', text: s.output, agentId: s.agentId }, cid)
+          }
+          if (o.summary) pushChat({ role: 'agent', text: o.summary, agentId: ORCHESTRATOR_ID }, cid)
+          setDone(ORCHESTRATOR_ID)
+        }
+        return
+      }
+      const r = await ui.run('team:ask', route.agentId, body, sent, history, convDir)
       if (typeof r === 'string') {
-        pushChat({ role: 'agent', text: r, agentId: route.agentId })
+        pushChat({ role: 'agent', text: r, agentId: route.agentId }, cid)
         setDone(route.agentId)
       }
     } finally {
       setChatWork('')
     }
   }
+  // comandos con «/»: se resuelven aquí, sin llamar a la IA
+  const COMMANDS: Array<[string, string]> = [['/nueva', 'Nueva conversación'], ['/limpiar', 'Vaciar la conversación'], ['/buscar', 'Buscar en el historial: /buscar texto'], ['/detener', 'Detener al agente que trabaja']]
+  const runCommand = (text: string): boolean => {
+    const [cmd, ...rest] = text.split(/\s+/)
+    if (!COMMANDS.some(([c]) => c === cmd)) return false
+    setDraft('')
+    if (cmd === '/nueva') newConv()
+    else if (cmd === '/limpiar') update(mapConv(team, activeId, (c) => ({ ...c, msgs: [] })))
+    else if (cmd === '/detener') stop()
+    else if (cmd === '/buscar') setQ(rest.join(' '))
+    return true
+  }
+  const send = async (): Promise<void> => {
+    const text = draft.trim()
+    if ((!text && !files.length) || routing || chatWork) return
+    if (!files.length && runCommand(text)) return
+    const sent = files
+    setDraft('')
+    setFiles([])
+    // una @mención escrita manda sobre el destinatario elegido
+    await dispatch(text, sent, !mentioned(text) && byId(target) ? target : undefined)
+  }
+  // acciones por mensaje
+  const prevUser = (id: string): TeamChatMsg | undefined => {
+    const i = log.findIndex((m) => m.id === id)
+    return log.slice(0, Math.max(i, 0)).reverse().find((m) => m.role === 'user')
+  }
+  const delMsg = (id: string): void => update(mapConv(team, activeId, (c) => ({ ...c, msgs: c.msgs.filter((m) => m.id !== id) })))
+  const copyMsg = (text: string): void => void navigator.clipboard.writeText(text).catch(() => undefined)
+  const retry = (m: TeamChatMsg): void => {
+    const u = prevUser(m.id)
+    if (u && m.agentId && !chatWork && !routing) void dispatch(u.text, u.attachments ?? [], m.agentId)
+  }
+  const forward = (m: TeamChatMsg, to: string): void => {
+    setFwd('')
+    const from = byId(m.agentId)?.name ?? 'otro agente'
+    if (!chatWork && !routing) void dispatch(`Continúa a partir de esta respuesta de ${from}:\n\n${m.text.slice(0, 6000)}`, [], to)
+  }
+  const addBlobs = async (blobs: File[]): Promise<void> => {
+    for (const f of blobs) {
+      const a = await ui.run('attach:save', TEAM_ATT, f.name || 'captura.png', new Uint8Array(await f.arrayBuffer()))
+      if (a) setFiles((cur) => [...cur, a])
+    }
+  }
+  const pickFiles = async (): Promise<void> => {
+    const r = await ui.run('attach:pick', TEAM_ATT)
+    if (r?.length) setFiles((cur) => [...cur, ...r])
+  }
+  const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>): void => {
+    const blobs = [...e.clipboardData.files]
+    if (!blobs.length) return
+    e.preventDefault()
+    void addBlobs(blobs)
+  }
+  const onDrop = (e: DragEvent<HTMLDivElement>): void => {
+    e.preventDefault()
+    setDragging(false)
+    void addBlobs([...e.dataTransfer.files])
+  }
+  // documentos de referencia del agente (se guardan en su propia carpeta y viajan con cada encargo)
+  const addRefs = async (): Promise<void> => {
+    if (!agent) return
+    const r = await ui.run('attach:pick', `ref-${agent.id}`)
+    if (r?.length) setAgent({ refs: [...(agent.refs ?? []), ...r] })
+  }
   const byId = (id?: string): TeamAgent | undefined => team.agents.find((a) => a.id === id)
   const secs = chatWork ? Math.floor((Date.now() - since) / 1000) : 0
   const elapsed = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`
-  const log = team.chat ?? []
+  const all = (convs.find((c) => c.id === activeId) ?? convs[0]).msgs
+  const needle = q.trim().toLowerCase()
+  const log = needle ? all.filter((m) => m.text.toLowerCase().includes(needle) || byId(m.agentId)?.name.toLowerCase().includes(needle)) : all
+  // sugerencias: @agente al empezar el mensaje, /comando
+  const mention = /^@([^\s@]*)$/.exec(draft)
+  const slash = /^\/([^\s/]*)$/.exec(draft)
+  const suggs: Array<{ key: string; label: string; hint: string; apply: () => void }> = mention
+    ? team.agents.filter((a) => a.name.toLowerCase().startsWith(mention[1].toLowerCase())).map((a) => ({ key: a.id, label: `${a.emoji} @${a.name}`, hint: a.model, apply: () => setDraft(`@${a.name} `) }))
+    : slash
+      ? COMMANDS.filter(([c]) => c.startsWith(draft)).map(([c, h]) => ({ key: c, label: c, hint: h, apply: () => setDraft(c === '/buscar' ? '/buscar ' : c) }))
+      : []
   const working = chatWork || (busy ? sel : undefined)
 
   const opts = <T extends string>(list: Array<[T, string]>, cur: T, on: (v: T) => void): ReactNode => (
@@ -393,86 +808,135 @@ export function TeamView(): ReactNode {
   const swatches = (list: string[], cur: string | undefined, on: (v: string) => void, label: string): ReactNode => {
     const custom = !!cur && !list.includes(cur)
     return (
-      <div className="tm-sw">
+      <div className="tm-sw" style={{ gridTemplateColumns: `repeat(${list.length + 1}, minmax(0, 20px))` }}>
         {list.map((s) => <button key={s} type="button" style={{ background: s }} className={cur === s ? 'on' : ''} aria-label={`${label} ${s}`} aria-pressed={cur === s} onClick={() => on(s)} />)}
         <label className={`tm-sw-custom ${custom ? 'on' : ''}`} title="Color personalizado" style={custom ? { background: cur } : undefined}>
           <input type="color" value={cur && /^#[0-9a-f]{6}$/i.test(cur) ? cur : '#888888'} onChange={(e) => on(e.target.value)} aria-label={`${label}: color personalizado`} />
+          {!custom && <span aria-hidden>＋</span>}
         </label>
+        <input key={cur} className="tm-hex" defaultValue={cur ?? ''} maxLength={7} spellCheck={false} aria-label={`${label}: código hexadecimal`} placeholder="#rrggbb"
+          onBlur={(e) => { const v = e.target.value.trim(); if (/^#[0-9a-f]{6}$/i.test(v)) on(v.toLowerCase()); else e.target.value = cur ?? '' }}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }} />
       </div>
     )
   }
-  const ch = team.character
   const field = (label: string, body: ReactNode): ReactNode => <div className="tm-field"><span className="tm-lbl">{label}</span>{body}</div>
 
   return (
-    <div className="tm-wrap">
-      <section className="card tm-char">
-        <div className="eyebrow">Tu personaje</div>
-        <div className="tm-stage"><Avatar c={team.character} size={170} live="idle" /></div>
-        <input className="tm-name" value={team.character.name} onChange={(e) => setChar({ name: e.target.value })} aria-label="Nombre del personaje" />
-        <input className="tm-name sub" value={team.character.role} onChange={(e) => setChar({ role: e.target.value })} aria-label="Rol del personaje" />
-        {/* por pestañas: con tantas opciones, una sola columna se volvía interminable */}
-        <div className="tm-subtabs" role="tablist">
-          {(['cara', 'pelo', 'ropa'] as const).map((k) => (
-            <button key={k} role="tab" aria-selected={charTab === k} className={charTab === k ? 'on' : ''} onClick={() => setCharTab(k)}>
-              {k === 'cara' ? 'Cara' : k === 'pelo' ? 'Pelo' : 'Ropa y extras'}
-            </button>
-          ))}
-        </div>
-        {charTab === 'cara' && <>
-          {field('Piel', swatches(SKINS, ch.skin, (skin) => setChar({ skin }), 'Piel'))}
-          {field('Ojos', swatches(EYE_COLORS, ch.eyeColor ?? '#1a1c28', (eyeColor) => setChar({ eyeColor }), 'Ojos'))}
-          {field('Boca', opts(MOUTH, ch.mouth ?? 'sonrisa', (mouth) => setChar({ mouth })))}
-          {field('Mejillas', opts(FACE, ch.face ?? 'normal', (face) => setChar({ face })))}
-          {field('Vello facial', opts(FACIAL, ch.facial ?? 'ninguno', (facial) => setChar({ facial })))}
-        </>}
-        {charTab === 'pelo' && <>
-          {field('Peinado', opts(HAIR, ch.hair, (hair) => setChar({ hair })))}
-          {field('Color de pelo', swatches(HAIR_COLORS, ch.hairColor ?? HAIR_COLOR, (hairColor) => setChar({ hairColor }), 'Pelo'))}
-        </>}
-        {charTab === 'ropa' && <>
-          {field('Ropa', opts(OUTFIT, ch.outfit, (outfit) => setChar({ outfit })))}
-          {field('Color de ropa', swatches(OUTFIT_COLORS, ch.outfitColor ?? OUTFIT_COLOR[ch.outfit], (outfitColor) => setChar({ outfitColor }), 'Ropa'))}
-          {field('Accesorio', opts(GEAR, ch.gear === 'barba' ? 'ninguno' : ch.gear, (gear) => setChar({ gear })))}
-        </>}
-        <button className="btn tm-rand" onClick={random}>🎲 Aleatorio</button>
-      </section>
+    <div className="tm-wrap tm-v2">
+      {showChar && <section className="card tm-char tm-char-pop" role="dialog" aria-label="Personalizar mi personaje">
+        <button className="btn sm tm-char-x" aria-label="Cerrar" onClick={() => setShowChar(false)}>✕ Cerrar</button>
+        <CharacterEditor char={team.character} onChange={setChar} />
+      </section>}
 
       <section className="card tm-mid">
-        <div className="eyebrow">La sala <span className="tm-hint">arrastra los objetos donde quieras</span></div>
+        <div className="eyebrow">La sala <button className="btn sm tm-me" title="Personalizar tu personaje" onClick={() => setShowChar(true)}>🎭 Mi personaje</button></div>
         <Room
           team={team}
           working={working}
+          progress={progress}
+          onStop={stop}
           routing={routing}
           done={done}
           sel={selProp}
+          selAgent={sel}
           onSel={setSelProp}
+          onAgent={pickAgent}
           onProps={(p) => setTeam({ ...team, props: p })}
           onDrop={() => teamRef.current && void ui.run('team:save', teamRef.current)}
         />
-        <div className="tr-pal">
-          {ASSETS.map((a) => <button key={a.k} onClick={() => addProp(a.k)} title={`Añadir: ${a.label}`}><span className="pv">{a.el}</span><small>{a.label}</small></button>)}
-        </div>
-        <div className={`tr-tools ${curProp ? 'on' : ''}`}>
-          <span>{curProp ? `Objeto: ${ASSET_BY_KEY[curProp.k]?.label}` : 'Selecciona un objeto de la sala para ajustarlo'}</span>
-          <button disabled={!curProp} onClick={() => patchProp({ s: clamp((curProp?.s ?? 1) + 0.15, 0.6, 2.2) })}>＋ Grande</button>
-          <button disabled={!curProp} onClick={() => patchProp({ s: clamp((curProp?.s ?? 1) - 0.15, 0.6, 2.2) })}>－ Pequeño</button>
-          <button disabled={!curProp} onClick={() => patchProp({ flip: !curProp?.flip })}>⇋ Voltear</button>
-          <button disabled={!curProp} onClick={() => { update({ ...team, props: props.filter((p) => p.id !== selProp) }); setSelProp('') }}>Quitar</button>
-        </div>
+        {byId(target) && (() => {
+          const ag = byId(target) as TeamAgent
+          const last = [...all].reverse().find((m) => m.role === 'agent' && m.agentId === ag.id)
+          const state = ag.id === working || ag.id === chatWork ? 'trabajando…' : last ? (ag.id === done ? 'terminó · ver resultado' : 'libre') : 'libre'
+          return (
+            <div className="tr-panel" style={{ ['--c' as string]: ag.color }}>
+              <div className="tr-ph"><b>{ag.emoji} {ag.name}</b> <small>{state}</small></div>
+              <p className="tr-role">{ag.prompt.split(/[.\n]/)[0]}.</p>
+              {last && (
+                <div className="tr-last">
+                  <div className="tr-lt">{last.text.slice(0, 280)}{last.text.length > 280 ? '…' : ''}</div>
+                  <div className="tr-la">
+                    <button className="btn sm" onClick={() => copyMsg(last.text)}>Copiar</button>
+                    <button className="btn sm" onClick={() => setTab('edit')}>⚙ Editar agente</button>
+                    <select aria-label="Pasar a otro agente" value="" onChange={(e) => { if (e.target.value) forward(last, e.target.value) }}>
+                      <option value="">Pasar a…</option>
+                      {team.agents.filter((x) => x.id !== ag.id).map((x) => <option key={x.id} value={x.id}>{x.emoji} {x.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+              )}
+              <div className="tr-sugg">
+                {(SUGGESTED[ag.id] ?? SUGGESTED_DEFAULT).map((s) => <button key={s} onClick={() => { setDraft(s); setTab('chat') }}>{s}</button>)}
+              </div>
+              {!last && <button className="btn sm" onClick={() => setTab('edit')}>⚙ Editar agente</button>}
+            </div>
+          )
+        })()}
+        <button className="tr-editbtn" aria-expanded={editRoom} onClick={() => { setEditRoom(!editRoom); if (editRoom) { setPop(''); setSelProp('') } }}>✎ {editRoom ? 'Listo' : 'Editar oficina'}</button>
+        {editRoom && <div className="tr-bar">
+          <div className="tm-popwrap">
+            <button className="tr-objbtn" aria-expanded={pop === 'obj'} aria-haspopup="true" onClick={() => setPop(pop === 'obj' ? '' : 'obj')}>🪑 Objetos</button>
+            {pop === 'obj' && (
+              <div className="tr-pop" role="menu">
+                {ASSETS.map((a) => <button key={a.k} role="menuitem" onClick={() => { addProp(a.k); setPop('') }} title={`Añadir: ${a.label}`}><span className="pv">{a.el}</span><small>{a.label}</small></button>)}
+              </div>
+            )}
+          </div>
+          {/* barra contextual: solo aparece con un objeto seleccionado */}
+          {curProp ? (
+            <div className="tr-ctx" role="toolbar" aria-label={`Ajustar ${ASSET_BY_KEY[curProp.k]?.label}`}>
+              <span>{ASSET_BY_KEY[curProp.k]?.label}</span>
+              <button title="Más grande (+)" aria-label="Más grande" onClick={() => patchProp({ s: clamp(curProp.s + 0.15, 0.6, 2.2) })}>＋</button>
+              <button title="Más pequeño (-)" aria-label="Más pequeño" onClick={() => patchProp({ s: clamp(curProp.s - 0.15, 0.6, 2.2) })}>－</button>
+              <button title="Voltear (F)" aria-label="Voltear" aria-pressed={!!curProp.flip} onClick={() => patchProp({ flip: !curProp.flip })}>⇋</button>
+              <button title="Quitar (Supr)" aria-label="Quitar" onClick={() => { update({ ...team, props: props.filter((p) => p.id !== selProp) }); setSelProp('') }}>🗑</button>
+            </div>
+          ) : <span className="tr-hintbar">Selecciona un objeto para ajustarlo · flechas, + − F, Supr</span>}
+        </div>}
         <div className="tm-agents-h">
           <div className="eyebrow">Agentes <span className="tm-count">{team.agents.length}</span></div>
-          <button className="btn primary sm" onClick={addAgent}>+ Nuevo agente</button>
+          <div className="tm-popwrap">
+            <button className="btn primary sm" aria-expanded={pop === 'add'} aria-haspopup="true" onClick={() => setPop(pop === 'add' ? '' : 'add')}>＋ Agente</button>
+            {pop === 'add' && (
+              <div className="rs-pop right up" role="menu">
+                <button role="menuitem" onClick={() => { setPop(''); addAgent() }}><span aria-hidden>🤖</span> Agente en blanco</button>
+                {missingTpl.map((t) => (
+                  <button key={t.id} role="menuitem" style={{ ['--c' as string]: t.color }} title={t.prompt} onClick={() => { setPop(''); addTemplate(t) }}><span aria-hidden>{t.emoji}</span> {t.name}</button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-        <div className="tm-agents">
-          {team.agents.map((a) => (
-            <button key={a.id} className={`tm-agent ${a.id === sel ? 'on' : ''} ${a.id === working ? 'busy' : ''}`} style={{ ['--c' as string]: a.color }} onClick={() => { setSel(a.id); setReply(''); setTab('edit') }}>
-              <span className="ic">{a.emoji}</span>
-              <span><b>{a.name}</b><span className="sk">{a.skills.map((s) => <span key={s}>{s}</span>)}</span></span>
-              <span className="st">{a.id === working ? 'trabajando…' : a.model}</span>
-            </button>
-          ))}
-        </div>
+        {team.agents.length === 0 ? (
+          <div className="rs-empty">
+            <b>＋ Crea tu primer agente</b>
+            <div>{AGENT_TEMPLATES.slice(0, 4).map((t) => <button key={t.id} style={{ ['--c' as string]: t.color }} onClick={() => addTemplate(t)}><span aria-hidden>{t.emoji}</span> {t.name}</button>)}</div>
+          </div>
+        ) : (
+          <div className="tm-roster" role="listbox" aria-label="Agentes del equipo" onKeyDown={rosterKey}>
+            {team.agents.map((a) => {
+              const isSel = a.id === sel
+              const isBusy = a.id === working
+              return (
+                <button
+                  key={a.id}
+                  role="option"
+                  aria-selected={isSel}
+                  tabIndex={isSel || (!agent && a === team.agents[0]) ? 0 : -1}
+                  data-id={a.id}
+                  aria-label={`${a.name}, ${a.model}${isBusy ? ', trabajando' : ''}`}
+                  className={`rs-chip ${isSel ? 'on' : ''} ${isBusy ? 'busy' : ''}`}
+                  style={{ ['--c' as string]: a.color }}
+                  onClick={() => pickAgent(a.id)}
+                >
+                  <span className="rs-bot"><Robot a={a} state={isBusy ? 'work' : 'idle'} size={34} /></span>
+                  {isSel && <span className="rs-txt"><b>{a.name}</b><small>{isBusy ? 'trabajando…' : a.model}{a.canEdit ? ' · edita' : ''}</small></span>}
+                </button>
+              )
+            })}
+          </div>
+        )}
       </section>
 
       <section className={`card tm-edit ${tab === 'chat' ? 'is-chat' : ''}`}>
@@ -484,8 +948,67 @@ export function TeamView(): ReactNode {
         </div>
         {tab === 'chat' ? (
           <div className="tc">
+            <div className="tc-bar">
+              <div className="tc-convs" role="tablist" aria-label="Conversaciones">
+                {convs.map((c) => c.id === activeId && renaming ? (
+                  <input key={c.id} className="tc-ren" autoFocus defaultValue={c.name} maxLength={30} aria-label="Nombre de la conversación"
+                    onBlur={(e) => { setRenaming(false); update(mapConv(team, c.id, (x) => ({ ...x, name: e.target.value.trim() || x.name }))) }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur() }} />
+                ) : (
+                  <button key={c.id} role="tab" aria-selected={c.id === activeId} className={c.id === activeId ? 'on' : ''}
+                    title={c.id === activeId ? 'Doble clic para renombrar' : c.name}
+                    onClick={() => { setQ(''); update(writeConvs(team, convs, c.id)) }}
+                    onDoubleClick={() => c.id === activeId && setRenaming(true)}>
+                    {c.name}
+                  </button>
+                ))}
+                <button className="tc-add" aria-label="Nueva conversación" title="Nueva conversación" onClick={newConv}>＋</button>
+              </div>
+              <button className={`tc-add ${searchOpen || q ? 'on' : ''}`} aria-label="Buscar en la conversación" title="Buscar" onClick={() => { setSearchOpen(!searchOpen); if (searchOpen) setQ('') }}>🔍</button>
+              {(searchOpen || q) && <input className="tc-search" type="search" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar en la conversación…" aria-label="Buscar en la conversación" />}
+              {convs.length > 1 && <button className="tc-add" aria-label="Eliminar conversación" title="Eliminar esta conversación" onClick={delConv}>🗑</button>}
+            </div>
+            {(() => {
+              // La carpeta es de la conversación y la usan todos los agentes; sin elegir, cae a la del agente que edita.
+              const cur = convs.find((c) => c.id === activeId)
+              const own = team.agents.find((a) => a.canEdit && a.workdir) ?? team.agents.find((a) => a.workdir)
+              const dir = cur?.workdir || own?.workdir
+              const setDir = (p: string): void => update(mapConv(team, activeId, (c) => ({ ...c, workdir: p })))
+              const name = (p: string): string => p.split(/[\\/]/).filter(Boolean).pop() ?? p
+              const grp = groups.find((g) => g.folders.some((f) => f.path === dir))
+              const pick = (p: string): void => { setDir(p); setDirOpen(false) }
+              return (
+                <div className="tc-dirwrap">
+                  <button type="button" className={`tc-dir ${dir ? '' : 'is-empty'} ${dirOpen ? 'open' : ''}`} aria-haspopup="menu" aria-expanded={dirOpen} title={dir ? `${dir}${cur?.workdir ? '' : ' (carpeta del agente)'}` : 'Elige la carpeta del proyecto'} onClick={() => setDirOpen(!dirOpen)}>
+                    <span aria-hidden>📁</span>
+                    <span className="tc-dir-n">{dir ? name(dir) : 'Elegir carpeta del proyecto'}</span>
+                    {grp && <small>{grp.name}</small>}
+                    <i aria-hidden>▾</i>
+                  </button>
+                  {dirOpen && (
+                    <>
+                      <button type="button" className="tc-dir-bg" aria-label="Cerrar" tabIndex={-1} onClick={() => setDirOpen(false)} />
+                      <div className="tc-dir-menu" role="menu">
+                        {groups.filter((g) => g.folders.length).map((g) => (
+                          <div key={g.id} role="group" aria-label={g.name}>
+                            <div className="tc-dir-g">{g.name}</div>
+                            {g.folders.map((fo) => (
+                              <button key={fo.path} type="button" role="menuitemradio" aria-checked={fo.path === dir} className={fo.path === dir ? 'on' : ''} title={fo.path} onClick={() => pick(fo.path)}>
+                                <b>{name(fo.path)}</b><small>{fo.path}</small>
+                              </button>
+                            ))}
+                          </div>
+                        ))}
+                        <button type="button" role="menuitem" className="tc-dir-o" onClick={() => void ui.run('folder:pick').then((p) => { if (p) pick(p); else setDirOpen(false) })}>📂 Elegir otra carpeta…</button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )
+            })()}
             <div className="tc-log" ref={logRef} aria-live="polite">
-              {log.length === 0 && !routing && (
+              {log.length === 0 && !routing && needle && <div className="tc-empty"><b>Sin resultados</b><p>Nada coincide con «{q}».</p></div>}
+              {log.length === 0 && !routing && !needle && (
                 <div className="tc-empty">
                   <span aria-hidden>🛰️</span>
                   <b>Pide algo al equipo</b>
@@ -494,7 +1017,18 @@ export function TeamView(): ReactNode {
               )}
               {log.map((m) => {
                 const a = byId(m.agentId)
-                if (m.role === 'user') return <div key={m.id} className="tc-msg me"><p>{m.text}</p></div>
+                if (m.role === 'user') return (
+                  <div key={m.id} className="tc-msg me">
+                    {m.attachments?.length ? <AttachmentList items={m.attachments} /> : null}
+                    {m.text && <p>{m.text}</p>}
+                    <div className="tc-act">
+                      <button title="Copiar" onClick={() => copyMsg(m.text)}>Copiar</button>
+                      <button title="Volver a ponerlo en el cuadro de texto" onClick={() => setDraft(m.text)}>Editar</button>
+                      <button title="Eliminar" onClick={() => delMsg(m.id)}>Eliminar</button>
+                    </div>
+                  </div>
+                )
+                if (m.role === 'system' && m.text) return <div key={m.id} className="tc-note">{m.text}</div>
                 if (m.role === 'system')
                   return (
                     <div key={m.id} className="tc-route" style={{ ['--c' as string]: a?.color ?? 'var(--accent)' }}>
@@ -505,7 +1039,23 @@ export function TeamView(): ReactNode {
                 return (
                   <div key={m.id} className="tc-msg bot" style={{ ['--c' as string]: a?.color ?? 'var(--accent)' }}>
                     <span className="tc-av" aria-hidden>{a?.emoji ?? '🤖'}</span>
-                    <div><b>{a?.name ?? 'Agente'}</b><p>{m.text}</p></div>
+                    <div>
+                      <b>{a?.name ?? 'Agente'}</b>
+                      <div className="tc-md"><Markdown text={m.text} /></div>
+                      <div className="tc-act">
+                        <button onClick={() => copyMsg(m.text)}>Copiar</button>
+                        <button disabled={!!(chatWork || routing) || !prevUser(m.id)} onClick={() => retry(m)}>Reintentar</button>
+                        <span className="tm-popwrap">
+                          <button aria-haspopup="true" aria-expanded={fwd === m.id} onClick={() => setFwd(fwd === m.id ? '' : m.id)}>Enviar a…</button>
+                          {fwd === m.id && (
+                            <div className="rs-pop" role="menu">
+                              {team.agents.filter((x) => x.id !== m.agentId).map((x) => <button key={x.id} role="menuitem" onClick={() => forward(m, x.id)}>{x.emoji} {x.name}</button>)}
+                            </div>
+                          )}
+                        </span>
+                        <button onClick={() => delMsg(m.id)}>Eliminar</button>
+                      </div>
+                    </div>
                   </div>
                 )
               })}
@@ -515,12 +1065,21 @@ export function TeamView(): ReactNode {
                 return (
                   <div className="tc-status work" style={{ ['--c' as string]: a?.color ?? 'var(--accent)' }}>
                     <span className="tc-av spin" aria-hidden>{a?.emoji}</span>
-                    <span><b>{a?.name}</b> está trabajando…</span>
-                    <code>{elapsed}</code>
+                    <span className="tc-st-txt"><b>{a?.name}</b><small>{progress || 'está trabajando…'}</small></span>
+                    <span className="tc-st-act"><code>{elapsed}</code><button className="btn sm danger" onClick={stop}>■ Detener</button></span>
                   </div>
                 )
               })()}
             </div>
+            {suggs.length > 0 && (
+              <div className="tc-sugg" role="listbox" aria-label="Sugerencias">
+                {suggs.map((g, i) => (
+                  <button key={g.key} role="option" aria-selected={i === sugg % suggs.length} className={i === sugg % suggs.length ? 'on' : ''} onMouseDown={(e) => { e.preventDefault(); g.apply() }}>
+                    <span>{g.label}</span><small>{g.hint}</small>
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="tc-mentions">
               {team.agents.map((a) => (
                 <button key={a.id} style={{ ['--c' as string]: a.color }} title={`Asignar a ${a.name}`} onClick={() => {
@@ -532,19 +1091,35 @@ export function TeamView(): ReactNode {
                 </button>
               ))}
             </div>
-            <div className="tc-comp">
+            <div className={`tc-comp ${dragging ? 'drag' : ''}`} onDragOver={(e) => { e.preventDefault(); setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={onDrop}>
+              {files.length > 0 && <AttachmentList items={files} onRemove={(i) => setFiles(files.filter((_, j) => j !== i))} />}
+              <div className="tr-to" style={{ ['--c' as string]: byId(target)?.color ?? 'var(--accent)' }}>
+                {byId(target) ? <>Hablando con: <b>{byId(target)?.emoji} {byId(target)?.name}</b> <button aria-label="Hablar con todo el equipo" title="Todo el equipo" onClick={() => setTarget('')}>✕</button></> : <>Todo el equipo <small>(se asigna solo)</small></>}
+              </div>
               <textarea
                 value={draft}
-                rows={3}
-                placeholder="¿Qué necesitas? Ej.: revisa la seguridad del login…"
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send() } }}
+                rows={2}
+                placeholder={byId(target) ? `Encárgale algo a ${byId(target)?.name}…` : '¿Qué necesitas? Ej.: revisa la seguridad del login…'}
+                onChange={(e) => { setDraft(e.target.value); setSugg(0) }}
+                onPaste={onPaste}
+                onKeyDown={(e) => {
+                  if (suggs.length) {
+                    const cur = suggs[sugg % suggs.length]
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setSugg(sugg + (e.key === 'ArrowDown' ? 1 : suggs.length - 1)); return }
+                    // Tab siempre completa; Enter completa salvo que el comando ya esté escrito entero (entonces se ejecuta)
+                    if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && draft !== cur.key)) { e.preventDefault(); cur.apply(); return }
+                  }
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send() }
+                }}
               />
+              <div className="tc-hint">{mentioned(draft) ? `Irá a ${mentioned(draft)?.name}` : 'Se asigna solo · @ agente · / comandos'}</div>
               <div className="tc-comp-f">
-                <span>{mentioned(draft) ? `Irá a ${mentioned(draft)?.name}` : 'Se asigna automáticamente · Mayús+Enter: nueva línea'}</span>
-                {log.length > 0 && <button className="btn sm" disabled={!!(routing || chatWork)} onClick={() => update({ ...team, chat: [] })}>Limpiar</button>}
-                <button className="btn primary sm" disabled={!draft.trim() || routing || !!chatWork || !team.agents.length} onClick={() => void send()}>Enviar</button>
+                <button className="ib clip" title="Adjuntar archivos o fotos (también puedes pegar o arrastrar)" aria-label="Adjuntar" onClick={() => void pickFiles()}><G n="files" size={16} /></button>
+                <span className="tc-sp" />
+                {all.length > 0 && <button className="btn sm" disabled={!!(routing || chatWork)} onClick={() => update(mapConv(team, activeId, (c) => ({ ...c, msgs: [] })))}>Limpiar</button>}
+                <button className="btn primary sm" disabled={(!draft.trim() && !files.length) || routing || !!chatWork || !team.agents.length} onClick={() => void send()}>Enviar</button>
               </div>
+              <p className="tc-hint">{mentioned(draft) ? `Irá a ${mentioned(draft)?.name}` : 'Se asigna automáticamente · Mayús+Enter: nueva línea'}</p>
             </div>
           </div>
         ) : agent ? (
@@ -552,30 +1127,134 @@ export function TeamView(): ReactNode {
             <div className="tm-edit-h" style={{ ['--c' as string]: agent.color }}>
               <span className="ic bot-prev"><Robot a={agent} state={agent.id === working ? 'work' : 'idle'} size={52} /></span>
               <span><b>{agent.name || 'Sin nombre'}</b><small>{agent.model} · {agent.skills.length} skill{agent.skills.length === 1 ? '' : 's'}</small></span>
+              <div className="tm-popwrap tm-more">
+                <button className="btn sm" aria-label="Más acciones" aria-haspopup="true" aria-expanded={pop === 'more'} onClick={() => { setConfirmDel(false); setPop(pop === 'more' ? '' : 'more') }}>⋯</button>
+                {pop === 'more' && (
+                  <div className="rs-pop right" role="menu">
+                    {confirmDel
+                      ? <button role="menuitem" className="danger" onClick={removeAgent}>Sí, eliminar «{agent.name}»</button>
+                      : <button role="menuitem" className="danger" onClick={() => setConfirmDel(true)}>Eliminar agente…</button>}
+                  </div>
+                )}
+              </div>
             </div>
+            <div className="tm-subtabs" role="tablist" aria-label="Secciones del agente" onKeyDown={(e) => {
+              const ks = ['id', 'brain', 'test'] as const
+              const i = ks.indexOf(sub)
+              const n = e.key === 'ArrowRight' ? (i + 1) % 3 : e.key === 'ArrowLeft' ? (i + 2) % 3 : -1
+              if (n < 0) return
+              e.preventDefault()
+              setSub(ks[n])
+              requestAnimationFrame(() => (document.getElementById(`sub-${ks[n]}`) as HTMLElement | null)?.focus())
+            }}>
+              {([['id', 'Identidad'], ['brain', 'Cerebro'], ['test', 'Probar']] as const).map(([k, l]) => (
+                <button key={k} id={`sub-${k}`} role="tab" aria-selected={sub === k} aria-controls="sub-panel" tabIndex={sub === k ? 0 : -1} className={sub === k ? 'on' : ''} onClick={() => setSub(k)}>{l}</button>
+              ))}
+            </div>
+            <div id="sub-panel" role="tabpanel" aria-labelledby={`sub-${sub}`}>
+            {sub === 'id' && <>
             <details className="tm-look" open>
               <summary>Apariencia del robot <button type="button" className="btn sm" onClick={(e) => { e.preventDefault(); randomBot() }}>🎲 Aleatorio</button></summary>
               {field('Color', swatches(COLORS, agent.color, (color) => setAgent({ color }), 'Color del agente'))}
               {field('Cabeza', opts(HEADS, agent.look?.head ?? 'redonda', (head) => setLook({ head })))}
               {field('Ojos', opts(BOT_EYES, agent.look?.eyes ?? 'pixel', (eyes) => setLook({ eyes })))}
               {field('Antena', opts(ANTENNAS, agent.look?.antenna ?? 'bola', (antenna) => setLook({ antenna })))}
+              {field('Boca', opts(BOT_MOUTH, agent.look?.mouth ?? 'ninguna', (mouth) => setLook({ mouth })))}
+              {field('Mejillas', opts(BOT_CHEEKS, agent.look?.cheeks ?? 'ninguno', (cheeks) => setLook({ cheeks })))}
               {field('Accesorio', opts(BOT_ACC, agent.look?.acc ?? 'ninguno', (acc) => setLook({ acc })))}
+              {field('Ropa', opts(BOT_OUTFIT, agent.look?.outfit ?? 'ninguna', (outfit) => setLook({ outfit })))}
             </details>
             <label>Nombre y emoji</label>
-            <div className="tm-row"><input value={agent.emoji} style={{ width: 56 }} onChange={(e) => setAgent({ emoji: e.target.value.slice(0, 2) })} /><input value={agent.name} onChange={(e) => setAgent({ name: e.target.value })} /></div>
+            <div className="tm-row"><input className="tm-emoji" aria-label="Emoji" value={agent.emoji} onChange={(e) => setAgent({ emoji: Array.from(e.target.value).slice(0, 2).join('') })} /><input aria-label="Nombre" value={agent.name} maxLength={40} onChange={(e) => setAgent({ name: e.target.value })} /></div>
+            </>}
+            {sub === 'brain' && <>
             <label>Modelo</label>
             {opts(MODELS.map((m) => [m, m[0].toUpperCase() + m.slice(1)] as [TeamAgent['model'], string]), agent.model, (model) => setAgent({ model }))}
+            <p className="tm-costhint">{agent.model === 'haiku' ? 'Rápido y barato: tareas cortas.' : agent.model === 'opus' ? 'El más capaz y el que más consume: úsalo solo si hace falta.' : 'Equilibrado: la opción recomendada.'}</p>
             <label>Instrucciones (prompt de sistema)</label>
             <textarea value={agent.prompt} onChange={(e) => setAgent({ prompt: e.target.value })} />
-            <label>Skills asignadas</label>
-            <div className="tm-opts">{SKILLS.map((s) => <button key={s} className={agent.skills.includes(s) ? 'on' : ''} onClick={() => setAgent({ skills: agent.skills.includes(s) ? agent.skills.filter((x) => x !== s) : [...agent.skills, s] })}>{s}</button>)}</div>
-            <label>Probar</label>
-            <textarea value={msg} placeholder="Escribe un encargo para este agente…" onChange={(e) => setMsg(e.target.value)} style={{ minHeight: 64 }} />
+            <label>Permisos y carpeta</label>
+            <label className="tm-check">
+              <input type="checkbox" checked={!!agent.canEdit} onChange={(e) => setAgent({ canEdit: e.target.checked })} /> Puede modificar código
+            </label>
+            {agent.canEdit && (
+              <div className="tm-warn" role="note">
+                <p>⚠️ Este agente <b>lee y edita archivos</b> de la carpeta elegida sin pedir confirmación (solo puede ejecutar git de lectura y typecheck). Revisa el diff antes de hacer commit.</p>
+              </div>
+            )}
+            <p className="tm-hint">{agent.canEdit ? 'Donde este agente edita archivos.' : 'Opcional: carpeta que el agente puede leer (sin editar). Si la dejas vacía usa la del agente que modifica código.'}</p>
+        {groups.some((g) => g.folders.length > 0) && (
+          <select aria-label="Grupo de carpetas" className="tm-groupsel" value={groups.some((g) => g.folders.some((f) => f.path === agent.workdir)) ? agent.workdir : ''} onChange={(e) => e.target.value && setAgent({ workdir: e.target.value })}>
+            <option value="">Elegir de un grupo de carpetas…</option>
+            {groups.filter((g) => g.folders.length > 0).map((g) => (
+              <optgroup key={g.id} label={g.name}>
+                {g.folders.map((f) => <option key={g.id + f.path} value={f.path}>{f.path.split(/[\\/]/).filter(Boolean).slice(-2).join('/')}{f.access === 'read' ? ' (solo lectura)' : ''}</option>)}
+              </optgroup>
+            ))}
+          </select>
+        )}
+        <div className="tm-row">
+          <input aria-label="Carpeta de trabajo" readOnly value={agent.workdir ?? ''} placeholder="Elige la carpeta del proyecto…" />
+          <button type="button" className="btn" onClick={() => void ui.run('folder:pick').then((p) => p && setAgent({ workdir: p }))}>Elegir…</button>
+        </div>
+            <label>Documentos de referencia</label>
+            <p className="tm-hint">Archivos que el agente lee en cada encargo (p. ej. una estimación anterior o una guía de cubicación).</p>
+            {(agent.refs?.length ?? 0) > 0 && <AttachmentList items={agent.refs ?? []} onRemove={(i) => setAgent({ refs: (agent.refs ?? []).filter((_, j) => j !== i) })} />}
+            <div className="tm-row"><button type="button" className="btn" onClick={() => void addRefs()}><G n="files" size={14} /> Añadir documentos…</button></div>
+            <label>Skills</label>
+            <p className="tm-hint">El agente las usará cuando la tarea encaje. Solo aparecen las instaladas.</p>
+            <div className="tm-skills">
+              {installed.map((s) => {
+                const on = agent.skills.includes(s.name)
+                return (
+                  <button key={s.name} type="button" aria-pressed={on} title={s.description} className={'tm-skill' + (on ? ' on' : '')} onClick={() => setAgent({ skills: on ? agent.skills.filter((x) => x !== s.name) : [...agent.skills, s.name] })}>
+                    <b>{s.name}</b><small>{s.description}</small>
+                  </button>
+                )
+              })}
+              {agent.skills.filter((n) => !installed.some((s) => s.name === n)).map((n) => (
+                <button key={n} type="button" aria-pressed className="tm-skill on missing" title="No instalada: quítala o instálala desde el catálogo" onClick={() => setAgent({ skills: agent.skills.filter((x) => x !== n) })}>
+                  <b>{n}</b><small>No instalada · pulsa para quitar</small>
+                </button>
+              ))}
+            </div>
+            <div className="tm-row"><button type="button" className="btn" onClick={() => void window.api.call('window:skills')}>Gestionar skills…</button></div>
+            {(agent.id === 'estimador' || agent.skills.includes('cubicación')) && (
+              <details className="tm-look" open>
+                <summary>Plantillas de estimación</summary>
+                <small>El agente usa la técnica o la comercial según lo que pidas (escribe «técnica» o «comercial» en el encargo).</small>
+                {ESTIMATE_LEVELS.map(([lvl, label]) => {
+                  const custom = team.estimateTemplates?.[lvl]
+                  const setTpl = (v: string | undefined): void => update({ ...team, estimateTemplates: { ...team.estimateTemplates, [lvl]: v } })
+                  return (
+                    <div key={lvl}>
+                      <label>{label} {custom?.trim() ? '(personalizada)' : '(por defecto)'}</label>
+                      <textarea value={custom ?? DEFAULT_ESTIMATE_TEMPLATES[lvl]} style={{ minHeight: 120 }} onChange={(e) => setTpl(e.target.value)} />
+                      <div className="tm-row">
+                        <label className="btn sm">
+                          Cargar archivo…
+                          <input type="file" accept=".md,.txt,.csv,text/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void f.text().then(setTpl) }} />
+                        </label>
+                        <button className="btn sm" disabled={!custom?.trim()} onClick={() => setTpl(undefined)}>Restaurar por defecto</button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </details>
+            )}
+            </>}
+            {sub === 'test' && <>
+            <label>Encargo de prueba</label>
+            <textarea value={msg} placeholder="Escribe un encargo para este agente…" onChange={(e) => setMsg(e.target.value)} style={{ minHeight: 96 }} />
             <div className="tm-row">
               <button className="btn primary" disabled={busy || !msg.trim()} onClick={() => void ask()}>{busy ? 'Pensando…' : 'Enviar'}</button>
-              <button className="btn" onClick={removeAgent}>Eliminar</button>
+              {agent.id === 'qa' && (
+                <button className="btn" disabled={busy} title="Prueba en la app aislada lo que cambió (diff). Gasta tokens: solo a petición." onClick={() => void runQa()}>{busy ? 'Probando…' : '🧪 Probar este commit'}</button>
+              )}
             </div>
             {reply && <pre className="tm-reply">{reply}</pre>}
+            </>}
+            </div>
           </>
         ) : (
           <div className="tm-empty">

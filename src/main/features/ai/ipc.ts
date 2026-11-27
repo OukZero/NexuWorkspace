@@ -4,10 +4,12 @@ import { pad } from '../../../shared/util'
 import * as checks from '../dev/checks'
 import * as iso from '../dev/isolation'
 import { planAssistant, readAndAnswer } from './assistant'
+import { askArch, deleteArch, listArch, saveArch } from './architecture'
 import * as attachments from './attachments'
+import { deleteDiagram, diagramChat, exportDiagram, listDiagrams, saveDiagram } from './diagrams'
 import * as chat from './chat'
 import { buildContext, expandVars, repoDirOf, taskById as findTask, withContext } from './context'
-import { deleteMockup, exportMockup, listMockups, revealMockups } from './mockups'
+import { addStyleRef, deleteMockup, exportMockup, getStyle, listMockups, removeStyleRef, revealMockups, saveStyle } from './mockups'
 import * as sessions from './sessions'
 import * as skills from './skills'
 import { summarizeConversation } from './summary'
@@ -32,6 +34,19 @@ export function registerAiIpc(): void {
   api('mockup:list', (taskId) => listMockups(taskId))
   api('mockup:delete', (taskId, name) => deleteMockup(taskId, name))
   api('mockup:export', (taskId, name, format, width) => exportMockup(taskId, name, format, width))
+  api('design:style-get', () => getStyle())
+  api('design:style-save', (p) => saveStyle(p))
+  api('design:style-add', (name, data) => addStyleRef(name, data))
+  api('design:style-remove', (name) => removeStyleRef(name))
+  api('diagram:list', () => listDiagrams())
+  api('diagram:save', (p) => saveDiagram(p))
+  api('diagram:delete', (id) => deleteDiagram(id))
+  api('diagram:chat', (id, taskId) => diagramChat(id, taskId))
+  api('diagram:export', (name, format, content) => exportDiagram(name, format, content))
+  api('arch:list', () => listArch())
+  api('arch:save', (p) => saveArch(p))
+  api('arch:delete', (id) => deleteArch(id))
+  api('arch:ask', (id, step, text) => askArch(id, step, text))
   api('mockup:reveal', (taskId) => revealMockups(taskId))
   api('attach:pick', (convId) => attachments.pick(convId))
   api('attach:save', (convId, name, data) => attachments.saveBytes(convId, name, data))
@@ -105,7 +120,7 @@ export function registerAiIpc(): void {
     c.closed = true
     commit()
     // nota de sesión automática (en segundo plano: cerrar la pestaña no espera a la IA)
-    if (getDb().settings.autoSessionNotes !== false && !c.running && c.kind !== 'design' && sessions.hasNewWork(c)) void sessions.createNote(convId).catch(() => undefined)
+    if (getDb().settings.autoSessionNotes !== false && !c.running && c.kind !== 'design' && c.kind !== 'diagram' && sessions.hasNewWork(c)) void sessions.createNote(convId).catch(() => undefined)
   })
   api('chat:reopen', (convId) => {
     const c = getDb().chats[convId]

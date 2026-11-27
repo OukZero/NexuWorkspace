@@ -101,7 +101,7 @@ export function ContextBar({ taskId, kinds, onChange, terminalText }: { taskId: 
                   <pre>{preview.text || 'No hay datos para estas piezas todavía.'}</pre>
                 </>
               ) : (
-                <div className="meta">Cargando…</div>
+                <div className="skel-list" aria-busy="true"><div className="skel" /><div className="skel" style={{ width: '60%' }} /></div>
               )}
             </div>
           )}

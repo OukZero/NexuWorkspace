@@ -2,7 +2,8 @@
 import { app, BrowserWindow, dialog, protocol, shell } from 'electron'
 import fs from 'fs'
 import path from 'path'
-import type { Attachment, MockupFile } from '../../../shared/types'
+import type { Attachment, DesignStyle, MockupFile } from '../../../shared/types'
+import { commit, getDb } from '../../db'
 import { getMain } from '../../windows'
 
 export const SCHEME = 'shutoki-mockup'
@@ -97,6 +98,57 @@ export function stageAssets(taskId: string, files: Attachment[]): string[] {
   return out
 }
 
+// ---- guía de estilo global ----
+export const styleDir = (): string => path.join(mockupsRoot(), '_estilo')
+
+export function getStyle(): DesignStyle {
+  const s = getDb().designStyle
+  return { brief: s?.brief ?? '', links: s?.links ?? [], refs: (s?.refs ?? []).filter((r) => fs.existsSync(r.path)) }
+}
+
+export function saveStyle(p: { brief: string; links: string[] }): DesignStyle {
+  const links = p.links.map((l) => l.trim()).filter((l) => /^https?:\/\//i.test(l)).slice(0, 12)
+  getDb().designStyle = { ...getStyle(), brief: p.brief.slice(0, 8000), links }
+  commit()
+  return getStyle()
+}
+
+export function addStyleRef(name: string, data: Uint8Array): DesignStyle {
+  const base = path.basename(name || 'referencia.png').replace(/[^\w.-]+/g, '-').replace(/^[^\w]+/, '')
+  if (!ASSET_RE.test(base)) throw new Error('Solo se admiten imágenes PNG, JPG, GIF, WEBP o SVG.')
+  if (data.byteLength > 10 * 1024 * 1024) throw new Error('La imagen supera 10 MB.')
+  const cur = getStyle()
+  if (cur.refs.length >= 12) throw new Error('Máximo 12 referencias.')
+  fs.mkdirSync(styleDir(), { recursive: true })
+  const ext = path.extname(base)
+  const file = path.join(styleDir(), cur.refs.some((r) => r.name === base) ? `${path.basename(base, ext)}-${Date.now().toString(36)}${ext}` : base)
+  fs.writeFileSync(file, data)
+  getDb().designStyle = { ...cur, refs: [...cur.refs, { name: path.basename(file), path: file }] }
+  commit()
+  return getStyle()
+}
+
+export function removeStyleRef(name: string): DesignStyle {
+  const cur = getStyle()
+  const hit = cur.refs.find((r) => r.name === name)
+  if (hit) fs.rmSync(hit.path, { force: true })
+  getDb().designStyle = { ...cur, refs: cur.refs.filter((r) => r.name !== name) }
+  commit()
+  return getStyle()
+}
+
+/** Bloque de la guía de estilo del usuario: manda sobre cualquier gusto propio del modelo. */
+function styleLines(): string[] {
+  const st = getStyle()
+  if (!st.brief.trim() && !st.links.length && !st.refs.length) return []
+  const out = ['', 'GUÍA DE ESTILO DEL USUARIO (obligatoria: todos los mockups deben seguirla; si el usuario pide otra cosa en el mensaje, manda el mensaje):']
+  if (st.brief.trim()) out.push(st.brief.trim())
+  if (st.links.length) out.push('Referencias web (consúltalas con WebFetch al empezar un mockup nuevo y extrae colores, tipografías, radios y patrones):', ...st.links.map((l) => '- ' + l))
+  if (st.refs.length) out.push('Imágenes de referencia (ábrelas con Read y respeta su estilo, paleta y composición):', ...st.refs.map((r) => '- ' + r.path))
+  out.push('Define las decisiones de la guía como variables CSS (:root) al inicio del HTML para que los mockups sean coherentes entre sí.', '')
+  return out
+}
+
 /** Instrucciones de diseño para Claude (se pasan con --append-system-prompt-file). */
 export function designInstructions(taskId: string, taskTitle: string): string {
   const dir = mockupsDir(taskId)
@@ -114,6 +166,7 @@ export function designInstructions(taskId: string, taskTitle: string): string {
       '- Diseño responsive (se previsualiza en escritorio, tableta y móvil), con datos de ejemplo realistas en español, sin lorem ipsum.',
       '- Cuida jerarquía visual, espaciado, contraste y estados (hover, vacío, error) cuando aporten.',
       '- Puedes consultar el código del proyecto para respetar su estilo, pero NO modifiques el proyecto: solo escribe en la carpeta de mockups.',
+      ...styleLines(),
       'Al terminar responde en dos líneas como máximo: qué incluye el mockup y el nombre del archivo.'
     ].join('\n')
   )

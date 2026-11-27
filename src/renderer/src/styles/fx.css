@@ -1,0 +1,52 @@
+/* ===== efectos de interfaz (alto impacto + impacto medio) =====
+   Solo transform/opacity/box-shadow. Se apagan con «Animaciones» desactivadas y con prefers-reduced-motion. */
+@keyframes fx-tab { from { opacity: 0; transform: translateY(6px); } }
+@keyframes fx-dots { 0%, 80%, 100% { transform: scale(.55); opacity: .4; } 40% { transform: scale(1); opacity: 1; } }
+@keyframes fx-spin { to { transform: rotate(360deg); } }
+@keyframes fx-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 45%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; } }
+@keyframes fx-item { from { opacity: 0; transform: translateY(6px); } }
+@keyframes fx-lift { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+
+/* 1 · cambio de pestaña: el contenido nuevo entra con un fundido corto */
+html:not([data-motion="off"]) :is(.seg, .tabs, .drawer-tabs) + *, html:not([data-motion="off"]) .tab-body { animation: fx-tab .28s cubic-bezier(.22, 1, .36, 1) backwards; }
+
+/* 3 · Claude está escribiendo: borde de la caja con degradado giratorio + tres puntos */
+html .chatpane .composer.cbox.working { position: relative; }
+html .chatpane .composer.cbox.working::after { content: ""; position: absolute; left: 14px; top: -9px; width: 34px; height: 12px; border-radius: 8px; pointer-events: none;
+  background: radial-gradient(circle 2.5px at 7px 6px, var(--accent) 98%, transparent), radial-gradient(circle 2.5px at 17px 6px, var(--accent) 98%, transparent), radial-gradient(circle 2.5px at 27px 6px, var(--accent) 98%, transparent); opacity: .85; }
+html:not([data-motion="off"]) .chatpane .composer.cbox.working { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 26px -8px color-mix(in srgb, var(--accent) 65%, transparent); animation: fx-lift 2.4s ease-in-out infinite; }
+
+/* 4 · timer activo: latido en el punto y en el borde de la píldora */
+html:not([data-motion="off"]) .now.run { animation: fx-pulse 2.4s ease-out infinite; }
+
+/* 5 · barras de desplazamiento finas con el acento */
+html { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--accent) 45%, transparent) transparent; }
+html *::-webkit-scrollbar { width: 8px; height: 8px; }
+html *::-webkit-scrollbar-track { background: transparent; }
+html *::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+html *::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--accent) 65%, transparent); background-clip: content-box; }
+
+/* 6 · foco que sigue al cursor (--mx/--my los pone fx.ts) */
+.bc { --mx: 50%; --my: 50%; }
+.bc::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .3s; z-index: 0;
+  background: radial-gradient(260px circle at var(--mx) var(--my), color-mix(in srgb, var(--accent) 16%, transparent), transparent 65%); }
+.bc:hover::before { opacity: 1; }
+.bc { position: relative; }
+
+/* 8 · arrastrar y soltar en el tablero */
+html .kb-col { transition: border-color .2s, background .2s, box-shadow .25s; }
+html .kb-col.over { background: color-mix(in srgb, var(--accent) 7%, var(--panel)); box-shadow: inset 0 0 0 1px var(--accent), 0 0 34px -12px var(--accent); }
+html .kb-card.dragging { opacity: .55; transform: rotate(2.5deg) scale(1.03); box-shadow: 0 18px 40px -12px #000a; }
+
+/* 9 · paleta de comandos: entrada tipo spotlight y resultados escalonados */
+html:not([data-motion="off"]) .dialog.palette { animation: fx-tab .22s cubic-bezier(.22, 1, .36, 1) backwards; }
+html:not([data-motion="off"]) .palette .pitem { animation: fx-item .26s cubic-bezier(.22, 1, .36, 1) backwards; }
+html:not([data-motion="off"]) .palette .pitem:nth-of-type(1) { animation-delay: .02s; }
+html:not([data-motion="off"]) .palette .pitem:nth-of-type(2) { animation-delay: .05s; }
+html:not([data-motion="off"]) .palette .pitem:nth-of-type(3) { animation-delay: .08s; }
+html:not([data-motion="off"]) .palette .pitem:nth-of-type(4) { animation-delay: .11s; }
+html:not([data-motion="off"]) .palette .pitem:nth-of-type(n + 5) { animation-delay: .14s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .now.run, .composer.cbox.working, .palette, .palette .pitem, .tab-body { animation: none !important; }
+}

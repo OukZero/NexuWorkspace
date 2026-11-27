@@ -4,8 +4,12 @@ import { app } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import type { UpdateState } from '../shared/types'
 import { clip } from '../shared/util'
-import { broadcast, getDb } from './db'
+import { broadcast, commit, getDb } from './db'
 import { lifecycle } from './lifecycle'
+import { stopActive } from './features/time/timer'
+import { cleanup } from './quit'
+import { showUpdating } from './splash'
+import { markInjectedToken } from './childEnv'
 
 const HOUR = 3_600_000
 let state: UpdateState = { status: app.isPackaged ? 'idle' : 'dev', current: app.getVersion() }
@@ -36,6 +40,7 @@ function explain(e: Error): string {
 function applyToken(): void {
   const t = (getDb().settings.updateToken || process.env.GH_TOKEN || '').trim()
   if (!t) return
+  if (process.env.GH_TOKEN !== t) markInjectedToken(t) // solo si lo pone la app: un GH_TOKEN propio del usuario no se toca
   process.env.GH_TOKEN = t // electron-updater lo usa para pedir los assets privados
   autoUpdater.addAuthHeader(`token ${t}`)
 }
@@ -86,7 +91,19 @@ export async function download(): Promise<void> {
 export function install(): void {
   if (state.status !== 'ready') throw new Error('Todavía no hay una actualización descargada.')
   lifecycle.quitting = true // sin esto «cerrar a la bandeja» impediría salir
-  autoUpdater.quitAndInstall(false, true)
+  // el instalador arranca ya, antes del cierre: se para el timer, se guarda y se matan los procesos hijo para que no bloqueen archivos
+  try {
+    stopActive()
+    commit()
+  } catch {
+    /* sin datos que guardar */
+  }
+  cleanup()
+  // pantalla «Actualizando…» unos segundos y luego se instala, para que no parezca que la app solo se cierra
+  void showUpdating(state.version).then(() => {
+    // isSilent=true: el Setup de NSIS corre con /S (sin asistente); el segundo true reabre la app al terminar
+    autoUpdater.quitAndInstall(true, true)
+  })
 }
 
 export function initUpdater(): void {

@@ -6,6 +6,7 @@ import type { Task } from '../../../shared/types'
 import { getDb } from '../../db'
 import { effectiveTask, groupAccess } from '../tasks/groups'
 import { emit } from '../../windows'
+import { childEnv } from '../../childEnv'
 
 interface Session {
   proc: nodePty.IPty
@@ -25,7 +26,7 @@ export function createPty(original: Task, cols: number, rows: number, sessionId?
     cols: Math.max(20, Math.floor(cols) || 100),
     rows: Math.max(5, Math.floor(rows) || 24),
     cwd: task.folder,
-    env: { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' } as Record<string, string>
+    env: childEnv({ TERM: 'xterm-256color', COLORTERM: 'truecolor' })
   })
   const id = `pty${++seq}`
   sessions.set(id, { proc, taskId: task.id })

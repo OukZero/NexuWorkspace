@@ -1,0 +1,511 @@
+/* =====================================================================
+   Piel «Sorvo» (tarjetas redondeadas, barra lateral ancha, botones y filtros
+   nuevos) aplicada a TODOS los temas: usa solo las variables del tema activo
+   (--panel, --line, --accent…). Aqua añade abajo su cristal y degradado.
+   Colores: PRESETS en theme.ts.
+   ===================================================================== */
+
+
+html[data-preset] {
+  --sv-ease: cubic-bezier(.645, .045, .355, 1); /* power3.inOut, como el mockup */
+  --sv-r: 10px;
+  --sv-r-lg: 16px;
+  --sv-glow: color-mix(in srgb, var(--accent) 38%, transparent);
+  --grad: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 80%, #000));
+  --glow: var(--sv-glow);
+  --ln: var(--line);
+  --ln2: color-mix(in srgb, var(--line) 60%, #fff);
+  --line2: var(--ln2);
+  --gl: var(--panel);
+  --gl2: var(--panel2);
+  --dim: var(--muted);
+  --nd-edge: rgba(255, 255, 255, .05);
+  --r-card: var(--sv-r-lg);
+}
+
+/* el botón de plegar solo existe en Sorvo */
+.navrail .tn-fold { display: none; }
+
+/* fondo: brillo naranja arriba a la derecha, como el mockup */
+html[data-preset][data-bg-kind="plano"] body::before {
+  display: block; content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(700px 460px at 92% -10%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%),
+    radial-gradient(560px 400px at 0% 105%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 70%);
+}
+
+/* ---------- barra lateral: ancha con etiquetas (solo en pantallas anchas) ---------- */
+@media (min-width: 1101px) {
+  html[data-preset] .navrail {
+    width: 232px; align-items: stretch; padding: 16px 12px; gap: 4px;
+    background: linear-gradient(180deg, var(--panel) 0%, var(--bg) 100%);
+    border-right: 1px solid var(--line); box-shadow: none;
+  }
+  /* plegado: el panel se recorta por el borde derecho (clip-path con esquinas redondas) mientras el ancho se anima */
+  html[data-preset] .navrail {
+    clip-path: inset(0 round 0 0 0 0);
+    transition: width .62s var(--sv-ease), clip-path .62s var(--sv-ease);
+  }
+  html[data-preset] .navrail[data-folded="true"] { width: 76px; clip-path: inset(0 round 0 28px 28px 0); }
+  html[data-preset] .navrail .tn-head { display: flex; align-items: center; margin: 4px 6px 18px; }
+  html[data-preset] .navrail .tn-logo { margin: 0; }
+  /* botón de plegar: fila al pie de la barra (icono + texto al desplegar, solo icono al plegar); también Ctrl+B */
+  html[data-preset] .navrail .tn-fold {
+    display: flex; align-items: center; width: 100%; height: 40px; padding: 0 18px; gap: 12px; overflow: hidden;
+    font-size: 13.5px; font-weight: 500; color: var(--muted); background: transparent; border: 0; border-radius: var(--sv-r);
+    transition: background-color .25s var(--sv-ease), color .25s var(--sv-ease);
+  }
+  html[data-preset] .navrail .tn-fold:hover { background: var(--panel2); color: var(--text); }
+  html[data-preset] .navrail .tn-fold svg { flex: none; transform: rotate(180deg); transition: transform .62s var(--sv-ease); }
+  html[data-preset] .navrail[data-folded="true"] .tn-fold svg { transform: none; }
+  html[data-preset] .navrail[data-folded="true"] .tn-fold .tn-t { max-width: 0; opacity: 0; }
+  html[data-preset] .navrail .tn-items { align-items: stretch; gap: 3px; }
+  html[data-preset] .navrail .tn-i {
+    width: 100%; height: 40px; padding: 0 12px; gap: 12px; justify-content: flex-start; overflow: hidden;
+    font-size: 13.5px; font-weight: 500; color: var(--muted); border-radius: var(--sv-r);
+  }
+  /* la posición del icono no depende del ancho (así el FLIP mide bien con la barra aún en transición) */
+  html[data-preset] .navrail[data-folded="true"] .tn-i { padding: 0 18px; }
+  html[data-preset] .navrail .tn-t {
+    display: inline !important; max-width: 160px; white-space: nowrap; overflow: hidden;
+    transition: opacity .3s var(--sv-ease) calc(.24s + var(--i, 0) * 18ms), max-width .62s var(--sv-ease);
+  }
+  html[data-preset] .navrail[data-folded="true"] .tn-t {
+    max-width: 0; opacity: 0; transition: opacity .2s var(--sv-ease) calc(var(--i, 0) * 18ms), max-width .62s var(--sv-ease);
+  }
+  html[data-preset] .navrail[data-folded="true"] .tn-n { position: absolute; top: 4px; right: 8px; margin: 0; min-width: 16px; height: 16px; font-size: 9px; }
+  html[data-preset] .navrail[data-folded="true"] .tn-dot { position: absolute; top: 8px; right: 12px; margin: 0; }
+  html[data-preset] .navrail[data-folded="true"] .rail-av { margin-left: 8px; }
+  html[data-preset] .navrail .tn-i:hover { background: var(--panel2); color: var(--text); }
+  html[data-preset] .navrail .tn-i.on {
+    background: var(--grad); color: var(--on-accent); font-weight: 600;
+    box-shadow: 0 10px 24px -14px var(--accent);
+  }
+  html[data-preset] .navrail .tn-i.on::before { display: none; }
+  html[data-preset] .navrail .tn-n {
+    position: static; margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px;
+    font-size: 11px; background: var(--accent); color: var(--on-accent); border-radius: 999px;
+  }
+  html[data-preset] .navrail .tn-dot { position: static; margin-left: auto; }
+  html[data-preset] .navrail .rail-av { width: 36px; height: 36px; margin: 6px 6px 0; }
+}
+
+/* ---------- barra superior: título grande, buscador tipo campo, iconos en botones ---------- */
+html[data-preset] .topbar {
+  min-height: 68px; padding: 12px 24px; gap: 14px;
+  background: transparent; backdrop-filter: none;
+  border-bottom: 1px solid var(--line);
+}
+html[data-preset] .tb-title h1 { font: 650 22px Sora, sans-serif; letter-spacing: -.01em; }
+html[data-preset] .tb-title small { color: var(--muted); }
+html[data-preset] .tb-search {
+  width: 300px; padding: 9px 12px; border-radius: var(--sv-r);
+  background: var(--panel); border-color: var(--line);
+}
+html[data-preset] .tb-tools .ib,
+html[data-preset] .topbar > .ib {
+  width: 38px; height: 38px; border-radius: var(--sv-r); background: var(--panel); border: 1px solid var(--line);
+}
+html[data-preset] .tb-tools .ib:hover,
+html[data-preset] .topbar > .ib:hover { background: var(--panel2); border-color: var(--ln2); }
+
+/* ---------- superficies: tarjetas grafito con luz superior y borde suave ---------- */
+html[data-preset] :is(.bc, .card, .group-card, .limit, .period, .bars, .wbars, .activity, .heat,
+  .hist-row, .addin, .sess, .wsp, .wsp-host, .ti-stats > div, .ti-session, .mu-card, .nt-list, .nt-main,
+  .imp, .row, .empty, .statusbar, .web-host, .webv-body, .design-list, .design-chat, .gleft, .gright,
+  .files-side, .files-main, .rm-card, .hm-col, .hm-line, .hm-ai, .hm-week, .hm-git) {
+  border-radius: var(--sv-r-lg);
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--panel2) 0%, var(--panel) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04), 0 22px 44px -30px rgba(0, 0, 0, .35);
+}
+html[data-preset] :is(.bc, .card, .addin, .group-card, .mu-card):hover {
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--line));
+}
+html[data-preset] .bc,
+html[data-preset] .card,
+html[data-preset] .addin { transition: border-color .25s var(--sv-ease), box-shadow .25s var(--sv-ease); }
+
+/* titulares de tarjeta: Sora, algo más grandes, como en las tarjetas del mockup */
+html[data-preset] .card-h h2,
+html[data-preset] .bc h2 { font: 600 15px Sora, sans-serif; letter-spacing: -.005em; }
+html[data-preset] .eyebrow { color: var(--muted); letter-spacing: .08em; }
+
+/* ---------- botones: contorno oscuro; el principal, degradado naranja con halo ---------- */
+html[data-preset] .btn {
+  border-radius: var(--sv-r); background: var(--panel); border: 1px solid var(--line); color: var(--text);
+  font-weight: 500; transition: background-color .25s var(--sv-ease), border-color .25s var(--sv-ease), transform .25s var(--sv-ease), box-shadow .25s var(--sv-ease);
+}
+html[data-preset] .btn:hover:not(:disabled) { background: var(--panel2); border-color: var(--ln2); }
+html[data-preset] .btn:active:not(:disabled) { transform: scale(.97); }
+html[data-preset] .btn.primary,
+html[data-preset] .btn.pri {
+  background: var(--grad); color: var(--on-accent); border-color: transparent; font-weight: 600;
+  box-shadow: 0 10px 24px -12px var(--accent);
+}
+html[data-preset] .btn.primary:hover:not(:disabled) { background: var(--grad); filter: brightness(1.06); }
+html[data-preset] .ib:hover { background: var(--panel2); }
+
+/* ---------- filtros y pestañas: contenedor oscuro, pestaña activa con relleno naranja ---------- */
+html[data-preset] :is(.tabs3, .subbar .modeseg, .seg) {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--sv-r); padding: 3px;
+}
+html[data-preset] :is(.tabs3 button, .subbar .modeseg button, .seg button) {
+  border-radius: 8px; color: var(--muted); font-weight: 600; background: none; border: 0;
+  transition: background-color .25s var(--sv-ease), color .25s var(--sv-ease);
+}
+html[data-preset] :is(.tabs3 button.on, .subbar .modeseg button.on, .seg button.on, .seg button[aria-pressed="true"]) {
+  background: var(--grad); color: var(--on-accent); box-shadow: 0 6px 16px -10px var(--accent);
+}
+/* pestañas tipo subrayado (Audiencia / Alcance…) */
+html[data-preset] .tab { color: var(--muted); background: none; border-radius: 0; }
+html[data-preset] .tab.on,
+html[data-preset] .tab.active,
+html[data-preset] .tab[aria-selected="true"] {
+  color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); background: none;
+}
+
+/* ---------- pastillas, etiquetas y chips ---------- */
+html[data-preset] :is(.tag, .pill, .chip, .chips button) { border-radius: 999px; }
+html[data-preset] .chip,
+html[data-preset] .chips button { border: 1px solid var(--line); background: var(--panel); }
+html[data-preset] :is(.chip.on, .chips button.on) {
+  background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: var(--accent); color: var(--accent);
+}
+
+/* ---------- campos de texto ---------- */
+html[data-preset] :is(input:not([type]), input[type="text"], input[type="search"], input[type="number"], input[type="date"], input[type="time"], select, textarea) {
+  border-radius: var(--sv-r); background: var(--panel); border: 1px solid var(--line); color: var(--text);
+}
+html[data-preset] :is(input, select, textarea):focus-visible {
+  outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* El textarea del compositor vive dentro de su caja: sin borde ni fondo propios (el foco lo marca la caja) */
+html[data-preset] .composer.cbox textarea,
+html[data-preset] .composer.cbox textarea:focus-visible {
+  background: none; border: 0; box-shadow: none; outline: none; border-radius: 0;
+}
+
+/* ---------- filas y listas: radio medio, fondo al pasar el cursor ---------- */
+html[data-preset] :is(.row, .hist-row, .mu-row, .nt-item, .menu-item, .tn-mi, .folder-row, .task, .hm-col .task, .tl-list .row) {
+  border-radius: 12px; transition: background-color .2s var(--sv-ease), transform .2s var(--sv-ease);
+}
+html[data-preset] :is(.row, .hist-row, .mu-row, .nt-item, .menu-item, .folder-row, .task):hover {
+  background: var(--panel2);
+}
+
+/* ---------- diálogos, menús y popovers ---------- */
+html[data-preset] :is(.dialog, .pmenu, .notif-pop, .sel-pop, .menu-pop, .tabmenu, .composer.cbox, .msg, .dtl-box) {
+  border-radius: var(--sv-r-lg); background: var(--panel); border: 1px solid var(--line);
+}
+html[data-preset] .modal { background: rgba(5, 6, 9, .6); }
+
+/* ---------- avisos y valores de estado: el naranja es el acento de marca ---------- */
+html[data-preset] .now { border-radius: var(--sv-r); background: var(--panel); border-color: var(--line); }
+html[data-preset] .now.run { border-color: color-mix(in srgb, var(--accent) 40%, transparent); box-shadow: 0 0 24px -10px var(--accent); }
+
+/* ---------- movimiento: transiciones suaves, sin decorativos infinitos ---------- */
+html[data-preset] .ib,
+html[data-preset] .btn,
+html[data-preset] .tn-i { transition-property: background-color, color, border-color, transform, box-shadow; transition-duration: .25s; transition-timing-function: var(--sv-ease); }
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-preset] * { transition-duration: 0s !important; animation-duration: 0s !important; }
+}
+html[data-motion="off"][data-preset] * { transition-duration: 0s !important; animation-duration: 0s !important; }
+
+/* ---------- retoques por ventana ---------- */
+/* Equipo: los paneles son tarjetas de vidrio, sin la franja de prioridad de las tareas */
+html[data-preset] .tm-wrap > .card::before { display: none; }
+/* Historial: el buscador ya tiene su propio marco; el input interior va sin borde */
+html[data-preset] .hist-q { border-radius: var(--sv-r); background: var(--panel); }
+html[data-preset] .hist-q input,
+html[data-preset] .hist-q input:focus { border: 0; box-shadow: none; background: none; outline: none; }
+/* Consumo: título de sección y botón alineados con aire */
+html[data-preset] .eyebrow { letter-spacing: .14em; }
+
+/* ======================================================================
+   Analítica estilo Sorvo: gráficos de Productividad y Consumo IA
+   ====================================================================== */
+@keyframes sv-grow { from { transform: scaleY(0); } }
+@keyframes sv-fill { from { transform: scaleX(0); } }
+
+/* barras verticales: rejilla suave, barras tenues y la destacada en naranja brillante */
+html[data-preset] .kz-spark {
+  gap: 10px; border-bottom: 0; padding-top: 18px;
+  background-image: linear-gradient(to bottom, rgba(255, 255, 255, .05) 1px, transparent 1px);
+  background-size: 100% 25%; background-position: 0 14px; background-repeat: repeat-y;
+}
+html[data-preset] .kz-spark .c .b {
+  border-radius: 8px 8px 3px 3px; transform-origin: bottom;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 46%, #3a2a20), color-mix(in srgb, var(--accent) 22%, #1b1511));
+  animation: sv-grow .7s var(--sv-ease) backwards;
+  transition: filter .25s var(--sv-ease), height .6s var(--sv-ease);
+}
+html[data-preset] .kz-spark .c:nth-child(2n) .b { animation-delay: .04s; }
+html[data-preset] .kz-spark .c:nth-child(3n) .b { animation-delay: .08s; }
+html[data-preset] .kz-spark .c:nth-child(5n) .b { animation-delay: .12s; }
+html[data-preset] .kz-spark .c.hi .b {
+  background: linear-gradient(180deg, #ffb27a, var(--accent) 45%, #e8642a);
+  box-shadow: 0 0 22px -4px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+html[data-preset] .kz-spark .c:hover .b { filter: brightness(1.25); }
+html[data-preset] .kz-spark .c.hi em { color: var(--accent); font-weight: 700; }
+
+/* barras horizontales con número de posición */
+html[data-preset] .db-hbars { counter-reset: sv-rank; gap: 12px; }
+html[data-preset] .db-hb { grid-template-columns: minmax(90px, 34%) 1fr auto; counter-increment: sv-rank; }
+html[data-preset] .db-hb-n::before { content: counter(sv-rank); display: inline-block; width: 18px; margin-right: 6px; color: var(--muted); font-variant-numeric: tabular-nums; }
+html[data-preset] .db-hb-t { height: 8px; background: rgba(255, 255, 255, .06); }
+html[data-preset] .db-hb-t i {
+  background: linear-gradient(90deg, #e8642a, var(--accent), #ffb27a); transform-origin: left;
+  animation: sv-fill .8s var(--sv-ease) backwards; box-shadow: 0 0 12px -2px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+/* horas del día */
+html[data-preset] .db-hours { gap: 5px; }
+html[data-preset] .db-hour-b { border-radius: 6px; transform-origin: bottom; animation: sv-grow .7s var(--sv-ease) backwards; background: linear-gradient(180deg, var(--accent), #e8642a); }
+
+/* tarjetas KPI: velo de color en la esquina, número grande */
+html[data-preset] .db-tiles { gap: 14px; }
+html[data-preset] .db-tile { position: relative; overflow: hidden; }
+html[data-preset] .db-tile::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--tint, var(--accent)) 16%, transparent), transparent 60%);
+}
+html[data-preset] .db-tile:nth-child(2) { --tint: #5fd0b0; }
+html[data-preset] .db-tile:nth-child(3) { --tint: #7aa8ff; }
+html[data-preset] .db-tile:nth-child(4) { --tint: #c39bff; }
+html[data-preset] .db-tile:nth-child(5) { --tint: #ffd166; }
+html[data-preset] .kz-big { font-family: Sora, "IBM Plex Sans", sans-serif; font-weight: 600; letter-spacing: -.03em; }
+html[data-preset] .kz-periods { gap: 0; }
+html[data-preset] .kz-periods .kz-per + .kz-per { border-left: 1px solid var(--line); padding-left: 20px; margin-left: 20px; }
+
+/* límites y consumo: barras con degradado naranja */
+html[data-preset] .limit.ok .ctx-bar i,
+html[data-preset] .kz-bar > i { background: linear-gradient(90deg, #e8642a, var(--accent), #ffb27a); box-shadow: 0 0 14px -2px color-mix(in srgb, var(--accent) 60%, transparent); transform-origin: left; animation: sv-fill .8s var(--sv-ease) backwards; }
+html[data-preset] .ctx-bar.big, html[data-preset] .kz-bar { background: rgba(255, 255, 255, .06); border-color: transparent; border-radius: 99px; }
+html[data-preset] .kz-cop-n { font-family: Sora, "IBM Plex Sans", sans-serif; }
+
+/* selector de periodo / agrupación como píldora segmentada */
+html[data-preset] .db-bar, html[data-preset] .db-seg { padding: 4px; gap: 2px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255, 255, 255, .03); width: fit-content; }
+html[data-preset] .db-bar .btn, html[data-preset] .db-seg .btn { border-color: transparent; background: none; box-shadow: none; }
+html[data-preset] .db-bar .btn.p, html[data-preset] .db-seg .btn.p { background: var(--grad); color: var(--on-accent, #1a0e05); }
+
+/* ======================================================================
+   Inicio con la distribución de «Overview»: héroe + lateral, línea,
+   tareas y fila de tarjetas KPI de colores al pie
+   ====================================================================== */
+html[data-preset] .bento.home:not(.compact) { grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+html[data-preset] .bento.home:not(.compact) :is(.home-l, .home-c, .home-r) { display: contents; }
+html[data-preset] .bento.home:not(.compact) .hm-focus { grid-column: 1 / span 8; grid-row: 1; min-height: 200px; }
+html[data-preset] .bento.home:not(.compact) .hm-day { grid-column: 9 / span 4; grid-row: 1; }
+html[data-preset] .bento.home:not(.compact) .hm-line { grid-column: 1 / -1; grid-row: 2; }
+html[data-preset] .bento.home:not(.compact) .hm-tasks { grid-column: 1 / -1; grid-row: 3; height: auto; }
+html[data-preset] .bento.home:not(.compact) .hm-ai { grid-column: 1 / span 4; grid-row: 4; }
+html[data-preset] .bento.home:not(.compact) .hm-week { grid-column: 5 / span 4; grid-row: 4; }
+html[data-preset] .bento.home:not(.compact) .hm-git { grid-column: 9 / span 4; grid-row: 4; }
+@media (max-width: 1000px) {
+  html[data-preset] .bento.home:not(.compact) :is(.hm-focus, .hm-day, .hm-line, .hm-tasks, .hm-ai, .hm-week, .hm-git) { grid-column: 1 / -1; grid-row: auto; }
+}
+html[data-preset] .hm-focus { background: radial-gradient(90% 120% at 0% 0%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 60%), linear-gradient(180deg, var(--panel2), var(--panel)); }
+html[data-preset] :is(.hm-ai, .hm-week, .hm-git) { position: relative; overflow: hidden; }
+html[data-preset] :is(.hm-ai, .hm-week, .hm-git)::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(110% 80% at 0% 0%, color-mix(in srgb, var(--tint) 15%, transparent), transparent 62%);
+}
+html[data-preset] .hm-ai { --tint: var(--accent); }
+html[data-preset] .hm-week { --tint: #5fd0b0; }
+html[data-preset] .hm-git { --tint: #7aa8ff; }
+
+/* =====================================================================
+   Tema «Aqua»: misma piel que Sorvo pero clara, con degradado turquesa,
+   tarjetas de cristal blanco y acento azul marino (PRESETS.aqua en theme.ts).
+   ===================================================================== */
+html[data-preset="aqua"] {
+  --sv-glow: rgba(15, 61, 86, .28);
+  --grad: linear-gradient(135deg, #14425e, #0b2a40);
+  --on-accent: #ffffff;
+  --nd-edge: rgba(255, 255, 255, .6);
+}
+html[data-preset="aqua"] body {
+  background: linear-gradient(135deg, #7fcfe3 0%, #aee3ef 45%, #dcf4fa 100%) fixed;
+}
+html[data-preset="aqua"][data-bg-kind="plano"] body::before {
+  background:
+    radial-gradient(640px 420px at 85% 0%, rgba(255, 255, 255, .45), transparent 70%),
+    radial-gradient(520px 380px at 0% 100%, rgba(8, 70, 100, .35), transparent 70%);
+}
+/* cristal: blanco translúcido con desenfoque, borde claro y sombra suave azulada */
+html[data-preset="aqua"] :is(.bc, .card, .group-card, .limit, .period, .bars, .wbars, .activity, .heat,
+  .hist-row, .addin, .sess, .wsp, .wsp-host, .ti-stats > div, .ti-session, .mu-card, .nt-list, .nt-main,
+  .imp, .row, .empty, .statusbar, .design-list, .design-chat, .gleft, .gright,
+  .files-side, .files-main, .rm-card, .hm-col, .hm-line, .hm-ai, .hm-week, .hm-git) {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .62), rgba(255, 255, 255, .38));
+  border: 1px solid rgba(255, 255, 255, .7);
+  box-shadow: 0 18px 40px -22px rgba(7, 60, 90, .55), inset 0 1px 0 rgba(255, 255, 255, .8);
+  backdrop-filter: blur(16px) saturate(1.3);
+}
+html[data-preset="aqua"] .navrail {
+  background: linear-gradient(180deg, rgba(8, 72, 102, .78), rgba(10, 92, 122, .62));
+  border-right: 1px solid rgba(255, 255, 255, .25);
+  backdrop-filter: blur(18px);
+  --text: #eaf9fd; --muted: #a9d9e8; --panel2: rgba(255, 255, 255, .14);
+}
+html[data-preset="aqua"] .navrail .tn-i.on { background: rgba(255, 255, 255, .22); color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .35); }
+html[data-preset="aqua"] .topbar { border-bottom-color: rgba(255, 255, 255, .45); }
+html[data-preset="aqua"] .tb-search,
+html[data-preset="aqua"] :is(.tb-tools .ib, .topbar > .ib) { background: rgba(255, 255, 255, .55); border-color: rgba(255, 255, 255, .7); }
+html[data-preset="aqua"] .btn { background: rgba(255, 255, 255, .6); border-color: rgba(255, 255, 255, .75); }
+html[data-preset="aqua"] .btn:hover:not(:disabled) { background: rgba(255, 255, 255, .85); }
+html[data-preset="aqua"] .btn.primary, html[data-preset="aqua"] .btn.p { background: var(--grad); color: #fff; border-color: transparent; }
+html[data-preset="aqua"] .kz-big { color: #b5650a; }
+html[data-preset="aqua"] .col { background: linear-gradient(180deg, rgba(255, 255, 255, .5), rgba(255, 255, 255, .3)); border: 1px solid rgba(255, 255, 255, .7); }
+
+/* Inicio ajustado a la ventana: las cuatro filas se reparten el alto disponible y cada tarjeta desplaza su contenido por dentro */
+@media (min-width: 1001px) and (min-height: 880px) {
+  html[data-preset] .bento.home:not(.compact) {
+    height: calc(calc(100 * var(--vh)) - 175px); min-height: 520px; padding-bottom: 0;
+    grid-template-rows: minmax(150px, 33fr) auto minmax(130px, 40fr) minmax(120px, 27fr);
+  }
+  html[data-preset] .bento.home:not(.compact) :is(.hm-focus, .hm-day, .hm-ai, .hm-week, .hm-git) { min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; }
+  /* Enfoque: sin scroll; el anillo cede alto (y se reduce) para que quepan título, etiquetas y botones */
+  html[data-preset] .bento.home:not(.compact) .hm-focus { display: flex; flex-direction: column; overflow: hidden; padding-block: 12px; }
+  html[data-preset] .hm-focus .hm-ring { flex: 1 1 0; min-height: 60px; margin: 4px 0; display: flex; justify-content: center; }
+  html[data-preset] .hm-focus .hm-ring .tring { height: 100% !important; width: auto !important; aspect-ratio: 1; max-height: 220px; }
+  html[data-preset] .hm-focus .hm-ring .tring { container-type: size; }
+  html[data-preset] .hm-focus .hm-ring .tring b { font-size: clamp(11px, 21cqmin, 38px); }
+  html[data-preset] .hm-focus :is(h2, .tags, .hm-btns) { flex: none; margin-top: 6px; }
+  html[data-preset] .hm-focus .hm-btns { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+  html[data-preset] .hm-focus .hm-btns .btn.wide { grid-column: auto; padding: 7px 12px; }
+  /* Uso de la IA: los medidores ceden alto a la tarjeta en vez de desbordarla */
+  html[data-preset] .bento.home:not(.compact) .hm-ai { display: flex; flex-direction: column; }
+  html[data-preset] .hm-ai .hm-gauges { flex: 1 1 0; min-height: 0; }
+  html[data-preset] .hm-ai .hm-arc { display: flex; flex-direction: column; min-height: 0; }
+  html[data-preset] .hm-ai .hm-arc .g { flex: 1 1 0; min-height: 24px; width: auto; max-width: 116px; margin: 0 auto; }
+  html[data-preset] .hm-ai .hm-arc :is(span, small) { flex: none; }
+  html[data-preset] .bento.home:not(.compact) .hm-tasks { min-height: 0; overflow: hidden; }
+  html[data-preset] .bento.home:not(.compact) .hm-cols { flex: 1; min-height: 0; }
+  html[data-preset] .bento.home:not(.compact) .hm-col { min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+  html[data-preset] .bento.home:not(.compact) .hm-cards { flex: 1; min-height: 0; max-height: none; overflow-y: auto; scrollbar-width: thin; }
+}
+
+/* Aqua · legibilidad: el fondo es claro, así que todo el texto fuera de las tarjetas va en azul marino con buen contraste */
+html[data-preset="aqua"] { --muted: #2f5266; --dim: #2f5266; --text: #082030; }
+html[data-preset="aqua"] .tb-title small,
+html[data-preset="aqua"] .eyebrow,
+html[data-preset="aqua"] .meta { color: #2a4d61; }
+html[data-preset="aqua"] .tb-title h1, html[data-preset="aqua"] h1, html[data-preset="aqua"] h2 { color: #082030; }
+html[data-preset="aqua"][data-bg-kind="plano"] body::before {
+  background:
+    radial-gradient(640px 420px at 88% 0%, rgba(255, 255, 255, .55), transparent 70%),
+    radial-gradient(560px 400px at 0% 100%, rgba(20, 110, 150, .18), transparent 70%);
+}
+/* pestañas y botones sueltos sobre el fondo: cristal más opaco */
+html[data-preset="aqua"] :is(.tab, .chat-tab, .tabs > button, .seg button, .set-nav button, .set-nav a, .sn-i) { color: #082030; }
+html[data-preset="aqua"] :is(.tab, .chat-tab):not(.on):not(.active) { background: rgba(255, 255, 255, .5); border-color: rgba(255, 255, 255, .7); }
+/* la barra lateral conserva su texto claro */
+html[data-preset="aqua"] .navrail { --text: #eaf9fd; --muted: #bfe6f1; }
+html[data-preset="aqua"] .navrail .tn-i { color: #d3f0f8; }
+html[data-preset="aqua"] .navrail .tn-i:hover { color: #fff; }
+
+/* =====================================================================
+   Inicio editable: rejilla de 12 columnas con widgets (componentes HomeGrid / HomeWidgets).
+   La altura de fila se calcula para que las filas del diseño quepan en la ventana; si no caben, se desplaza.
+   ===================================================================== */
+.home-wrap.bento { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.hg-tools { display: flex; align-items: center; gap: 8px; min-height: 34px; padding-bottom: 8px; }
+.hg-hint { font-size: 12px; color: var(--muted); }
+.hg-add { position: relative; }
+.hg-menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 240px; padding: 6px;
+  display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 24px 48px -20px rgba(0, 0, 0, .45);
+}
+.hg-menu button { text-align: left; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text); font-size: 13px; }
+.hg-menu button:hover:not(:disabled) { background: var(--panel2); }
+.hg-menu button:disabled { opacity: .4; }
+
+.home-grid {
+  --hg-row: max(54px, calc((calc(100 * var(--vh)) - 235px - (var(--hg-rows, 14) - 1) * 14px) / var(--hg-rows, 14)));
+  display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: var(--hg-row); gap: 14px;
+  padding-bottom: 64px; /* hueco para la barra flotante de nueva tarea */
+}
+.hg-item { position: relative; min-width: 0; min-height: 0; display: flex; }
+.hg-body { flex: 1; min-width: 0; min-height: 0; display: flex; }
+.hg-body > * { flex: 1; min-width: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; }
+.hg-body > .hm-tasks { display: flex; flex-direction: column; overflow: hidden; height: auto; }
+.hg-body > .hm-kpi-fix, .hw-kpi { overflow: hidden; }
+.hg-body .hm-cols { flex: 1; min-height: 0; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); grid-template-rows: minmax(0, 1fr); }
+.hg-body .hm-col.wide { grid-column: auto; }
+.hg-body .hm-col.wide .hm-cards { display: flex; }
+.hg-body .hm-col { min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.hg-body .hm-cards { flex: 1; min-height: 0; max-height: none; overflow-y: auto; scrollbar-width: thin; }
+/* enfoque: el anillo cede alto para que quepan título, etiquetas y botones */
+.hg-body .hm-focus { display: flex; flex-direction: column; overflow: hidden; padding-block: 12px; }
+.hg-body .hm-focus .hm-ring { flex: 1 1 0; min-height: 60px; margin: 4px 0; display: flex; justify-content: center; }
+.hg-body .hm-focus .hm-ring .tring { height: 100% !important; width: auto !important; aspect-ratio: 1; max-height: 220px; }
+.hg-body .hm-focus .hm-ring .tring { container-type: size; }
+.hg-body .hm-focus .hm-ring .tring b { font-size: clamp(11px, 21cqmin, 38px); }
+.hg-body .hm-focus :is(h2, .tags, .hm-btns) { flex: none; margin-top: 6px; }
+.hg-body .hm-focus .hm-btns { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+.hg-body .hm-focus .hm-btns .btn.wide { grid-column: auto; padding: 7px 12px; }
+
+/* Uso de la IA en la cuadrícula: con poco alto se compacta (padding y texto secundario) para que no haya scroll */
+.hg-body > .hm-ai { container-type: size; display: flex; flex-direction: column; padding-block: 12px; }
+.hg-body > .hm-ai .hm-gauges { flex: 1 1 0; min-height: 0; }
+.hg-body > .hm-ai .hm-arc { display: flex; flex-direction: column; min-height: 0; }
+.hg-body > .hm-ai .hm-arc .g { flex: 1 1 0; min-height: 44px; container-type: size; width: auto; max-width: 116px; margin: 0 auto; }
+.hg-body > .hm-ai .hm-arc :is(span, small) { flex: none; }
+@container (max-height: 175px) { .hm-ai .hm-arc small { display: none; } }
+.hg-body > .hm-ai .hm-arc .g b { font-size: clamp(9px, 24cqmin, 20px); }
+
+/* widgets de gráficos */
+.hw { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; }
+.hw-kpi { justify-content: center; }
+.hw-big { font: 650 clamp(24px, calc(4.2 * var(--vh)), 44px) Sora, sans-serif; margin-top: 4px; letter-spacing: -.02em; line-height: 1; }
+.hw-big small { font-size: .38em; font-weight: 500; color: var(--muted); }
+.hw-bars { flex: 1; min-height: 0; display: flex; align-items: stretch; gap: 4px; }
+.hw-bars > div { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; }
+.hw-bars i { display: block; width: 100%; max-width: 36px; border-radius: 6px 6px 2px 2px; background: color-mix(in srgb, var(--accent) 45%, transparent); transition: height .4s var(--sv-ease); }
+.hw-bars .last i { background: var(--accent); }
+.hw-bars span { font-size: 10px; line-height: 1; color: var(--muted); }
+.hw-area { flex: 1; min-height: 0; }
+.hw-area svg { display: block; width: 100%; height: 100%; }
+.hw-donut { flex: 1; min-height: 0; display: flex; align-items: center; gap: 14px; }
+.hw-donut svg { height: 100%; max-height: 100%; aspect-ratio: 1; flex: none; min-height: 0; }
+.hw-dt { font: 700 15px Sora, sans-serif; fill: var(--text); }
+.hw-ds { font-size: 6px; fill: var(--muted); }
+.hw-donut ul, .hw-rank { list-style: none; margin: 0; padding: 0; flex: 1; min-width: 0; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 6px; font-size: 12px; scrollbar-width: thin; }
+.hw-donut li { display: flex; align-items: center; gap: 6px; }
+.hw-donut li i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.hw-donut li span, .hw-rank li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hw-donut em, .hw-rank em { font-style: normal; color: var(--muted); }
+.hw-rank { flex: 1; }
+.hw-rank li { display: grid; grid-template-columns: minmax(0, 1fr) 1.3fr auto; align-items: center; gap: 8px; }
+.hw-rank li div { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.hw-rank li i { display: block; height: 100%; border-radius: inherit; }
+
+/* modo edición */
+.home-grid.editing .hg-body { pointer-events: none; opacity: .85; }
+.hg-ov {
+  position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; cursor: grab; touch-action: none; user-select: none;
+  border: 2px dashed color-mix(in srgb, var(--accent) 75%, transparent); border-radius: 16px;
+  background: color-mix(in srgb, var(--panel) 30%, transparent);
+}
+.hg-ov:active { cursor: grabbing; }
+.hg-bar { display: flex; align-items: center; gap: 8px; padding: 6px 8px; font-size: 12px; border-radius: 14px 14px 0 0; background: color-mix(in srgb, var(--accent) 20%, var(--panel)); color: var(--text); }
+.hg-bar b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hg-grip { opacity: .7; }
+.hg-bar select { font-size: 12px; padding: 3px 6px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--text); }
+.hg-x { width: 22px; height: 22px; display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--text); }
+.hg-x:hover { background: color-mix(in srgb, #ef4444 30%, transparent); }
+.hg-size { position: absolute; right: 5px; bottom: 5px; width: 18px; height: 18px; cursor: nwse-resize; border-right: 3px solid var(--accent); border-bottom: 3px solid var(--accent); border-radius: 0 0 9px 0; }
+.hg-item.moving { z-index: 6; }
+
+@media (max-width: 900px) {
+  .home-grid { display: flex; flex-direction: column; }
+  .hg-item { min-height: 230px; }
+  .hg-tools { display: none; }
+}

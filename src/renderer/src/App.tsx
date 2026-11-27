@@ -5,6 +5,7 @@ import { workFolder } from '../../shared/util'
 import { AddEntryModal } from './components/AddEntryModal'
 import { ChatView } from './components/Chat'
 import { DiffModal } from './components/DiffModal'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { NewTabModal } from './components/NewTabModal'
 import { Rail, TopTools } from './components/Sidebar'
 import { StatusBar } from './components/StatusBar'
@@ -18,6 +19,8 @@ import { CommandPalette } from './components/CommandPalette'
 import { Assistant } from './components/Assistant'
 import { TerminalDock, type TermRequest } from './components/TerminalDock'
 import { Confetti } from './components/Confetti'
+import { Ambient } from './components/Ambient'
+import { Companion } from './components/Companion'
 import { confettiEnabled, getFocus, getName, setFocusMode, useFocusMode } from './theme'
 import { getLayout, setLayout, useLayout } from './layout'
 import { ConfirmDialog } from './components/ConfirmDialog'
@@ -371,7 +374,10 @@ export function App(): ReactNode {
       setActiveTask(taskId)
       setView('chat')
     },
-    celebrate: () => confettiEnabled() && setConfetti((n) => n + 1),
+    celebrate: () => {
+      window.dispatchEvent(new Event('shutoki:celebrate')) // sonido y reacción del acompañante
+      if (confettiEnabled()) setConfetti((n) => n + 1)
+    },
     openHelp: () => setModal({ kind: 'help' }),
     run
   }
@@ -520,6 +526,9 @@ export function App(): ReactNode {
     web: 'Pestañas integradas para webs de trabajo',
     notes: 'Se guardan como archivos Markdown en tu equipo',
     meetings: 'Graba la voz, transcribe en tu equipo y obtén el resumen',
+    arch: 'Diseña la arquitectura con Claude: opciones según tipo de tarea y alcance',
+    diagrams: 'BPMN, flujo, UML y ER: dibújalos a mano o pídeselos a la IA',
+    videos: 'Graba videos de funcionalidades de tus apps web: guion con IA, voz y MP4',
     team: 'Agentes especializados con su propio prompt y skills; tu personaje decora la sala',
     music: 'Spotify: reproduce, pausa y cambia de pista sin salir de la app',
     groups: 'Conjuntos de carpetas a los que la IA puede acceder',
@@ -607,7 +616,7 @@ const Registered = VIEWS[view]
           {!popTask && active && view === 'chat' && <TaskHead taskId={active} mode={mode} onMode={(m) => setModes((s) => ({ ...s, [active]: m }))} />}
         </div>
         <div className="scroll">
-          <section id="view">{content}</section>
+          <section id="view"><ErrorBoundary key={view}>{content}</ErrorBoundary></section>
           <WebHost />
         </div>
         {!popTask && active && dockOpen && db.settings.terminalMode !== 'external' && (
@@ -653,6 +662,8 @@ const Registered = VIEWS[view]
         </button>
       )}
       {confetti > 0 && <Confetti key={confetti} onDone={() => setConfetti(0)} />}
+      <Ambient />
+      {!popTask && <Companion />}
     </UiContext.Provider>
   )
 }

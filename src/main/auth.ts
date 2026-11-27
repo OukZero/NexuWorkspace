@@ -142,15 +142,19 @@ function emailFromToken(jwt: string | undefined, fallback: string): string {
 }
 
 // ---------- persistencia cifrada ----------
-function persist(): void {
-  if (!stored || !safeStorage.isEncryptionAvailable()) return // sin cifrado disponible no se guarda nada en disco
-  fs.writeFileSync(sessionFile(), safeStorage.encryptString(JSON.stringify(stored)))
+async function persist(): Promise<void> {
+  try {
+    if (!stored || !(await safeStorage.isAsyncEncryptionAvailable())) return // sin cifrado disponible no se guarda nada en disco
+    fs.writeFileSync(sessionFile(), await safeStorage.encryptStringAsync(JSON.stringify(stored)))
+  } catch {
+    /* sin permiso de escritura: la sesión vale solo hasta cerrar la app */
+  }
 }
 
-function loadStored(): Stored | null {
+async function loadStored(): Promise<Stored | null> {
   try {
-    if (!safeStorage.isEncryptionAvailable()) return null
-    const s = JSON.parse(safeStorage.decryptString(fs.readFileSync(sessionFile()))) as Stored
+    if (!(await safeStorage.isAsyncEncryptionAvailable())) return null
+    const s = JSON.parse((await safeStorage.decryptStringAsync(fs.readFileSync(sessionFile()))).result) as Stored
     return s.refreshToken && s.email ? s : null
   } catch {
     return null
@@ -250,7 +254,7 @@ export async function initAuth(): Promise<void> {
   status = signedOut()
   if (!configured()) return
   powerMonitor.on('resume', () => void refresh()) // al despertar el equipo se revalida (puede haberse revocado el acceso)
-  stored = loadStored()
+  stored = await loadStored()
   if (stored) await refresh()
 }
 
@@ -259,7 +263,7 @@ function finish(r: AuthResult, email: string): AuthStatus {
   const a = r.AuthenticationResult
   if (!a?.RefreshToken) throw new AuthError('Unexpected', 'Respuesta inesperada del servicio de acceso.')
   stored = { refreshToken: a.RefreshToken, email: emailFromToken(a.IdToken, email), issuedAt: Date.now() }
-  persist()
+  void persist()
   challenge = null
   applyTokens(a)
   setStatus({ configured: true, signedIn: true, email: stored.email })

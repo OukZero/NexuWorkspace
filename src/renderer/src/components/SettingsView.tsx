@@ -11,6 +11,7 @@ import { TelegramSettings } from './TelegramSettings'
 import { TemplatesEditor } from './TemplatesEditor'
 import { ProfilesEditor, TaskTemplatesEditor } from './ListEditors'
 import { UpdateCard } from './UpdateCard'
+import { MeetingsStorageSettings } from './MeetingsStorageSettings'
 import { AppearanceSettings } from './AppearanceSettings'
 import { ALL_CONTEXT, CONTEXT_HINT, CONTEXT_LABEL, DEFAULT_CONTEXT, profilesOf, taskTemplatesOf, templatesOf } from '../../../shared/templates'
 
@@ -45,6 +46,9 @@ const ICONS: Record<string, string> = {
   integraciones: 'M9 7V3M15 7V3M7 7h10v4a5 5 0 0 1-10 0V7zM12 16v5',
   sistema: 'M4 5h16v11H4zM8 20h8M12 16v4',
   datos: 'M12 4c4.4 0 8 1.1 8 2.5S16.4 9 12 9 4 7.9 4 6.5 7.6 4 12 4zM4 6.5v5C4 12.9 7.6 14 12 14s8-1.1 8-2.5v-5M4 11.5v5C4 17.9 7.6 19 12 19s8-1.1 8-2.5v-5',
+  telegram: 'M21 4L3 11l6 2.2L11.5 20l3.2-4.2 4.8 3.7z M9 13.2l4.5-3.2',
+  spotify: 'M9 18V6l10-2v12 M9 18a2.5 2.5 0 1 1-2-2.4 M19 16a2.5 2.5 0 1 1-2-2.4',
+  calendario: 'M4 5h16v15H4z M4 10h16 M9 3v4 M15 3v4',
   card: 'M5 5h14v14H5z M9 9h6M9 13h6'
 }
 function Icon({ n, size = 16 }: { n: string; size?: number }): ReactNode {
@@ -196,6 +200,8 @@ export function SettingsView(): ReactNode {
       whisperModel: (s.whisperModel || '').trim(),
       whisperLang: (s.whisperLang || '').trim() || 'es',
       meetingKeepAudio: !!s.meetingKeepAudio,
+      meetingsDir: (s.meetingsDir || '').trim(),
+      meetingAudioDays: Math.max(0, Math.floor(Number(s.meetingAudioDays) || 0)),
       myNames: (s.myNames || '').trim(),
       meetingAutoTasks: !!s.meetingAutoTasks,
       meetingAutoRecord: !!s.meetingAutoRecord,
@@ -371,13 +377,14 @@ export function SettingsView(): ReactNode {
 
             </div>
             </Card>
-            <Card icon="datos" title="Reuniones" sub="Transcripción en tu equipo" badge={s.whisperModel?.trim() ? undefined : 'Falta modelo'} tone="warn">
+            <Card icon="datos" title="Reuniones" sub="Transcripción en tu equipo">
             <div className="grid2">
               <div style={wide} className="meta">
-                La voz se transcribe localmente con whisper.cpp: el audio no sale de tu equipo. Solo el texto se envía a Claude para redactar el resumen. Descarga whisper-cli (whisper.cpp) y un modelo ggml, por ejemplo ggml-small.bin.
+                La voz se transcribe localmente con whisper.cpp, que viene integrado en la app: el audio no sale de tu equipo. Solo el texto se envía a Claude para redactar el resumen. La primera transcripción descarga el modelo (ggml-small, ~465 MB). Los dos campos siguientes son opcionales: déjalos vacíos para usar lo integrado.
               </div>
+              <MeetingsStorageSettings s={s} set={set} />
               <div>
-                <label>Ejecutable de whisper.cpp (whisper-cli.exe)</label>
+                <label>Ejecutable propio de whisper.cpp (opcional)</label>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <input style={{ flex: 1, minWidth: 0 }} value={s.whisperCmd} onChange={(e) => set('whisperCmd', e.target.value)} />
                   <button className="btn sm" onClick={() => void ui.run('file:pick', 'app').then((p) => p && set('whisperCmd', p))}>
@@ -386,7 +393,7 @@ export function SettingsView(): ReactNode {
                 </div>
               </div>
               <div>
-                <label>Modelo (ggml-*.bin)</label>
+                <label>Modelo propio (ggml-*.bin, opcional)</label>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <input style={{ flex: 1, minWidth: 0 }} value={s.whisperModel} onChange={(e) => set('whisperModel', e.target.value)} />
                   <button className="btn sm" onClick={() => void ui.run('file:pick', 'file').then((p) => p && set('whisperModel', p))}>
@@ -612,6 +619,9 @@ export function SettingsView(): ReactNode {
 
           {tab === 'integraciones' && (
             <>
+              <div className="meta" style={{ marginBottom: 14 }}>
+                Redmine y Git se guardan con el botón «Guardar» de abajo; Telegram, Spotify y el calendario tienen cada uno el suyo.
+              </div>
               <Card icon="integraciones" title="Redmine" sub="Dirección y actividad por defecto">
               <div className="grid2">
                 <div>
@@ -649,12 +659,15 @@ export function SettingsView(): ReactNode {
                 </div>
               </div>
               </Card>
-              <div className="meta" style={{ marginTop: 14 }}>
-                Redmine y git se guardan con el botón «Guardar» de abajo; Telegram tiene el suyo.
-              </div>
-              <TelegramSettings />
-              <SpotifySettings />
-              <CalendarSettings />
+              <Card icon="telegram" title="Telegram" sub="Avisos y permisos de Claude en el móvil">
+                <TelegramSettings />
+              </Card>
+              <Card icon="spotify" title="Spotify" sub="Control de reproducción y pomodoro">
+                <SpotifySettings />
+              </Card>
+              <Card icon="calendario" title="Calendario de Outlook" sub="Reuniones en «Hoy» y avisos previos">
+                <CalendarSettings />
+              </Card>
             </>
           )}
 
@@ -723,6 +736,7 @@ export function SettingsView(): ReactNode {
                       <option value="full">Completa: conversación, timer y chat</option>
                       <option value="compact">Compacta: conversación y timer</option>
                       <option value="timer">Mínima: solo timer</option>
+                      <option value="edge">Barra en el borde derecho (opciones y chat al pasar el mouse)</option>
                     </select>
                     <label style={{ ...checkRow, margin: 0 }}>
                       <input type="checkbox" style={{ width: 'auto' }} checked={s.miniOnTop !== false} onChange={(e) => set('miniOnTop', e.target.checked)} />

@@ -1,4 +1,4 @@
-import { BrowserWindow, screen } from 'electron'
+import { app, BrowserWindow, screen } from 'electron'
 import fs from 'fs'
 import path from 'path'
 
@@ -10,9 +10,13 @@ const MIN_VISIBLE_MS = 900 // una vez dibujada, se deja ver un instante para que
 
 const logoPath = path.join(__dirname, '../../resources/icon.png')
 
-function html(): string {
+// marca que deja la actualización antes de cerrar la app: al reabrir, la pantalla de inicio dice que se actualizó
+const markerPath = (): string => path.join(app.getPath('userData'), 'updating.json')
+
+function html(status = ''): string {
   const logo = fs.existsSync(logoPath) ? `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}` : ''
   return `<!doctype html><html><head><meta charset="utf-8"><style>
+p{font-size:12px;color:#9fb3e6;letter-spacing:.3px;margin-top:2px;text-align:center;padding:0 16px}
 *{box-sizing:border-box;margin:0}
 html,body{width:100%;height:100%;overflow:hidden;background:#070b18;font-family:'Segoe UI',system-ui,sans-serif;-webkit-user-select:none}
 .card{position:absolute;inset:0;background:radial-gradient(120% 120% at 20% 10%,#16264d 0%,#0a1020 55%,#04060f 100%);box-shadow:inset 0 0 0 1px #1f3a6b;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;animation:in .35s ease-out}
@@ -24,12 +28,56 @@ h2{font-size:10px;font-weight:600;color:#22d3ee;letter-spacing:3px;text-transfor
 @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
 @keyframes slide{0%{transform:translateX(-110%)}100%{transform:translateX(260%)}}
 @keyframes in{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
-</style></head><body><div class="card">${logo ? `<img src="${logo}">` : ''}<h1>Nexu</h1><h2>Workspace</h2><div class="bar"><i></i></div></div></body></html>`
+</style></head><body><div class="card">${logo ? `<img src="${logo}">` : ''}<h1>Nexu</h1><h2>Workspace</h2><div class="bar"><i></i></div>${status ? `<p>${status.replace(/[<>&]/g, '')}</p>` : ''}</div></body></html>`
+}
+
+/** Deja anotado que la app se cierra para actualizarse; el siguiente arranque lo muestra en su pantalla de inicio. */
+function markUpdating(version?: string): void {
+  try {
+    fs.writeFileSync(markerPath(), JSON.stringify({ to: version ?? '' }))
+  } catch {
+    /* sin marca: el arranque sale normal */
+  }
+}
+
+function takeMarker(): string | null {
+  try {
+    const m = JSON.parse(fs.readFileSync(markerPath(), 'utf8')) as { to?: string }
+    fs.unlinkSync(markerPath())
+    return m.to ? `Actualizado a la versión ${m.to}` : 'Actualización instalada'
+  } catch {
+    return null
+  }
+}
+
+/** Pantalla «Actualizando…» antes de cerrar para instalar: oculta las ventanas y la deja ver `ms` milisegundos. */
+export function showUpdating(version: string | undefined, ms = 2200): Promise<void> {
+  markUpdating(version)
+  for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.hide()
+  return new Promise((resolve) => {
+    try {
+      if (splash && !splash.isDestroyed()) splash.destroy()
+      openWindow(`Actualizando${version ? ` a la versión ${version}` : ''}… la app se reabrirá sola`)
+    } catch {
+      /* sin pantalla: se instala igualmente */
+    }
+    setTimeout(resolve, ms)
+  })
 }
 
 /** Pantalla de inicio: aparece al instante, antes de cargar los datos y la ventana principal, para que se note que la app está abriendo. */
 export function showSplash(): void {
   try {
+    openWindow(takeMarker() ?? '')
+    // si algo falla al abrir, la pantalla de inicio no se queda para siempre
+    guard = setTimeout(() => finish(true), 20000)
+  } catch {
+    splash = null
+  }
+}
+
+function openWindow(status: string): void {
+  {
     const wa = screen.getPrimaryDisplay().workArea
     const w = 360
     const h = 300
@@ -55,11 +103,7 @@ export function showSplash(): void {
       tryClose()
     })
     splash.showInactive()
-    void splash.loadURL(`data:text/html;charset=utf-8;base64,${Buffer.from(html()).toString('base64')}`)
-    // si algo falla al abrir, la pantalla de inicio no se queda para siempre
-    guard = setTimeout(() => finish(true), 20000)
-  } catch {
-    splash = null
+    void splash.loadURL(`data:text/html;charset=utf-8;base64,${Buffer.from(html(status)).toString('base64')}`)
   }
 }
 

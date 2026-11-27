@@ -53,7 +53,6 @@ function Recorder({ onStopped }: { onStopped: (m: Meeting) => void }): ReactNode
   }, [rec])
 
   const tasks = db.tasks.filter((t) => isWorkTask(t) && t.status !== 'done')
-  const configured = !!db.settings.whisperCmd.trim() && !!db.settings.whisperModel.trim()
 
   const start = async (): Promise<void> => {
     setBusy(true)
@@ -133,7 +132,6 @@ function Recorder({ onStopped }: { onStopped: (m: Meeting) => void }): ReactNode
       <button className="btn p" disabled={busy} onClick={() => void start()}>
         <span className="mt-dot" aria-hidden /> Grabar reunión
       </button>
-      {!configured && <div className="meta">Puedes grabar ya: el audio se guarda y se transcribirá cuando indiques whisper.cpp y su modelo en Ajustes → IA (luego pulsa «Reintentar»).</div>}
       <div className="meta">Avisa a los participantes de que la reunión se graba.</div>
     </div>
   )

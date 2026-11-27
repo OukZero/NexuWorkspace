@@ -95,7 +95,7 @@ h1, h2, h3, .tb-title h1, .card-h h2, .bc h2 { font-family: 'Sora', 'IBM Plex Sa
 
 /* ---------- riel lateral (64 px) ---------- */
 .navrail {
-  flex: none; width: 64px; height: 100vh; display: flex; flex-direction: column; align-items: center;
+  flex: none; width: 64px; height: calc(100 * var(--vh)); display: flex; flex-direction: column; align-items: center;
   gap: 6px; padding: 14px 0; background: color-mix(in srgb, var(--panel) 96%, #000);
   border-right: 1px solid var(--line); box-shadow: inset -1px 0 0 var(--nd-edge); z-index: 7;
 }
@@ -135,8 +135,9 @@ h1, h2, h3, .tb-title h1, .card-h h2, .bc h2 { font-family: 'Sora', 'IBM Plex Sa
 
 /* ---------- inicio: detalles del mockup ---------- */
 /* la barra de captura es `fixed` pero el contenedor del bento la contiene: se le da altura de pantalla para que quede abajo */
-.bento.home { min-height: calc(100vh - 128px); }
-.bento.home:not(.compact) .addin.hm-add { position: absolute; bottom: 14px; }
+.bento.home { min-height: calc(calc(100 * var(--vh)) - 200px); align-content: start; padding-bottom: 16px; }
+/* la barra vive como último hijo de `.scroll`: `sticky` la mantiene flotando abajo aunque se haga scroll */
+.scroll > .addin.hm-add { position: sticky; left: auto; bottom: 14px; transform: none; width: min(640px, calc(100% - 48px)); margin: 0 auto 14px; }
 .addin.hm-add {
   border-radius: var(--nd-r-lg); border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
   box-shadow: inset 0 1px 0 var(--nd-edge), 0 18px 44px -14px #000, 0 0 30px -14px var(--glow);
@@ -224,7 +225,9 @@ html :is(.dialog, .pmenu, .notif-pop, .sel-pop, .composer.cbox, .nt-list, .nt-ma
   background: linear-gradient(to top right, transparent calc(50% - 1px), color-mix(in srgb, var(--accent) 45%, transparent) calc(50% - 1px), color-mix(in srgb, var(--accent) 45%, transparent) 50%, transparent 50%);
 }
 /* el contenido de las tarjetas no debe sobresalir de las esquinas redondeadas */
-.bc, .card, .dialog, .pmenu, .notif-pop, .mu-card, .nt-list, .nt-main { overflow: clip; overflow-clip-margin: 0px; }
+.bc, .card, .pmenu, .notif-pop, .mu-card, .nt-list, .nt-main { overflow: clip; overflow-clip-margin: 0px; }
+/* los diálogos sí deben poder hacer scroll (clip lo impedía y los formularios largos quedaban cortados) */
+.dialog { overflow: auto; }
 /* efecto al pasar el cursor, para todos los temas (no solo Obsidiana) */
 .bc, .card { transition: border-color .2s, box-shadow .2s; }
 .bc:hover, .card:hover { border-color: color-mix(in srgb, var(--accent) 34%, var(--line)); box-shadow: inset 0 1px 0 var(--nd-edge), 0 18px 40px -28px #000, 0 0 26px -16px var(--glow); }

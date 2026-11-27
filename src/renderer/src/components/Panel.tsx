@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import type { GitCommit, LimitWindow, Task } from '../../../shared/types'
 import { workFolder } from '../../../shared/util'
 import { usePomodoro } from '../pomodoro'
@@ -12,6 +13,9 @@ import { meetingMs, useCalendar } from '../calendar'
 import { G } from './glyphs'
 import { Arc, weekPace } from './Gauges'
 import { RefreshLimits } from './Usage'
+import { DEFAULT_LAYOUT, HomeGrid, WIDGETS, loadLayout, newWidget, saveLayout, settle } from './HomeGrid'
+import type { WItem, WType } from './HomeGrid'
+import { ChartWidget } from './HomeWidgets'
 
 const h1 = (ms: number): string => (ms / 3600000).toFixed(2).replace('.', ',')
 const pctOf = (x: number): number => Math.round(Math.max(0, Math.min(1, x)) * 100)
@@ -49,6 +53,9 @@ export function Panel({ compact }: { compact?: boolean }): ReactNode {
   const [over, setOver] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
   const dragId = useRef<string | null>(null)
+  const [layout, setLayout] = useState<WItem[]>(loadLayout)
+  const [editing, setEditing] = useState(false)
+  const [menu, setMenu] = useState(false)
 
   useEffect(() => {
     input.current?.focus({ preventScroll: true })
@@ -184,7 +191,7 @@ export function Panel({ compact }: { compact?: boolean }): ReactNode {
 
   const column = (key: string, name: string, dot: string, list: Task[], drop?: 'going' | 'next', hint?: string): ReactNode => (
     <div
-      className={`hm-col${over === key ? ' over' : ''}`}
+      className={`hm-col${key === 'rout' ? ' wide' : ''}${over === key ? ' over' : ''}`}
       onDragOver={drop ? (e) => { e.preventDefault(); setOver(key) } : undefined}
       onDragLeave={() => setOver((o) => (o === key ? null : o))}
       onDrop={drop ? () => dropIn(drop) : undefined}
@@ -201,18 +208,18 @@ export function Panel({ compact }: { compact?: boolean }): ReactNode {
     </div>
   )
 
-  return (
-    <div className={`bento home${compact ? ' compact' : ''}`}>
-      <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
-        <defs>
-          <linearGradient id="ringgrad" x1="0" x2="1">
-            <stop offset="0" stopColor="var(--accent)" />
-            <stop offset="1" stopColor="var(--accent2, var(--pink, #ff7ab6))" />
-          </linearGradient>
-        </defs>
-      </svg>
+  const svgDefs = (
+    <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
+      <defs>
+        <linearGradient id="ringgrad" x1="0" x2="1">
+          <stop offset="0" stopColor="var(--accent)" />
+          <stop offset="1" stopColor="var(--accent2, var(--pink, #ff7ab6))" />
+        </linearGradient>
+      </defs>
+    </svg>
+  )
 
-      <div className="home-l">
+  const focusEl = (
         <section className="bc hm-focus">
           <div className="eyebrow">Enfoque ahora</div>
           {focus ? (
@@ -271,7 +278,9 @@ export function Panel({ compact }: { compact?: boolean }): ReactNode {
             </div>
           )}
         </section>
+  )
 
+  const dayEl = (
         <section className="bc hm-day">
           <div className="card-h">
             <span className="eyebrow">Jornada</span>
@@ -305,9 +314,9 @@ export function Panel({ compact }: { compact?: boolean }): ReactNode {
             </div>
           )}
         </section>
-      </div>
+  )
 
-      <div className="home-c">
+  const lineEl = (
         <section className="bc hm-line">
           <div className="card-h">
             <div>
@@ -328,7 +337,9 @@ export function Panel({ compact }: { compact?: boolean }): ReactNode {
           </div>
           {todayEntries.length > 0 || meet > 0 || (db.focusBlocks ?? []).length > 0 ? <DayTimeline day={todayKey} entries={todayEntries} /> : <div className="cempty slim">Aún no registras tiempo hoy. Inicia el timer en una tarea.</div>}
         </section>
+  )
 
+  const tasksEl = (
         <div className="hm-tasks">
           <div className="hm-th">
             <span className="eyebrow">Tareas de hoy</span>
@@ -343,12 +354,13 @@ export function Panel({ compact }: { compact?: boolean }): ReactNode {
           <div className="hm-cols">
             {column('going', 'En marcha', 'var(--ok)', going, 'going', 'Arrastra una tarea aquí para empezar su timer')}
             {column('next', 'Siguientes', 'var(--accent)', upNext, 'next')}
+            {column('done', 'Completadas', 'var(--muted)', todays.filter((t) => t.status === 'done'), undefined, 'Aún no has completado tareas hoy.')}
             {column('rout', 'Rutinas y pendientes', 'var(--warn)', routines)}
           </div>
         </div>
-      </div>
+  )
 
-      <div className="home-r">
+  const aiEl = (
         <section className="bc hm-ai">
           <div className="card-h">
             <span className="eyebrow">Uso de la IA</span>
@@ -370,7 +382,9 @@ export function Panel({ compact }: { compact?: boolean }): ReactNode {
             Ver el consumo completo →
           </button>
         </section>
+  )
 
+  const weekEl = (
         <section className="bc hm-week">
           <div className="card-h">
             <span className="eyebrow">Semana</span>
@@ -387,7 +401,9 @@ export function Panel({ compact }: { compact?: boolean }): ReactNode {
             ))}
           </div>
         </section>
+  )
 
+  const gitEl = (
         <section className="bc hm-git">
           <div className="card-h">
             <span className="eyebrow">Git{commits ? ` · ${commits.branch}` : ''}</span>
@@ -416,16 +432,80 @@ export function Panel({ compact }: { compact?: boolean }): ReactNode {
             </button>
           )}
         </section>
-      </div>
+  )
 
-      <label className="addin hm-add">
+  const renderWidget = (it: WItem): ReactNode => {
+    switch (it.type) {
+      case 'focus': return focusEl
+      case 'day': return dayEl
+      case 'line': return lineEl
+      case 'tasks': return tasksEl
+      case 'ai': return aiEl
+      case 'week': return weekEl
+      case 'git': return gitEl
+      default: return <ChartWidget item={it} db={db} now={now} />
+    }
+  }
+  const updateLayout = (l: WItem[]): void => {
+    setLayout(l)
+    saveLayout(l)
+  }
+
+  // se monta en el contenedor de scroll (no en #view, cuyo `container-type` rompe a `fixed`/`sticky`) para que quede siempre flotando abajo
+  const addBar = createPortal(<label className="addin hm-add">
         <G n="plus" size={16} />
         <input ref={input} value={title} placeholder="Escribe una tarea y pulsa Enter: queda en «Para hoy»" aria-label="Nueva tarea para hoy" onChange={(e) => setTitle(e.target.value)} onKeyDown={quickAdd} />
         <button type="button" className="btn sm" title="Tarea detallada: descripción, carpeta, estimación…" aria-label="Crear tarea detallada" onClick={() => ui.editTask({ title })}>
           <G n="edit" size={13} /> Con detalles
         </button>
         {isRunning && <span className="hm-timer">{fmtDur(sessionMs)}</span>}
-      </label>
+      </label>, document.querySelector('.scroll') ?? document.body)
+
+  if (compact) {
+    return (
+      <div className="bento home compact">
+        {svgDefs}
+        <div className="home-l">{focusEl}{dayEl}</div>
+        <div className="home-c">{lineEl}{tasksEl}</div>
+        <div className="home-r">{aiEl}{weekEl}{gitEl}</div>
+        {addBar}
+      </div>
+    )
+  }
+
+  const present = new Set(layout.map((i) => i.type))
+  return (
+    <div className="home-wrap bento">
+      {svgDefs}
+      <div className="hg-tools">
+        {editing ? (
+          <>
+            <span className="hg-hint">Arrastra para mover · tira de la esquina para cambiar el tamaño</span>
+            <span className="grow" />
+            <div className="hg-add">
+              <button className="btn sm" onClick={() => setMenu((m) => !m)}><G n="plus" size={13} /> Añadir</button>
+              {menu && (
+                <div className="hg-menu" onMouseLeave={() => setMenu(false)}>
+                  {(Object.keys(WIDGETS) as WType[]).map((t) => (
+                    <button key={t} disabled={!WIDGETS[t].opt && present.has(t)} onClick={() => { updateLayout(settle([...layout, newWidget(t, layout)])); setMenu(false) }}>
+                      {WIDGETS[t].label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button className="btn sm" onClick={() => updateLayout(DEFAULT_LAYOUT)}><G n="reset" size={13} /> Restablecer</button>
+            <button className="btn sm p" onClick={() => { setEditing(false); setMenu(false) }}><G n="check" size={13} /> Listo</button>
+          </>
+        ) : (
+          <>
+            <span className="grow" />
+            <button className="btn sm" onClick={() => setEditing(true)} title="Mover, redimensionar y añadir gráficos al Inicio"><G n="edit" size={13} /> Editar</button>
+          </>
+        )}
+      </div>
+      <HomeGrid items={layout} setItems={updateLayout} editing={editing} render={renderWidget} />
+      {addBar}
     </div>
   )
 }

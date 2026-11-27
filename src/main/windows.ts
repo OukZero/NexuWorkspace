@@ -67,16 +67,17 @@ export function showWin(): void {
 }
 
 // tamaño de la ventana flotante según el formato elegido en Ajustes
-const MINI_SIZE = { full: [360, 108], compact: [360, 60], timer: [210, 50] } as const
-// en formato «full» el renderer pide su tamaño (píldora o vista expandida, que crece con la respuesta, adjuntos y permisos)
+const MINI_SIZE = { full: [360, 108], compact: [360, 60], timer: [210, 50], edge: [8, 160] } as const
+// en formato «full» y «edge» el renderer pide su tamaño (píldora o vista expandida; en «edge», franja → menú → chat)
 let miniWant: [number, number] | null = null
 const miniSize = (): readonly [number, number] => {
   const f = getDb().settings.miniFormat ?? 'full'
-  return f === 'full' && miniWant ? miniWant : (MINI_SIZE[f] ?? MINI_SIZE.full)
+  return (f === 'full' || f === 'edge') && miniWant ? miniWant : (MINI_SIZE[f] ?? MINI_SIZE.full)
 }
 
 export function resizeMini(w: number, h: number): void {
-  miniWant = [Math.min(520, Math.max(300, Math.round(w))), Math.min(560, Math.max(44, Math.round(h)))]
+  if ((getDb().settings.miniFormat ?? 'full') === 'edge') miniWant = [Math.min(520, Math.max(10, Math.round(w))), Math.min(720, Math.max(60, Math.round(h)))]
+  else miniWant = [Math.min(520, Math.max(300, Math.round(w))), Math.min(560, Math.max(44, Math.round(h)))]
   applyMini()
 }
 
@@ -97,7 +98,14 @@ export function applyMini(): void {
   const [w, h] = miniSize()
   const b = mini.getBounds()
   // el formato cambia el tamaño sin mover la esquina inferior derecha
-  if (b.width !== w || b.height !== h) {
+  if (s.miniFormat === 'edge') {
+    // barra pegada al borde derecho (como la barra de tareas oculta), centrada en vertical; crece hacia la izquierda
+    const a = screen.getDisplayMatching(b).workArea
+    const hh = Math.min(h, a.height)
+    const x = a.x + a.width - w
+    const y = Math.round(a.y + (a.height - hh) / 2)
+    if (b.x !== x || b.y !== y || b.width !== w || b.height !== hh) mini.setBounds({ x, y, width: w, height: hh })
+  } else if (b.width !== w || b.height !== h) {
     // y sin salirse del área de trabajo: si no, al crecer (vista expandida) el input queda tapado por la barra de tareas o fuera de la pantalla
     const a = screen.getDisplayMatching(b).workArea
     const x = Math.min(Math.max(b.x + b.width - w, a.x), a.x + a.width - w)
@@ -113,18 +121,21 @@ export function applyMini(): void {
 function createMini(): void {
   const wa = screen.getPrimaryDisplay().workArea
   const [w, h] = miniSize()
+  const edge = getDb().settings.miniFormat === 'edge'
   // posición recordada, si sigue dentro de alguna pantalla; si no, esquina inferior derecha
   const saved = getDb().settings.miniPos
   const onScreen = saved && screen.getAllDisplays().some((d) => saved.x >= d.bounds.x && saved.y >= d.bounds.y && saved.x + w <= d.bounds.x + d.bounds.width && saved.y + h <= d.bounds.y + d.bounds.height)
   mini = new BrowserWindow({
     width: w,
     height: h,
-    x: onScreen ? saved.x : wa.x + wa.width - w - 16,
-    y: onScreen ? saved.y : wa.y + wa.height - h - 16,
+    x: edge ? wa.x + wa.width - w : onScreen ? saved.x : wa.x + wa.width - w - 16,
+    y: edge ? Math.round(wa.y + (wa.height - h) / 2) : onScreen ? saved.y : wa.y + wa.height - h - 16,
     frame: false,
     alwaysOnTop: true,
     skipTaskbar: true,
     resizable: false,
+    minWidth: 1,
+    minHeight: 1,
     maximizable: false,
     minimizable: false,
     fullscreenable: false,
@@ -235,7 +246,15 @@ export function createWindows(): void {
   })
   registerWindow(win)
   autoFit(win)
-  win.once('ready-to-show', () => closeSplash(() => !hidden && win?.show()))
+  let ready = false
+  win.once('ready-to-show', () => {
+    ready = true
+    closeSplash(() => !hidden && win?.show())
+  })
+  // si el renderer no llega a cargar, la ventana no se queda oculta para siempre (pantalla en negro sin nada visible)
+  setTimeout(() => {
+    if (!ready && !hidden && win && !win.isDestroyed()) win.show()
+  }, 15000).unref()
   // Sin esto, al fijar la app en la barra de tareas (o en su menú de salto) Windows usa el icono de electron.exe.
   if (process.platform === 'win32' && fs.existsSync(iconPath)) {
     const launcher = path.join(app.getAppPath(), 'tools', 'launch.ps1')
