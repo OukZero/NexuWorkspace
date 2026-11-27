@@ -205,7 +205,6 @@ export function SettingsView(): ReactNode {
       myNames: (s.myNames || '').trim(),
       meetingAutoTasks: !!s.meetingAutoTasks,
       meetingAutoRecord: !!s.meetingAutoRecord,
-      meetingExportDir: (s.meetingExportDir || '').trim(),
       copilotCmd: s.copilotCmd.trim() || 'copilot',
       geminiCmd: s.geminiCmd.trim() || 'gemini',
       copilotQuota: Math.max(0, Math.round(Number(s.copilotQuota) || 0)),
@@ -425,15 +424,6 @@ export function SettingsView(): ReactNode {
                   Grabar automáticamente las reuniones del calendario (empieza al arrancar el evento y para cuando la llamada queda en silencio). Si está desactivado, grabas a mano.
                 </Toggle>
                 <div className="meta">Requiere la app abierta (puede estar en la bandeja), el calendario de Outlook conectado y que estés en la llamada: se graba el audio de tu equipo y tu micrófono.</div>
-              </div>
-              <div style={wide}>
-                <label>Carpeta para guardar las transcripciones (.md y .txt, solo texto; vacío = no exportar)</label>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input style={{ flex: 1, minWidth: 0 }} value={s.meetingExportDir ?? ''} placeholder="Ej.: C:\Users\yo\Documents\Reuniones" onChange={(e) => set('meetingExportDir', e.target.value)} />
-                  <button className="btn sm" onClick={() => void ui.run('folder:pick').then((p) => p && set('meetingExportDir', p))}>
-                    Elegir…
-                  </button>
-                </div>
               </div>
             </div>
             </Card>

@@ -598,8 +598,6 @@ export interface Settings {
   meetingAutoTasks: boolean
   /** Reuniones: empezar a grabar solas cuando arranca un evento del calendario y parar al terminar la llamada. */
   meetingAutoRecord?: boolean
-  /** Reuniones: carpeta donde se guardan las transcripciones (.md y .txt) al terminar. Vacío = no se exportan. */
-  meetingExportDir?: string
   /** Comando del CLI de GitHub Copilot. */
   copilotCmd: string
   /** Comando del CLI de Gemini. La clave se lee de la variable de entorno GEMINI_API_KEY, no se guarda en la app. */
